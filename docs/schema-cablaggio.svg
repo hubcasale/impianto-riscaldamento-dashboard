@@ -1,126 +1,128 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 800" width="1400" height="800" font-family="Helvetica, Arial, sans-serif">
-<rect width="1400" height="800" fill="#ffffff"/>
-<text x="700.0" y="34" font-size="22" font-weight="700" fill="#0f172a" text-anchor="middle">Pompa di integrazione con Shelly 1PM: schema dei collegamenti</text>
-<text x="700.0" y="56" font-size="12.5" font-weight="400" fill="#475569" text-anchor="middle">L'Elios (schema 02, OUT2) non alimenta più la pompa: dà solo il segnale «richiesta integrazione». Il relè dello Shelly alimenta la pompa e può bloccarla da Home Assistant.</text>
-<rect x="60" y="100" width="190" height="80" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2.5"/>
-<text x="155.0" y="124" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Quadro</text>
-<text x="155.0" y="142" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">fase protetta 10 A</text>
-<circle cx="155" cy="180" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="165" y="176" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L</text>
-<rect x="60" y="235" width="190" height="150" rx="12" fill="#fff7ed" stroke="#fb923c" stroke-width="2.5" stroke-dasharray="6 4"/>
-<text x="155.0" y="259" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Shelly EM Mini Gen4</text>
-<text x="155.0" y="277" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">esistente · contatore in linea, senza relè</text>
-<circle cx="155" cy="235" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="145" y="215" font-size="11.5" font-weight="700" fill="#0f172a" text-anchor="end">L dal quadro</text>
-<circle cx="250" cy="310" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="236" y="314" font-size="11.5" font-weight="700" fill="#0f172a" text-anchor="end">O (uscita)</text>
-<circle cx="155" cy="385" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
-<polyline points="155,180 155,235" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
-<polyline points="155,385 155,419" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
-<rect x="146" y="419" width="18" height="11" rx="3" fill="#2563eb"/>
-<text x="179" y="429" font-size="11" font-weight="700" fill="#2563eb" text-anchor="start">N comune</text>
-<rect x="330" y="100" width="330" height="410" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 920" width="1400" height="920" font-family="Helvetica, Arial, sans-serif">
+<rect width="1400" height="920" fill="#ffffff"/>
+<text x="700.0" y="34" font-size="21" font-weight="700" fill="#0f172a" text-anchor="middle">Elios 25: misura della pompa del collettore (EM Mini) e controllo della pompa di integrazione (Shelly 1PM)</text>
+<text x="700.0" y="56" font-size="12.5" font-weight="400" fill="#475569" text-anchor="middle">Numeri dei morsetti dal manuale Elios 25: OUT1 = pin 6 e 7, OUT2 = pin 8 e 9. I contatti OUT sono puliti: il pin 6 (o 8) riceve la fase, il pin 7 (o 9) la porta alla pompa.</text>
+<rect x="40" y="100" width="190" height="80" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2.5"/>
+<text x="135.0" y="124" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Quadro</text>
+<text x="135.0" y="142" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">fase protetta 10 A</text>
+<circle cx="230" cy="150" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
+<text x="218" y="154" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">L</text>
+<rect x="330" y="100" width="330" height="520" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2.5"/>
 <text x="495.0" y="124" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Elios 25 (schema 02)</text>
 <text x="495.0" y="142" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">uscite OUT = contatti puliti 2(1) A, 230 V~</text>
 <circle cx="330" cy="160" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
 <text x="342" y="164" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L alimentazione</text>
 <circle cx="330" cy="200" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
 <text x="342" y="204" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">N alimentazione</text>
-<text x="645" y="245" font-size="12" font-weight="700" fill="#475569" text-anchor="end">OUT2 · pompa di integrazione</text>
+<text x="645" y="245" font-size="12" font-weight="700" fill="#475569" text-anchor="end">OUT1 · pompa del collettore</text>
 <circle cx="660" cy="275" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="648" y="279" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">a</text>
+<text x="648" y="279" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">pin 6</text>
 <circle cx="660" cy="315" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="648" y="319" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">b</text>
-<text x="645" y="375" font-size="12" font-weight="700" fill="#475569" text-anchor="end">OUT1 · pompa del collettore</text>
+<text x="648" y="319" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">pin 7</text>
+<text x="645" y="375" font-size="12" font-weight="700" fill="#475569" text-anchor="end">OUT2 · pompa di integrazione</text>
 <circle cx="660" cy="405" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="648" y="409" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">a</text>
+<text x="648" y="409" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">pin 8</text>
 <circle cx="660" cy="445" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="648" y="449" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">b</text>
-<line x1="640" y1="275" x2="640" y2="315" stroke="#475569" stroke-width="2" stroke-dasharray="3 3"/>
-<line x1="640" y1="405" x2="640" y2="445" stroke="#475569" stroke-width="2" stroke-dasharray="3 3"/>
-<circle cx="495" cy="510" r="5" fill="#fff" stroke="#16a34a" stroke-width="2.5"/>
-<rect x="800" y="235" width="200" height="195" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="2.5"/>
-<text x="900.0" y="259" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Shelly 1PM</text>
-<text x="900.0" y="277" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">relè 16 A + misura di potenza</text>
-<circle cx="800" cy="300" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="812" y="304" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L</text>
-<circle cx="800" cy="340" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="812" y="344" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">SW (ingresso)</text>
-<circle cx="800" cy="390" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
-<text x="812" y="394" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">N</text>
-<circle cx="1000" cy="300" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="988" y="304" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">O (uscita)</text>
-<rect x="1150" y="235" width="200" height="195" rx="12" fill="#fef3c7" stroke="#d97706" stroke-width="2.5"/>
-<text x="1250.0" y="259" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Pompa integrazione</text>
-<text x="1250.0" y="277" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">230 V~, circa 40 W</text>
-<circle cx="1150" cy="300" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="1162" y="304" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L</text>
-<circle cx="1150" cy="350" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
-<text x="1162" y="354" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">N</text>
-<circle cx="1150" cy="395" r="5" fill="#fff" stroke="#16a34a" stroke-width="2.5"/>
-<text x="1162" y="399" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">PE</text>
-<rect x="1150" y="450" width="200" height="100" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2.5"/>
-<text x="1250.0" y="474" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Pompa collettore</text>
-<text x="1250.0" y="492" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">circa 20 W (invariata)</text>
-<circle cx="1150" cy="487" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
-<text x="1162" y="491" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L</text>
-<circle cx="1150" cy="525" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
-<text x="1162" y="529" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">N</text>
-<polyline points="255,310 280,310 280,76 700,76" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
-<polyline points="280,160 330,160" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
-<polyline points="700,76 700,405" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
-<polyline points="700,275 665,275" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<text x="648" y="449" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">pin 9</text>
+<circle cx="495" cy="620" r="5" fill="#fff" stroke="#16a34a" stroke-width="2.5"/>
+<rect x="800" y="110" width="200" height="150" rx="12" fill="#fff7ed" stroke="#fb923c" stroke-width="2.5"/>
+<text x="900.0" y="134" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Shelly EM Mini Gen4</text>
+<text x="900.0" y="152" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">contatore in linea, senza relè</text>
+<circle cx="800" cy="150" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
+<text x="812" y="154" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L</text>
+<circle cx="800" cy="215" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
+<text x="812" y="219" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">O (uscita)</text>
+<circle cx="900" cy="260" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
+<text x="912" y="264" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">N</text>
+<rect x="1150" y="110" width="200" height="140" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2.5"/>
+<text x="1250.0" y="134" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Pompa collettore</text>
+<text x="1250.0" y="152" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">circa 20 W</text>
+<circle cx="1150" cy="180" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
+<text x="1162" y="184" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L</text>
+<circle cx="1150" cy="220" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
+<text x="1162" y="224" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">N</text>
+<rect x="800" y="370" width="200" height="240" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="2.5"/>
+<text x="900.0" y="394" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Shelly 1PM</text>
+<text x="900.0" y="412" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">relè 16 A + misura di potenza</text>
+<circle cx="800" cy="480" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
+<text x="812" y="484" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L</text>
+<circle cx="800" cy="520" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
+<text x="812" y="524" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">SW (ingresso)</text>
+<circle cx="800" cy="570" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
+<text x="812" y="574" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">N</text>
+<circle cx="1000" cy="480" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
+<text x="988" y="484" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">O (uscita)</text>
+<rect x="1150" y="370" width="200" height="240" rx="12" fill="#fef3c7" stroke="#d97706" stroke-width="2.5"/>
+<text x="1250.0" y="394" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Pompa integrazione</text>
+<text x="1250.0" y="412" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">230 V~, circa 40 W</text>
+<circle cx="1150" cy="480" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
+<text x="1162" y="484" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L</text>
+<circle cx="1150" cy="535" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
+<text x="1162" y="539" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">N</text>
+<circle cx="1150" cy="580" r="5" fill="#fff" stroke="#16a34a" stroke-width="2.5"/>
+<text x="1162" y="584" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">PE</text>
+<polyline points="235,150 280,150 280,76 700,76" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="280,150 280,160 330,160" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="700,76 700,480" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="700,405 665,405" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
-<polyline points="760,76 760,300 800,300" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
-<path d="M665 315 H693 a7 7 0 0 1 14 0 H740 V340 H800" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round" stroke-dasharray="9 5"/>
-<polyline points="1005,300 1150,300" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round"/>
-<polyline points="665,445 700,445 700,490 1100,490 1100,487 1150,487" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="700,480 800,480" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="760,76 760,150 800,150" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<path d="M805 215 H760 V275 H707 a7 7 0 0 0 -14 0 H665" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round" stroke-dasharray="9 5"/>
+<path d="M665 315 H693 a7 7 0 0 1 14 0 H1100 V180 H1150" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<path d="M665 445 H693 a7 7 0 0 1 14 0 H740 V520 H800" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round" stroke-dasharray="9 5"/>
+<polyline points="1005,480 1150,480" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round"/>
 <polyline points="330,200 292,200" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
 <rect x="281" y="191" width="11" height="18" rx="3" fill="#2563eb"/>
 <text x="276" y="204" font-size="11" font-weight="700" fill="#2563eb" text-anchor="end">N comune</text>
-<polyline points="495,510 495,534" fill="none" stroke="#16a34a" stroke-width="4" stroke-linejoin="round"/>
-<polyline points="495,510 495,534" fill="none" stroke="#facc15" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 6"/>
-<line x1="477" y1="534" x2="513" y2="534" stroke="#16a34a" stroke-width="2.5"/>
-<line x1="483" y1="539" x2="507" y2="539" stroke="#16a34a" stroke-width="2.5"/>
-<line x1="489" y1="544" x2="501" y2="544" stroke="#16a34a" stroke-width="2.5"/>
-<text x="521" y="548" font-size="11" font-weight="700" fill="#16a34a" text-anchor="start">terra comune</text>
-<polyline points="800,390 762,390" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
-<rect x="751" y="381" width="11" height="18" rx="3" fill="#2563eb"/>
-<text x="746" y="394" font-size="11" font-weight="700" fill="#2563eb" text-anchor="end">N comune</text>
-<polyline points="1150,350 1112,350" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
-<rect x="1101" y="341" width="11" height="18" rx="3" fill="#2563eb"/>
-<text x="1096" y="354" font-size="11" font-weight="700" fill="#2563eb" text-anchor="end">N comune</text>
-<polyline points="1150,395 1112,395" fill="none" stroke="#16a34a" stroke-width="4" stroke-linejoin="round"/>
-<polyline points="1150,395 1112,395" fill="none" stroke="#facc15" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 6"/>
-<line x1="1112" y1="386" x2="1112" y2="404" stroke="#16a34a" stroke-width="2.5"/>
-<line x1="1107" y1="389" x2="1107" y2="401" stroke="#16a34a" stroke-width="2.5"/>
-<line x1="1102" y1="392" x2="1102" y2="398" stroke="#16a34a" stroke-width="2.5"/>
-<text x="1090" y="399" font-size="11" font-weight="700" fill="#16a34a" text-anchor="end">terra comune</text>
-<polyline points="1150,525 1112,525" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
-<rect x="1101" y="516" width="11" height="18" rx="3" fill="#2563eb"/>
-<text x="1096" y="529" font-size="11" font-weight="700" fill="#2563eb" text-anchor="end">N comune</text>
-<circle cx="722" cy="346" r="13" fill="#dc2626"/>
-<text x="722" y="351" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">1</text>
-<circle cx="770" cy="418" r="13" fill="#dc2626"/>
-<text x="770" y="423" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">2</text>
-<circle cx="1075" cy="286" r="13" fill="#dc2626"/>
-<text x="1075" y="291" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">3</text>
-<rect x="30" y="578" width="1340" height="180" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
-<polyline points="50,600 100,600" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
-<text x="110" y="604" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">fase (L)</text>
-<polyline points="210,600 260,600" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
-<text x="270" y="604" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">neutro (N)</text>
-<polyline points="390,600 440,600" fill="none" stroke="#16a34a" stroke-width="4" stroke-linejoin="round"/>
-<polyline points="390,600 440,600" fill="none" stroke="#facc15" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 6"/>
-<text x="450" y="604" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">terra (PE)</text>
-<polyline points="560,600 620,600" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round" stroke-dasharray="9 5"/>
-<text x="630" y="604" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">filo che cambia destinazione</text>
-<polyline points="840,600 900,600" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round"/>
-<text x="910" y="604" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">filo nuovo</text>
-<text x="50" y="632" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">1  Il filo di fase che oggi esce da OUT2 (morsetto b) verso la pompa va ora all'ingresso SW dello Shelly: l'Elios dà solo il segnale (la pompa non passa più da lì).</text>
-<text x="50" y="654" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">2  Lo Shelly è alimentato da L e N permanenti, non dal contatto OUT2: deve restare acceso anche quando l'Elios non chiama la pompa.</text>
-<text x="50" y="676" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">3  Filo nuovo dall'uscita O dello Shelly alla fase della pompa. Neutro e terra della pompa restano com'erano; la linea del collettore (OUT1) non cambia.</text>
-<text x="50" y="698" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">4  Lo Shelly di misura (EM Mini Gen4) resta dov'è: in serie sulla fase principale (L dal quadro, uscita O verso il nodo L). Lo Shelly 1PM si alimenta DOPO di lui, così il contatore vede anche la pompa.</text>
-<text x="50" y="720" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">«N comune» e «terra comune» sono le barre che hai già: i tratti disegnati sono i conduttori di oggi, non servono fili in più.</text>
-<text x="50" y="750" font-size="12.5" font-weight="700" fill="#dc2626" text-anchor="start">Stessa fase per L, SW e O. Prima di toccare qualsiasi filo togli corrente dal quadro. Lavori da elettricista abilitato, con puntalini sui conduttori.</text>
+<polyline points="900,260 900,290" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
+<rect x="891" y="290" width="18" height="11" rx="3" fill="#2563eb"/>
+<text x="924" y="300" font-size="11" font-weight="700" fill="#2563eb" text-anchor="start">N comune</text>
+<polyline points="1150,220 1112,220" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
+<rect x="1101" y="211" width="11" height="18" rx="3" fill="#2563eb"/>
+<text x="1096" y="224" font-size="11" font-weight="700" fill="#2563eb" text-anchor="end">N comune</text>
+<polyline points="800,570 762,570" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
+<rect x="751" y="561" width="11" height="18" rx="3" fill="#2563eb"/>
+<text x="746" y="574" font-size="11" font-weight="700" fill="#2563eb" text-anchor="end">N comune</text>
+<polyline points="1150,535 1112,535" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
+<rect x="1101" y="526" width="11" height="18" rx="3" fill="#2563eb"/>
+<text x="1096" y="539" font-size="11" font-weight="700" fill="#2563eb" text-anchor="end">N comune</text>
+<polyline points="1150,580 1112,580" fill="none" stroke="#16a34a" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1150,580 1112,580" fill="none" stroke="#facc15" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 6"/>
+<line x1="1112" y1="571" x2="1112" y2="589" stroke="#16a34a" stroke-width="2.5"/>
+<line x1="1107" y1="574" x2="1107" y2="586" stroke="#16a34a" stroke-width="2.5"/>
+<line x1="1102" y1="577" x2="1102" y2="583" stroke="#16a34a" stroke-width="2.5"/>
+<text x="1090" y="584" font-size="11" font-weight="700" fill="#16a34a" text-anchor="end">terra comune</text>
+<polyline points="495,620 495,640" fill="none" stroke="#16a34a" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="495,620 495,640" fill="none" stroke="#facc15" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 6"/>
+<line x1="477" y1="640" x2="513" y2="640" stroke="#16a34a" stroke-width="2.5"/>
+<line x1="483" y1="645" x2="507" y2="645" stroke="#16a34a" stroke-width="2.5"/>
+<line x1="489" y1="650" x2="501" y2="650" stroke="#16a34a" stroke-width="2.5"/>
+<text x="521" y="654" font-size="11" font-weight="700" fill="#16a34a" text-anchor="start">terra comune</text>
+<circle cx="735" cy="252" r="13" fill="#dc2626"/>
+<text x="735" y="257" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+<circle cx="718" cy="500" r="13" fill="#dc2626"/>
+<text x="718" y="505" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+<circle cx="772" cy="460" r="13" fill="#dc2626"/>
+<text x="772" y="465" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">3</text>
+<circle cx="1075" cy="467" r="13" fill="#dc2626"/>
+<text x="1075" y="472" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+<rect x="30" y="698" width="1340" height="190" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<polyline points="50,720 100,720" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<text x="110" y="724" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">fase (L)</text>
+<polyline points="210,720 260,720" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
+<text x="270" y="724" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">neutro (N)</text>
+<polyline points="390,720 440,720" fill="none" stroke="#16a34a" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="390,720 440,720" fill="none" stroke="#facc15" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 6"/>
+<text x="450" y="724" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">terra (PE)</text>
+<polyline points="560,720 620,720" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round" stroke-dasharray="9 5"/>
+<text x="630" y="724" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">filo che cambia destinazione</text>
+<polyline points="840,720 900,720" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round"/>
+<text x="910" y="724" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">filo nuovo</text>
+<text x="50" y="748" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">1  Pompa COLLETTORE (OUT1): la fase che arriva al pin 6 passa prima dallo Shelly EM Mini: dal nodo L entra in L dello Shelly, esce da O e va al pin 6. Il pin 7 e la pompa restano come sono.</text>
+<text x="50" y="770" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">2  Pompa INTEGRAZIONE (OUT2): il filo che oggi esce dal pin 9 verso la pompa va invece all'ingresso SW dello Shelly 1PM. Il pin 8 resta con la sua fase.</text>
+<text x="50" y="792" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">3  Lo Shelly 1PM si alimenta da L e N permanenti (stessa fase del pin 8), non dal contatto OUT2.</text>
+<text x="50" y="814" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">4  Filo nuovo dall'uscita O dello Shelly 1PM alla fase della pompa di integrazione. Neutro e terra della pompa restano come sono.</text>
+<text x="50" y="838" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">L'EM Mini misura solo la pompa del collettore, ma è alimentato sempre (L e N permanenti): resta acceso anche a pompa ferma. Non è più in serie sulla fase principale: Elios, 1PM ed EM Mini prendono la fase direttamente dal quadro.</text>
+<text x="50" y="860" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">Il ponticello dal morsetto L al pin 6 (esempio del manuale, pag. 11) si toglie: il pin 6 ora riceve la fase dall'EM Mini. Verifica sul tuo impianto quale dei due pin riceve la fase.</text>
+<text x="50" y="886" font-size="12.5" font-weight="700" fill="#dc2626" text-anchor="start">Stessa fase per tutti i collegamenti. Togli corrente dal quadro prima di toccare qualsiasi filo. Lavori da elettricista abilitato, con puntalini sui conduttori.</text>
 </svg>
