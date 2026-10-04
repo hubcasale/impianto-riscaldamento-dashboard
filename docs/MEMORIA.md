@@ -18,9 +18,9 @@ del sistema, quali scelte sono state fatte e perché, e che cosa resta da verifi
 - **Caldaia a pellet Nobis Polygon (Micronova)**, schema 01: scalda **solo il puffer di bilanciamento da 50 L**.
   Il calore passa al boiler tramite la serpentina di integrazione, con una pompa comandata dall'Elios.
   Comfort Clima: isteresi (delta riaccensione) 15 °C, ritardo spegnimento 3 minuti. Set boiler 45 °C, set acqua 65 °C.
-- **ESP32 `solare-termico`** (192.168.178.45): sonde NTC 10k B3950. Boiler alto (GPIO34) e basso (GPIO35) funzionano;
+- **ESP32 `solare-termico`** (in rete locale): sonde NTC 10k B3950. Boiler alto (GPIO34) e basso (GPIO35) funzionano;
   le 4 sonde delle serpentine sono sul modulo **ADS1115, che è guasto** (legge sempre -0,002 V): da sostituire.
-- **Home Assistant** su `hubcasale@192.168.178.100`, configurazione in `/home/hubcasale/docker/homeassistant/data`.
+- **Home Assistant** in Docker sul server di casa, configurazione in `.../docker/homeassistant/data`.
   Integrazione della caldaia: `aguaiot_hubcasale` (repository `hubcasale/home_assistant_micronova_agua_iot_hubcasale`).
 
 ## 2. Cose imparate dai dati (fatti, non ipotesi)
