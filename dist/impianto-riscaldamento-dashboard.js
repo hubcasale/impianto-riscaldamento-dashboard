@@ -740,6 +740,8 @@ var DEFAULT_MODEL_ENTITIES = {
   mains_temp: "input_number.boiler_solare_t_rete"
 };
 var FLAME_PATH = "M0,-100 C10,-70 45,-50 45,-15 C45,12 25,25 0,25 C-25,25 -45,12 -45,-15 C-45,-32 -35,-45 -25,-58 C-22,-40 -12,-32 -6,-34 C-14,-60 -8,-82 0,-100 Z";
+var COIL_INTEGRATION = "M238 200 H398 M398 200 q14 12 0 24 H238 q-14 12 0 24 H398 q14 12 0 24 H238";
+var COIL_SOLAR = "M238 560 H398 M398 560 q14 12 0 24 H238 q-14 12 0 24 H398 q14 12 0 24 H238 q-14 12 0 24 H398";
 var HOPPER_FILL = {
   ok: "#15803d",
   riserva: "#d97706",
@@ -896,8 +898,8 @@ var ImpiantoOverviewCard = class extends i4 {
         <path d="M420 135 H520 V95" class="pipe hot" />
         <path d="M420 745 H520 V775" class="pipe cold" />
         <g class="pufgroup">
-          <path d="M440 208 H575" class=${pumpOn ? "pipe hot thin flow" : "pipe hot thin idle"} />
-          <path d="M440 268 H520 V315 H575" class=${pumpOn ? "pipe warm thin flow" : "pipe warm thin idle"} />
+          <path d="M440 208 H575" class="pipe hot thin" />
+          <path d="M440 268 H520 V315 H575" class="pipe warm thin" />
           <path d="M685 215 H700" class="pipe hot thin" />
           <path d="M685 300 H700" class="pipe warm thin" />
           <text x="452" y="196" class="t2 s13">mandata</text>
@@ -908,12 +910,15 @@ var ImpiantoOverviewCard = class extends i4 {
         <rect x="200" y="100" width="240" height="660" rx="52" fill="url(#iso)" class="outline" />
         <rect x="222" y="122" width="196" height="616" rx="38" fill="url(#acqua)" />
         <g class="coil">
-          <path d="M238 200 H398 M398 200 q14 12 0 24 H238 q-14 12 0 24 H398 q14 12 0 24 H238" stroke="#7c3aed" />
-          <path d="M238 560 H398 M398 560 q14 12 0 24 H238 q-14 12 0 24 H398 q14 12 0 24 H238 q-14 12 0 24 H398" stroke="#15803d" />
+          <path d=${COIL_INTEGRATION} stroke="#7c3aed" />
+          <path d=${COIL_SOLAR} stroke="#15803d" />
         </g>
+        ${pumpOn ? w`<path d=${COIL_INTEGRATION} class="coilflow" />` : A}
+        ${collectorOn ? w`<path d=${COIL_SOLAR} class="coilflow" />` : A}
         <rect x="246" y="150" width="160" height="26" rx="13" class="pill" />
         <text x="326" y="168" class="s14 b" text-anchor="middle" fill="#a78bfa">Integrazione (caldaia)</text>
-        ${pumpOn ? w`<rect x="258" y="178" width="136" height="20" rx="10" class="pill" /><circle cx="274" cy="188" r="4.5" fill="#22c55e" class="pulse" /><text x="338" y="192.5" class="s13 b" text-anchor="middle" fill="#22c55e">pompa in funzione</text>` : A}
+        ${pumpOn ? w`<rect x="244" y="284" width="164" height="22" rx="11" class="pill" /><circle cx="260" cy="295" r="4.5" fill="#22c55e" class="pulse" /><text x="336" y="299.5" class="s13 b" text-anchor="middle" fill="#22c55e">pompa integrazione</text>` : A}
+        ${collectorOn ? w`<rect x="250" y="676" width="152" height="22" rx="11" class="pill" /><circle cx="266" cy="687" r="4.5" fill="#22c55e" class="pulse" /><text x="334" y="691.5" class="s13 b" text-anchor="middle" fill="#22c55e">pompa collettore</text>` : A}
         <rect x="266" y="522" width="120" height="26" rx="13" class="pill" />
         <text x="326" y="540" class="s14 b" text-anchor="middle" fill="#4ade80">Solare</text>
         <rect x="222" y="122" width="196" height="616" rx="38" fill="url(#lucido)" />
@@ -953,7 +958,6 @@ var ImpiantoOverviewCard = class extends i4 {
         <!-- solare -->
         <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
         <text x="82" y="752" class="t2 s14" text-anchor="middle">Solare ${fmt(solarKw, 1)} kW</text>
-        ${collectorOn ? w`<circle cx="136" cy="742" r="5" fill="#22c55e" class="pulse" /><title>pompa del collettore in funzione</title>` : A}
         <text x="82" y="786" class="b" font-size="24" text-anchor="middle" fill="#22c55e">${fmt(collector, 0)} °C</text>
 
         <text x="532" y="80" class="b s14" fill="#ef4444">Acqua calda</text>
@@ -1239,16 +1243,19 @@ var ImpiantoOverviewCard = class extends i4 {
     .pipe.thin {
       stroke-width: 8;
     }
-    .pipe.idle {
-      opacity: 0.4;
+    /* acqua che scorre dentro la serpentina: tratteggio chiaro che si muove */
+    .coilflow {
+      fill: none;
+      stroke: #ffffff;
+      stroke-opacity: 0.9;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-dasharray: 5 11;
+      animation: coilflow 0.8s linear infinite;
     }
-    .pipe.flow {
-      stroke-dasharray: 14 10;
-      animation: flow 0.9s linear infinite;
-    }
-    @keyframes flow {
+    @keyframes coilflow {
       to {
-        stroke-dashoffset: -24;
+        stroke-dashoffset: -16;
       }
     }
     .pulse {
@@ -1260,7 +1267,7 @@ var ImpiantoOverviewCard = class extends i4 {
       }
     }
     @media (prefers-reduced-motion: reduce) {
-      .pipe.flow,
+      .coilflow,
       .pulse {
         animation: none;
       }
@@ -2562,7 +2569,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.2";
+var VERSION = "0.3.3";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
