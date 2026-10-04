@@ -687,6 +687,13 @@ function etaText(minutes) {
   if (minutes === null) return "\u2013";
   return `${Math.round(minutes)} min`;
 }
+function pelletStatus(reserve, empty, open) {
+  if (empty) return { key: "vuoto", label: "Vuoto" };
+  if (reserve) return { key: "riserva", label: "In riserva" };
+  if (open) return { key: "aperto", label: "Aperto" };
+  if (reserve === null && empty === null && open === null) return { key: "nd", label: "\u2013" };
+  return { key: "ok", label: "OK" };
+}
 
 // src/plant-card.ts
 var CARD_TAG = "impianto-overview-card";
@@ -720,7 +727,10 @@ var DEFAULT_ENTITIES = {
   boost_start_script: "script.caldaia_accensione_rapida",
   boost_cancel_script: "script.caldaia_accensione_rapida_annulla",
   guard: "input_boolean.caldaia_salvaguardia_attiva",
-  guard_flag: "input_boolean.caldaia_salvaguardia_ha_spento"
+  guard_flag: "input_boolean.caldaia_salvaguardia_ha_spento",
+  pellet_reserve: "binary_sensor.casale_riserva_legna",
+  pellet_empty: "binary_sensor.casale_pellet_empty",
+  pellet_open: "binary_sensor.casale_pellet_hopper_open"
 };
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
@@ -728,6 +738,13 @@ var DEFAULT_MODEL_ENTITIES = {
   mains_temp: "input_number.boiler_solare_t_rete"
 };
 var FLAME_PATH = "M0,-100 C10,-70 45,-50 45,-15 C45,12 25,25 0,25 C-25,25 -45,12 -45,-15 C-45,-32 -35,-45 -25,-58 C-22,-40 -12,-32 -6,-34 C-14,-60 -8,-82 0,-100 Z";
+var HOPPER_FILL = {
+  ok: "#15803d",
+  riserva: "#d97706",
+  vuoto: "#dc2626",
+  aperto: "#2563eb",
+  nd: "#475569"
+};
 var LOOK_LABEL = {
   off: "spenta",
   wait: "in attesa",
@@ -955,7 +972,7 @@ var ImpiantoOverviewCard = class extends i4 {
       <path d=${FLAME_PATH} fill="#fde047" transform="translate(0,6) scale(0.52)" />
     </g>`;
   }
-  _renderStoveImage(look) {
+  _renderStoveImage(look, pellet) {
     const flame = look === "work" ? this._flame(90, 168, 1) : look === "start" ? this._flame(90, 168, 0.4) : look === "stopping" ? this._flame(90, 168, 0.22, 0.55) : A;
     const glow = look === "work" ? 0.55 : look === "start" ? 0.3 : 0;
     return b2`
@@ -969,8 +986,8 @@ var ImpiantoOverviewCard = class extends i4 {
             <stop offset="0" stop-color="#f97316" stop-opacity=${glow} /><stop offset="1" stop-color="#f97316" stop-opacity="0" />
           </radialGradient>
         </defs>
-        <rect x="20" y="4" width="140" height="26" rx="6" fill="#475569" />
-        <text x="90" y="22" font-size="12" text-anchor="middle" fill="#e2e8f0">pellet</text>
+        <rect x="20" y="4" width="140" height="26" rx="6" fill=${HOPPER_FILL[pellet.key]} />
+        <text x="90" y="22" font-size="12" font-weight="700" text-anchor="middle" fill="#ffffff">${pellet.key === "nd" ? "pellet" : `pellet ${pellet.label.toLowerCase()}`}</text>
         <rect x="0" y="30" width="180" height="214" rx="16" fill="#1f2937" stroke="#64748b" stroke-width="2" />
         <rect x="20" y="52" width="140" height="130" rx="12" fill="url(#vetro)" stroke="#94a3b8" stroke-width="3" />
         <rect x="20" y="52" width="140" height="130" rx="12" fill="url(#bagliore)" />
@@ -1018,11 +1035,12 @@ var ImpiantoOverviewCard = class extends i4 {
     const pump = this._s(e5.pump);
     const pumpOn = pump !== void 0 && pump !== "OFF" && pump !== "unknown" && pump !== "unavailable";
     const work = this._n(e5.work_hours_today);
+    const pellet = pelletStatus(this._yes(e5.pellet_reserve), this._yes(e5.pellet_empty), this._yes(e5.pellet_open));
     return b2`
       <section class="stove">
         <h3>Caldaia a pellet (Polygon)</h3>
         <div class="top">
-          ${this._renderStoveImage(look)}
+          ${this._renderStoveImage(look, pellet)}
           <div class="statecard">
             <span class="tl">Stato caldaia</span>
             <span class="statepill ${look}">${stateRaw ?? "\u2013"}</span>
@@ -1030,6 +1048,8 @@ var ImpiantoOverviewCard = class extends i4 {
             <span class="water">${fmt(this._n(e5.stove_water), 1)}<small> °C</small></span>
             <span class="tl">Ultimo cambio stato</span>
             <span class="since">${since ? `alle ${since}` : "\u2013"}</span>
+            <span class="tl">Pellet</span>
+            <span class="pelletpill ${pellet.key}">${pellet.label}</span>
           </div>
         </div>
         <div class="legendbar">
@@ -1308,6 +1328,29 @@ var ImpiantoOverviewCard = class extends i4 {
       background: color-mix(in srgb, #ef4444 28%, transparent);
       color: #ef4444;
     }
+    .pelletpill {
+      font-weight: 700;
+      font-size: 15px;
+      border-radius: 14px;
+      padding: 2px 14px;
+      background: var(--divider-color);
+    }
+    .pelletpill.ok {
+      background: color-mix(in srgb, #22c55e 25%, transparent);
+      color: #22c55e;
+    }
+    .pelletpill.riserva {
+      background: color-mix(in srgb, #f59e0b 28%, transparent);
+      color: #f59e0b;
+    }
+    .pelletpill.vuoto {
+      background: color-mix(in srgb, #ef4444 28%, transparent);
+      color: #ef4444;
+    }
+    .pelletpill.aperto {
+      background: color-mix(in srgb, #3b82f6 28%, transparent);
+      color: #3b82f6;
+    }
     .water {
       font-size: 32px;
       font-weight: 700;
@@ -1454,9 +1497,13 @@ var ImpiantoOverviewCard = class extends i4 {
       grid-template-rows: auto auto;
       justify-content: space-around;
       align-items: center;
-      column-gap: 16px;
+      column-gap: 12px;
       row-gap: 2px;
       padding: 6px 8px;
+    }
+    .compact .pelletpill {
+      font-size: 13px;
+      padding: 1px 10px;
     }
     .compact .statecard .tl {
       font-size: 11px;
@@ -2483,7 +2530,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.2.3";
+var VERSION = "0.3.0";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

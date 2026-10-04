@@ -144,3 +144,23 @@ export function etaText(minutes: number | null): string {
   if (minutes === null) return "–";
   return `${Math.round(minutes)} min`;
 }
+
+/** Stato del pellet ricavato dai segnali della caldaia (null = segnale non disponibile). */
+export type PelletKey = "ok" | "riserva" | "vuoto" | "aperto" | "nd";
+
+export interface PelletStatus {
+  key: PelletKey;
+  label: string;
+}
+
+/**
+ * Priorità: pellet vuoto, riserva (sta per finire), serbatoio aperto, altrimenti ok.
+ * Se nessun segnale è disponibile lo stato è "nd".
+ */
+export function pelletStatus(reserve: boolean | null, empty: boolean | null, open: boolean | null): PelletStatus {
+  if (empty) return { key: "vuoto", label: "Vuoto" };
+  if (reserve) return { key: "riserva", label: "In riserva" };
+  if (open) return { key: "aperto", label: "Aperto" };
+  if (reserve === null && empty === null && open === null) return { key: "nd", label: "–" };
+  return { key: "ok", label: "OK" };
+}

@@ -49,6 +49,7 @@ Senza altro usa questi nomi di entità (cambiali in `entities:` se i tuoi sono d
 | `solar_power`, `collector_temp` | `sensor.solare_termico_potenza`, `sensor.solare_termico_t_collettore_stimata` | pacchetto solare termico |
 | `puffer`, `stove_state`, `stove_water`, `smoke`, `flame`, `power`, `water_pressure`, `brazier_pressure`, `extractor`, `pump`, `alarm` | `sensor.casale_*` | integrazione `aguaiot_hubcasale` |
 | `set_boiler`, `set_water` | `number.casale_setpoint_boiler`, `climate.casale_acqua` (attributo `temperature`) | integrazione |
+| `pellet_reserve`, `pellet_empty`, `pellet_open` | `binary_sensor.casale_riserva_legna` (riserva: sta per finire), `binary_sensor.casale_pellet_empty` (vuoto), `binary_sensor.casale_pellet_hopper_open` (serbatoio aperto) | integrazione `aguaiot_hubcasale` v1.2.7-hubcasale.4 (gli ultimi due) |
 | `starts_today`, `starts_yesterday`, `standby_today`, `work_hours_today` | `sensor.caldaia_*` | `ha-packages/caldaia_suggerimento.yaml` |
 | `request_acs`, `request_heating`, `consent` | `binary_sensor.caldaia_richiesta_acs` … | idem |
 

@@ -93,6 +93,11 @@ set("binary_sensor.caldaia_consenso_suggerito", "off");
 // accensione rapida (?boost=pronta|attiva|non_serve|puffer_caldo|accesa|limite  ?eta=35)
 set("sensor.caldaia_acqua_pronta_tra", q.get("eta") ?? "35", { unit_of_measurement: "min" });
 set("sensor.caldaia_accensione_rapida_stato", q.get("boost") || "pronta");
+// pellet (?pellet=ok|riserva|vuoto|aperto)
+const pel = q.get("pellet") || "ok";
+set("binary_sensor.casale_riserva_legna", pel === "riserva" ? "on" : "off");
+set("binary_sensor.casale_pellet_empty", pel === "vuoto" ? "on" : "off");
+set("binary_sensor.casale_pellet_hopper_open", pel === "aperto" ? "on" : "off");
 // salvaguardia (?salvaguardia=off)
 set("input_boolean.caldaia_salvaguardia_attiva", q.get("salvaguardia") === "off" ? "off" : "on");
 set("input_boolean.caldaia_salvaguardia_ha_spento", "off");

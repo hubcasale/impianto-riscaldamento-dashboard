@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_MODEL, boostButton, etaText, fmt, showersEstimate, stoveLook, tempColor, toNumber } from "../src/plant-logic";
+import { DEFAULT_MODEL, boostButton, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber } from "../src/plant-logic";
 
 test("docce: boiler caldo in alto, freddo in basso", () => {
   // zona alta 95 L a 55,6 °C -> 95*(40,6)/23 = 167,7 L a 38 °C -> 4 docce da 40 L
@@ -75,4 +75,17 @@ test("minuti stimati", () => {
   assert.equal(etaText(0), "0 min");
   assert.equal(etaText(34.6), "35 min");
   assert.equal(etaText(null), "–");
+});
+
+test("pellet: priorita tra vuoto, riserva e aperto", () => {
+  assert.deepEqual(pelletStatus(false, false, false), { key: "ok", label: "OK" });
+  assert.equal(pelletStatus(true, false, false).key, "riserva");
+  assert.equal(pelletStatus(true, true, true).key, "vuoto");
+  assert.equal(pelletStatus(false, false, true).key, "aperto");
+  assert.equal(pelletStatus(true, null, true).key, "riserva");
+});
+
+test("pellet: segnali mancanti", () => {
+  assert.equal(pelletStatus(null, null, null).key, "nd");
+  assert.equal(pelletStatus(false, null, null).key, "ok");
 });

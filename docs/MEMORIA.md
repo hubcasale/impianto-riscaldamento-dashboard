@@ -111,6 +111,7 @@ flowchart TD
 | Modello di partenza (usato con meno di 3 punti) | `input_number.boiler_solare_t_ambiente` (16), `..._k_alto` (0,766), `..._k_basso` (0,73); `..._delta_alto` / `..._delta_basso` (0) per ritocchi fini |
 | Stato e puffer della Polygon | `sensor.casale_stato`, `sensor.casale_temperatura_boiler` (= puffer da 50 L), `sensor.casale_temperatura_acqua` |
 | Accensione / spegnimento | `climate.casale_acqua` (heat / off) |
+| Pellet | `binary_sensor.casale_riserva_legna` (riserva), `binary_sensor.casale_pellet_empty` (vuoto), `binary_sensor.casale_pellet_hopper_open` (serbatoio aperto): sulla scheda la tramoggia della stufa cambia colore (verde ok, arancione riserva, rosso vuoto, blu aperto) e c'è la riga «Pellet» |
 | Programmi (N = 1..4) | `time.casale_crono_pN_accensione`, `..._spegnimento`, `number.casale_crono_pN_setpoint_boiler`, `..._setpoint_acqua`, `switch.casale_crono_pN_<giorno>`, `switch.casale_cronotermostato_settimanale` |
 | Minuti per avere acqua calda | `sensor.caldaia_acqua_pronta_tra`, `sensor.caldaia_tempo_medio_messa_in_temperatura`, `sensor.caldaia_tempo_stimato_messa_in_temperatura` |
 | Campioni (modificabili) | `input_text.caldaia_campioni_messa_in_temperatura` |
