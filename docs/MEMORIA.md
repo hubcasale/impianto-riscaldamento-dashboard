@@ -33,7 +33,7 @@ del sistema, quali scelte sono state fatte e perché, e che cosa resta da verifi
 | Programmi e puffer | Un programma accende la caldaia anche con il puffer già caldo (4/10 alle 11:47 con puffer 45 °C): da qui la salvaguardia. |
 | Raffreddamento | Il puffer da fermo perde circa 0,13 °C/min. Riaccensione di Comfort Clima osservata a circa 41-45 °C con set 45. |
 | Circolatore Polygon | In ECO STOP fa impulsi di circa 1 minuto ogni 10-11 minuti; da OFF resta spento. Il registro della pompa è di sola lettura. |
-| Sonda ESP32 alta | Legge più bassa della S3 dell'Elios per contatto termico scarso: ~73% del salto rispetto all'ambiente. Correzione provvisoria **+9,5 °C** (alta) e **+2,0 °C** (bassa). |
+| Sonde ESP32 del boiler | Leggono più basso di S3/S2 dell'Elios per contatto termico scarso: sentono in parte l'aria del garage. Correzione con modello di accoppiamento `stimata = T_ambiente + (grezza - T_ambiente) / k`, con **T_ambiente 16 °C**, **k alto 0,766**, **k basso 0,73** (5 letture di confronto, errore sotto 0,1 °C su quei punti). Il collettore stimato dal modello solare è invece già esatto (44,7 contro 44,8). |
 | Polling cloud | Home Assistant legge la caldaia ogni **60 s** (opzione `update_interval`), perciò vede una partenza con fino a 60 s di ritardo. |
 
 ## 3. Come funziona il sistema (vedi diagramma)
@@ -102,7 +102,7 @@ flowchart TD
 | Boiler alto / basso, grezzi (ESP32) | `sensor.solare_termico_boiler_alto`, `sensor.garage_solare_termico_boiler_basso` |
 | Boiler alto / basso, corretti (S3 / S2) | `sensor.boiler_solare_alto_stimato`, `sensor.boiler_solare_basso_stimato` |
 | Media, stratificazione, energia, acqua equivalente | `sensor.boiler_solare_temperatura_media`, `..._stratificazione`, `..._energia_accumulata`, `..._acqua_calda_equivalente` |
-| Correzioni provvisorie | `input_number.boiler_solare_delta_alto` (9,5), `..._delta_basso` (2,0) |
+| Correzione delle sonde | `input_number.boiler_solare_t_ambiente` (16), `..._k_alto` (0,766), `..._k_basso` (0,73); `..._delta_alto` / `..._delta_basso` (0) per ritocchi fini |
 | Stato e puffer della Polygon | `sensor.casale_stato`, `sensor.casale_temperatura_boiler` (= puffer da 50 L), `sensor.casale_temperatura_acqua` |
 | Accensione / spegnimento | `climate.casale_acqua` (heat / off) |
 | Programmi (N = 1..4) | `time.casale_crono_pN_accensione`, `..._spegnimento`, `number.casale_crono_pN_setpoint_boiler`, `..._setpoint_acqua`, `switch.casale_crono_pN_<giorno>`, `switch.casale_cronotermostato_settimanale` |
@@ -154,7 +154,7 @@ flowchart TD
 5. **Integrazione**: pubblicare la versione con i sensori dell'orologio (`v1.2.7-hubcasale.3`) e poi aggiungere la sincronizzazione
    automatica se lo scostamento supera 2-3 minuti.
 6. **Sonda bassa del boiler**: a tratti legge -30,7 °C (non collegata): controllare il contatto.
-7. **Hardware**: sostituire l'ADS1115, montare le sonde piccole (perlina NTC) e rifare il confronto con S3/S2 per sostituire i delta provvisori con gli `offset` di ESPHome.
+7. **Hardware**: sostituire l'ADS1115, montare le sonde piccole (perlina NTC) e rifare il confronto con S3/S2: poi k = 1 e delta = 0 (oppure `offset` in ESPHome). Intanto ricontrollare il modello con nuove letture di S3 e S2 a temperature diverse (soprattutto sopra 60 °C, dove il modello è un'estrapolazione).
 8. **Polling**: valutare di scendere a 15-20 s (`update_interval`) per accorciare il ritardo della salvaguardia.
 9. **Spegnimento per assenza** (nessuno a casa) e **preset** dei programmi: pianificati, non ancora fatti (vedi pacchetto
    e scheda di programmazione).

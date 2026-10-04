@@ -7,10 +7,11 @@ import yaml
 from jinja2 import Environment
 
 PKG = yaml.safe_load(open("ha-packages/caldaia_accensione_rapida.yaml"))
+BOILER = yaml.safe_load(open("ha-packages/boiler_solare.yaml"))
 
 
-def find(domain, name):
-    for item in PKG["template"]:
+def find(domain, name, pkg=None):
+    for item in (pkg or PKG)["template"]:
         for e in item.get(domain, []):
             if e["name"] == name:
                 return e
@@ -140,6 +141,26 @@ check("spegni: puffer sotto soglia ma acqua fredda", render(cond, {**sp_base, "s
 check("spegni: scaduta la durata massima (2 h)", render(cond, {**sp_base, "sensor.casale_temperatura_boiler": "64", "sensor.boiler_solare_alto_stimato": "40"}, a_(121), now=NOW), "True")
 check("spegni: poco prima delle 2 h", render(cond, {**sp_base, "sensor.casale_temperatura_boiler": "64"}, a_(119), now=NOW), "False")
 check("spegni: puffer non disponibile", render(cond, {**sp_base, "sensor.casale_temperatura_boiler": "unavailable"}, a_(40), now=NOW), "False")
+
+# ---------------------------------------------------------------- correzione delle sonde del boiler (modello di accoppiamento)
+alto_t = find("sensor", "Boiler solare - alto stimato", BOILER)
+basso_t = find("sensor", "Boiler solare - basso stimato", BOILER)
+par = {"input_number.boiler_solare_t_ambiente": "16", "input_number.boiler_solare_k_alto": "0.766", "input_number.boiler_solare_k_basso": "0.73",
+       "input_number.boiler_solare_delta_alto": "0", "input_number.boiler_solare_delta_basso": "0"}
+def vicino(label, tpl, grezza_entity, grezza, reale, tol=0.4):
+    global fails
+    got = float(render(tpl["state"], {**par, grezza_entity: str(grezza)}))
+    ok = abs(got - reale) <= tol
+    fails += 0 if ok else 1
+    print(("ok   " if ok else "FAIL ") + f"{label}: grezza {grezza} -> {got} (reale {reale})")
+for raw, true in [(45.1, 54.0), (47.2, 56.8), (49.5, 59.6)]:
+    vicino("alto", alto_t, "sensor.solare_termico_boiler_alto", raw, true)
+for raw, true in [(21.4, 23.4), (27.8, 32.2)]:
+    vicino("basso", basso_t, "sensor.garage_solare_termico_boiler_basso", raw, true)
+check("alto: sonda scollegata (-30,7) non disponibile", render(alto_t["availability"], {**par, "sensor.solare_termico_boiler_alto": "-30.7"}), "False")
+check("basso: sonda scollegata (-30,7) non disponibile", render(basso_t["availability"], {**par, "sensor.garage_solare_termico_boiler_basso": "-30.7"}), "False")
+check("alto: sonda normale disponibile", render(alto_t["availability"], {**par, "sensor.solare_termico_boiler_alto": "40"}), "True")
+check("delta di ritocco si somma", str(float(render(alto_t["state"], {**par, "sensor.solare_termico_boiler_alto": "49.5", "input_number.boiler_solare_delta_alto": "1"}))), "60.7")
 
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

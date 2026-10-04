@@ -118,8 +118,8 @@ I giorni si scrivono in italiano o inglese, corti o lunghi (`lun`, `mon`, `luned
 
 Le schede leggono sensori che qui sono forniti come esempio:
 
-- `ha-packages/boiler_solare.yaml`: temperature stimate alta e bassa (con una correzione provvisoria rispetto alla centralina
-  solare), media, stratificazione, energia accumulata e acqua calda equivalente.
+- `ha-packages/boiler_solare.yaml`: temperature stimate alta e bassa (con una correzione provvisoria di accoppiamento rispetto alla centralina
+  solare, vedi `docs/MEMORIA.md`), media, stratificazione, energia accumulata e acqua calda equivalente.
 - `ha-packages/caldaia_suggerimento.yaml`: suggerimento informativo di accendere o no la caldaia, contatori di
   accensioni e ore in lavoro. **Non comanda niente.**
 - `ha-packages/caldaia_tempo_acqua.yaml`: misura quanti minuti servono, dopo un'accensione a freddo, per portare il boiler solare

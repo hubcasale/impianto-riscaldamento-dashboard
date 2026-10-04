@@ -3,9 +3,11 @@
 # Modello semplice: il serbatoio e' diviso in due zone. La parte alta e' rappresentata dalla sonda alta,
 # il resto dalla sonda bassa (sul fondo del serbatoio).
 # Il peso della zona alta e' regolabile (default 40 %).
-# Le sonde NTC dell'ESP32 hanno oggi uno scarso contatto termico: leggono piu' basso della centralina Elios
-# (S3 alta, S2 bassa). Provvisoriamente si somma una correzione costante (delta) alle letture; quando arrivano
-# le sonde nuove si sostituisce il delta con gli offset in ESPHome (e qui il delta torna a 0).
+# Le sonde NTC dell'ESP32 hanno oggi uno scarso contatto termico: sentono in parte l'aria del garage e leggono piu'
+# basso della centralina Elios (S3 alta, S2 bassa). Correzione provvisoria con il modello di accoppiamento:
+#     stimata = T_ambiente + (grezza - T_ambiente) / k + delta
+# con T_ambiente = 16 C (garage), k_alto = 0.766, k_basso = 0.73 (ricavati da 5 letture di S3/S2 della centralina,
+# errore sotto 0.3 C). Il delta serve per ritocchi fini. Quando arrivano le sonde nuove: k = 1 e delta = 0.
 
 input_boolean:
   boiler_solare_defaults_impostati:
@@ -14,8 +16,30 @@ input_boolean:
   boiler_solare_defaults_v2_impostati:
     name: Boiler solare - valori iniziali v2 impostati
     icon: mdi:check
+  boiler_solare_defaults_v3_impostati:
+    name: Boiler solare - valori iniziali v3 impostati
+    icon: mdi:check
 
 input_number:
+  boiler_solare_t_ambiente:
+    name: Boiler solare - temperatura ambiente delle sonde (garage)
+    min: 0
+    max: 35
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
+  boiler_solare_k_alto:
+    name: Boiler solare - accoppiamento sonda alta (1 = perfetto)
+    min: 0.3
+    max: 1
+    step: 0.001
+    mode: box
+  boiler_solare_k_basso:
+    name: Boiler solare - accoppiamento sonda bassa (1 = perfetto)
+    min: 0.3
+    max: 1
+    step: 0.001
+    mode: box
   boiler_solare_delta_alto:
     name: Boiler solare - correzione sonda alta (S3 meno ESP32)
     min: -20
@@ -69,10 +93,13 @@ template:
         icon: mdi:thermometer-high
         availability: >
           {{ is_number(states('sensor.solare_termico_boiler_alto'))
-             and is_number(states('input_number.boiler_solare_delta_alto')) }}
+             and states('sensor.solare_termico_boiler_alto') | float > -20
+             and is_number(states('input_number.boiler_solare_k_alto')) }}
         state: >
-          {{ (states('sensor.solare_termico_boiler_alto') | float
-              + states('input_number.boiler_solare_delta_alto') | float) | round(1) }}
+          {% set amb = states('input_number.boiler_solare_t_ambiente') | float(16) %}
+          {% set k = states('input_number.boiler_solare_k_alto') | float(1) %}
+          {{ (amb + (states('sensor.solare_termico_boiler_alto') | float - amb) / k
+              + states('input_number.boiler_solare_delta_alto') | float(0)) | round(1) }}
 
       - name: Boiler solare - basso stimato
         unique_id: boiler_solare_basso_stimato
@@ -82,10 +109,13 @@ template:
         icon: mdi:thermometer-low
         availability: >
           {{ is_number(states('sensor.garage_solare_termico_boiler_basso'))
-             and is_number(states('input_number.boiler_solare_delta_basso')) }}
+             and states('sensor.garage_solare_termico_boiler_basso') | float > -20
+             and is_number(states('input_number.boiler_solare_k_basso')) }}
         state: >
-          {{ (states('sensor.garage_solare_termico_boiler_basso') | float
-              + states('input_number.boiler_solare_delta_basso') | float) | round(1) }}
+          {% set amb = states('input_number.boiler_solare_t_ambiente') | float(16) %}
+          {% set k = states('input_number.boiler_solare_k_basso') | float(1) %}
+          {{ (amb + (states('sensor.garage_solare_termico_boiler_basso') | float - amb) / k
+              + states('input_number.boiler_solare_delta_basso') | float(0)) | round(1) }}
 
       - name: Boiler solare - temperatura media
         unique_id: boiler_solare_temperatura_media
@@ -192,3 +222,32 @@ automation:
         data: {value: 2.0}
       - action: input_boolean.turn_on
         target: {entity_id: input_boolean.boiler_solare_defaults_v2_impostati}
+
+  - id: boiler_solare_valori_iniziali_v3
+    alias: Boiler solare - valori iniziali v3
+    description: Passa dalla correzione fissa al modello di accoppiamento (una sola volta).
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.boiler_solare_defaults_v3_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_t_ambiente}
+        data: {value: 16}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_k_alto}
+        data: {value: 0.766}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_k_basso}
+        data: {value: 0.73}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_delta_alto}
+        data: {value: 0}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_delta_basso}
+        data: {value: 0}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.boiler_solare_defaults_v3_impostati}
