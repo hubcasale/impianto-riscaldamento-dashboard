@@ -171,3 +171,13 @@ flowchart TD
 9. **Spegnimento per assenza** (nessuno a casa) e **preset** dei programmi: pianificati, non ancora fatti (vedi pacchetto
    e scheda di programmazione).
 10. **Repository**: renderlo pubblico se si vuole installarlo da HACS (ora è privato, la convalida HACS fallisce per questo).
+
+11. **Idea: anti-legionella fatta da noi** (da progettare, non iniziata). La funzione dell'Elios (parametro P16 «LEG», **disattivata di fabbrica**,
+    solo per gli schemi con integrazione) fa questo: se in 30 giorni l'acqua del boiler non ha raggiunto almeno una volta 65 °C per 5 minuti
+    consecutivi, esegue un ciclo di riscaldamento a 65 °C per 5 minuti. Il contatore dei 30 giorni si azzera ogni volta che il boiler tiene 65 °C
+    per almeno 5 minuti (anche per merito del solare). Se entro un'ora il ciclo non riesce, l'Elios suona, fa lampeggiare l'icona della caldaia e forza
+    il riscaldamento; per uscire dall'allarme si usa il sottoparametro «RS L» di P16 (azzera il contatore).
+    Come potremmo replicarla: un sensore che registra l'ultima volta in cui la S3 stimata è stata ≥ 65 °C per 5 minuti (anche solo col sole), una
+    notifica/ciclo quando mancano pochi giorni ai 30, un ciclo che accende la caldaia (puffer ≥ 70 °C), sblocca l'integrazione e aspetta S3 ≥ 65 °C per
+    5 minuti con un limite di un'ora e un avviso se non riesce. Attenzioni: la sonda ESP32 è corretta con una stima (±1 °C), il puffer arriva a circa
+    65-70 °C col set attuale, e durante il ciclo il blocco dell'integrazione deve restare disattivato.
