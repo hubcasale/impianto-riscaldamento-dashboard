@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 800" width="1400" height="800" font-family="Helvetica, Arial, sans-serif">
-<rect width="1400" height="800" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 940" width="1400" height="940" font-family="Helvetica, Arial, sans-serif">
+<rect width="1400" height="940" fill="#ffffff"/>
 <text x="700.0" y="34" font-size="22" font-weight="700" fill="#0f172a" text-anchor="middle">Pompa di integrazione con Shelly 1PM: schema dei collegamenti</text>
 <text x="700.0" y="56" font-size="12.5" font-weight="400" fill="#475569" text-anchor="middle">L'Elios (schema 02, OUT2) non alimenta più la pompa: dà solo il segnale «richiesta integrazione». Il relè dello Shelly alimenta la pompa e può bloccarla da Home Assistant.</text>
 <rect x="30" y="110" width="190" height="110" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2.5"/>
@@ -54,9 +54,6 @@
 <text x="1162" y="491" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L</text>
 <circle cx="1150" cy="525" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
 <text x="1162" y="529" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">N</text>
-<rect x="800" y="455" width="200" height="70" rx="12" fill="#fff7ed" stroke="#fb923c" stroke-width="2.5" stroke-dasharray="6 4"/>
-<text x="900.0" y="479" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Shelly di misura (esistente)</text>
-<text x="900.0" y="497" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">in serie su questa linea</text>
 <polyline points="225,160 330,160" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="280,160 280,76 700,76" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
 <polyline points="700,76 700,405" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
@@ -65,8 +62,26 @@
 <polyline points="760,76 760,300 800,300" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
 <path d="M665 315 H693 a7 7 0 0 1 14 0 H740 V340 H800" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round" stroke-dasharray="9 5"/>
 <polyline points="1005,300 1150,300" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round"/>
-<polyline points="665,445 700,445 700,490 800,490" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
-<polyline points="1000,490 1100,490 1100,487 1150,487" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="665,445 700,445 700,490 1100,490 1100,487 1150,487" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="900" cy="490" r="17" fill="#fff7ed" fill-opacity="0.6" stroke="#fb923c" stroke-width="4"/>
+<line x1="915" y1="478" x2="930" y2="470" stroke="#fb923c" stroke-width="3"/>
+<text x="900" y="466" font-size="12" font-weight="700" fill="#c2410c" text-anchor="middle">pinza (CT)</text>
+<text x="960" y="482" font-size="10.5" font-weight="400" fill="#c2410c" text-anchor="start">freccia verso la pompa</text>
+<rect x="800" y="575" width="200" height="125" rx="12" fill="#fff7ed" stroke="#fb923c" stroke-width="2.5"/>
+<text x="900.0" y="599" font-size="15" font-weight="700" fill="#0f172a" text-anchor="middle">Shelly EM Mini Gen4</text>
+<text x="900.0" y="617" font-size="11.5" font-weight="400" fill="#475569" text-anchor="middle">esistente · solo misura, senza relè</text>
+<circle cx="800" cy="630" r="5" fill="#fff" stroke="#92400e" stroke-width="2.5"/>
+<text x="812" y="634" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">L</text>
+<circle cx="800" cy="668" r="5" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
+<text x="812" y="672" font-size="12" font-weight="700" fill="#0f172a" text-anchor="start">N</text>
+<polyline points="770,630 800,630" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<text x="765" y="634" font-size="11" font-weight="700" fill="#92400e" text-anchor="end">L permanente</text>
+<polyline points="800,668 762,668" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
+<rect x="751" y="659" width="11" height="18" rx="3" fill="#2563eb"/>
+<text x="746" y="672" font-size="11" font-weight="700" fill="#2563eb" text-anchor="end">N comune</text>
+<circle cx="900" cy="575" r="5" fill="#fff" stroke="#fb923c" stroke-width="2.5"/>
+<text x="888" y="566" font-size="11" font-weight="700" fill="#c2410c" text-anchor="end">ingresso pinza CT</text>
+<polyline points="900,507 900,575" fill="none" stroke="#fb923c" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="5 4"/>
 <polyline points="330,200 292,200" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
 <rect x="281" y="191" width="11" height="18" rx="3" fill="#2563eb"/>
 <text x="276" y="204" font-size="11" font-weight="700" fill="#2563eb" text-anchor="end">N comune</text>
@@ -97,21 +112,22 @@
 <text x="770" y="423" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">2</text>
 <circle cx="1075" cy="286" r="13" fill="#dc2626"/>
 <text x="1075" y="291" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">3</text>
-<rect x="30" y="578" width="1340" height="170" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
-<polyline points="50,600 100,600" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
-<text x="110" y="604" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">fase (L)</text>
-<polyline points="210,600 260,600" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
-<text x="270" y="604" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">neutro (N)</text>
-<polyline points="390,600 440,600" fill="none" stroke="#16a34a" stroke-width="4" stroke-linejoin="round"/>
-<polyline points="390,600 440,600" fill="none" stroke="#facc15" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 6"/>
-<text x="450" y="604" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">terra (PE)</text>
-<polyline points="560,600 620,600" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round" stroke-dasharray="9 5"/>
-<text x="630" y="604" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">filo che cambia destinazione</text>
-<polyline points="840,600 900,600" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round"/>
-<text x="910" y="604" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">filo nuovo</text>
-<text x="50" y="632" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">1  Il filo di fase che oggi esce da OUT2 (morsetto b) verso la pompa va ora all'ingresso SW dello Shelly: l'Elios dà solo il segnale (la pompa non passa più da lì).</text>
-<text x="50" y="654" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">2  Lo Shelly è alimentato da L e N permanenti, non dal contatto OUT2: deve restare acceso anche quando l'Elios non chiama la pompa.</text>
-<text x="50" y="676" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">3  Filo nuovo dall'uscita O dello Shelly alla fase della pompa. Neutro e terra della pompa restano com'erano; la linea del collettore (OUT1) non cambia.</text>
-<text x="50" y="700" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">«N comune» e «terra comune» sono le barre che hai già: i tratti disegnati sono i conduttori di oggi, non servono fili in più.</text>
-<text x="50" y="728" font-size="12.5" font-weight="700" fill="#dc2626" text-anchor="start">Stessa fase per L, SW e O. Prima di toccare qualsiasi filo togli corrente dal quadro. Lavori da elettricista abilitato, con puntalini sui conduttori.</text>
+<rect x="30" y="713" width="1340" height="195" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+<polyline points="50,735 100,735" fill="none" stroke="#92400e" stroke-width="3" stroke-linejoin="round"/>
+<text x="110" y="739" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">fase (L)</text>
+<polyline points="210,735 260,735" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
+<text x="270" y="739" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">neutro (N)</text>
+<polyline points="390,735 440,735" fill="none" stroke="#16a34a" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="390,735 440,735" fill="none" stroke="#facc15" stroke-width="4" stroke-linejoin="round" stroke-dasharray="6 6"/>
+<text x="450" y="739" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">terra (PE)</text>
+<polyline points="560,735 620,735" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round" stroke-dasharray="9 5"/>
+<text x="630" y="739" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">filo che cambia destinazione</text>
+<polyline points="840,735 900,735" fill="none" stroke="#92400e" stroke-width="4" stroke-linejoin="round"/>
+<text x="910" y="739" font-size="12" font-weight="400" fill="#0f172a" text-anchor="start">filo nuovo</text>
+<text x="50" y="767" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">1  Il filo di fase che oggi esce da OUT2 (morsetto b) verso la pompa va ora all'ingresso SW dello Shelly: l'Elios dà solo il segnale (la pompa non passa più da lì).</text>
+<text x="50" y="789" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">2  Lo Shelly è alimentato da L e N permanenti, non dal contatto OUT2: deve restare acceso anche quando l'Elios non chiama la pompa.</text>
+<text x="50" y="811" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">3  Filo nuovo dall'uscita O dello Shelly alla fase della pompa. Neutro e terra della pompa restano com'erano; la linea del collettore (OUT1) non cambia.</text>
+<text x="50" y="833" font-size="12.5" font-weight="400" fill="#0f172a" text-anchor="start">4  Lo Shelly di misura (EM Mini Gen4) resta alimentato da L e N come ora: si sposta solo la PINZA, aperta e richiusa attorno al SOLO filo di fase tra OUT1 b e la pompa del collettore (freccia verso la pompa). Nessun filo si taglia.</text>
+<text x="50" y="857" font-size="12.5" font-weight="400" fill="#475569" text-anchor="start">«N comune» e «terra comune» sono le barre che hai già: i tratti disegnati sono i conduttori di oggi, non servono fili in più.</text>
+<text x="50" y="887" font-size="12.5" font-weight="700" fill="#dc2626" text-anchor="start">Stessa fase per L, SW e O. Prima di toccare qualsiasi filo togli corrente dal quadro. Lavori da elettricista abilitato, con puntalini sui conduttori.</text>
 </svg>
