@@ -67,6 +67,10 @@ model:
 
 Sotto i 560 px di larghezza il disegno del boiler perde il puffer (resta nelle tessere) per restare leggibile.
 
+**Modalità compatta** (`compact: auto | true | false`, predefinito `auto`): sugli schermi larghi ma bassi (tablet, altezza sotto 850 px)
+la scheda si riduce per stare in una schermata: boiler ridimensionato all'altezza dello schermo, meno tessere, niente legenda delle fiamme.
+Per forzarla o escluderla: `compact: true` / `compact: false`.
+
 ## `caldaia-schedule-card`
 
 ```yaml

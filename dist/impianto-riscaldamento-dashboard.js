@@ -740,20 +740,33 @@ var ImpiantoOverviewCard = class extends i4 {
   constructor() {
     super(...arguments);
     this._narrow = false;
+    this._compact = false;
     this._armed = false;
+    this._width = 1e3;
+    this._onResize = () => this._updateCompact();
   }
   connectedCallback() {
     super.connectedCallback();
     this._ro = new ResizeObserver((entries) => {
       const w2 = entries[0]?.contentRect.width ?? 1e3;
+      this._width = w2;
       const narrow = w2 < 560;
       if (narrow !== this._narrow) this._narrow = narrow;
+      this._updateCompact();
     });
     this._ro.observe(this);
+    window.addEventListener("resize", this._onResize);
+  }
+  /** Compatta se richiesto, oppure (auto) quando c'è spazio in larghezza ma lo schermo è basso. */
+  _updateCompact() {
+    const opt = this._config?.compact ?? "auto";
+    const compact = opt === true || opt === "auto" && this._width >= 900 && window.innerHeight < 850;
+    if (compact !== this._compact) this._compact = compact;
   }
   disconnectedCallback() {
     super.disconnectedCallback();
     this._ro?.disconnect();
+    window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
   }
   /** Primo tocco = conferma richiesta (4 secondi), secondo tocco = esegue. */
@@ -773,6 +786,7 @@ var ImpiantoOverviewCard = class extends i4 {
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
     this._config = config;
+    this._updateCompact();
   }
   getCardSize() {
     return 12;
@@ -835,7 +849,7 @@ var ImpiantoOverviewCard = class extends i4 {
     const eta = this._n(e5.eta);
     const btn = boostButton(this._s(e5.boost_state), this._armed);
     return b2`
-      <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : "0 0 700 840"} role="img" aria-label="Boiler solare">
+      <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : this._compact ? "0 66 700 762" : "0 0 700 840"} role="img" aria-label="Boiler solare">
         <defs>
           <linearGradient id="acqua" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color=${cTop} />
@@ -1031,10 +1045,10 @@ var ImpiantoOverviewCard = class extends i4 {
           ${this._tile("Fiamma", `${fmt(this._n(e5.flame), 0)} \xB0C`)}
           ${this._tile("Potenza reale", `${fmt(this._n(e5.power), 0)} %`)}
           ${this._tile("Pressione acqua", `${fmt(this._n(e5.water_pressure), 1)} bar`)}
-          ${this._tile("Pressione braciere", fmt(this._n(e5.brazier_pressure), 1))}
-          ${this._tile("Estrattore fumi", `${fmt(this._n(e5.extractor), 0)} giri`)}
+          ${this._compact ? A : this._tile("Pressione braciere", fmt(this._n(e5.brazier_pressure), 1))}
+          ${this._compact ? A : this._tile("Estrattore fumi", `${fmt(this._n(e5.extractor), 0)} giri`)}
           ${this._tile("Circolatore", pump === void 0 ? "\u2013" : pumpOn ? "ON" : "OFF", pumpOn ? "#22c55e" : void 0)}
-          ${this._tile("Accensioni ieri", fmt(this._n(e5.starts_yesterday), 0))}
+          ${this._compact ? A : this._tile("Accensioni ieri", fmt(this._n(e5.starts_yesterday), 0))}
           ${this._tile("Allarme", noAlarm ? "nessuno" : alarmRaw, noAlarm ? "#22c55e" : "#ef4444")}
         </div>
         <div class="counters">
@@ -1059,7 +1073,7 @@ var ImpiantoOverviewCard = class extends i4 {
     return b2`
       <ha-card>
         ${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}
-        <div class="layout">${this._renderBoiler()} ${this._renderStove()}</div>
+        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()} ${this._renderStove()}</div>
       </ha-card>
     `;
   }
@@ -1413,6 +1427,66 @@ var ImpiantoOverviewCard = class extends i4 {
     .look {
       display: none;
     }
+    /* modalità compatta: tutto in una schermata di tablet */
+    .compact svg.boiler {
+      max-height: calc(100vh - 150px);
+    }
+    .compact .stove {
+      padding: 10px 12px;
+    }
+    .compact .stove h3 {
+      margin: 0 0 6px;
+      font-size: 15px;
+    }
+    .compact .top {
+      grid-template-columns: 130px 1fr;
+      gap: 8px;
+    }
+    .compact .stoveimg {
+      max-width: 120px;
+    }
+    .compact .statecard {
+      padding: 6px;
+      gap: 2px;
+    }
+    .compact .statepill {
+      font-size: 17px;
+      margin-bottom: 4px;
+    }
+    .compact .water {
+      font-size: 26px;
+      margin-bottom: 4px;
+    }
+    .compact .legendbar {
+      display: none;
+    }
+    .compact .tiles {
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .compact .tile {
+      padding: 4px 8px;
+    }
+    .compact .tv {
+      font-size: 15px;
+    }
+    .compact .counters {
+      margin-top: 8px;
+      padding: 4px 10px;
+    }
+    .compact .counters > div {
+      font-size: 14px;
+    }
+    .compact .chips {
+      margin-top: 8px;
+    }
+    .compact .chip {
+      padding: 3px 4px;
+    }
+    .compact .guard {
+      margin-top: 8px;
+      padding: 6px 12px;
+    }
     .guard {
       display: flex;
       align-items: center;
@@ -1475,6 +1549,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoOverviewCard.prototype, "_narrow", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCard.prototype, "_compact", 2);
 __decorateClass([
   r5()
 ], ImpiantoOverviewCard.prototype, "_armed", 2);
@@ -2362,7 +2439,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.2.1";
+var VERSION = "0.2.2";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

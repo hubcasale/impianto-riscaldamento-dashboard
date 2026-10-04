@@ -84,6 +84,8 @@ type NumOrEntity = number | string;
 export interface PlantCardConfig {
   type: string;
   title?: string;
+  /** "auto" (predefinito): compatta sugli schermi bassi (tablet); true/false per forzare */
+  compact?: boolean | "auto";
   entities?: Partial<PlantEntities>;
   model?: {
     /** litri del boiler solare (utili: 190 per un Bolly 2 da 200 L) */
@@ -119,7 +121,10 @@ export class ImpiantoOverviewCard extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @state() private _config!: PlantCardConfig;
   @state() private _narrow = false;
+  @state() private _compact = false;
   @state() private _armed = false;
+  private _width = 1000;
+  private _onResize = () => this._updateCompact();
   private _armTimer?: number;
   private _ro?: ResizeObserver;
 
@@ -128,15 +133,26 @@ export class ImpiantoOverviewCard extends LitElement {
     // su schermi stretti (telefono) lo schema del boiler perde il puffer per restare leggibile
     this._ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width ?? 1000;
+      this._width = w;
       const narrow = w < 560;
       if (narrow !== this._narrow) this._narrow = narrow;
+      this._updateCompact();
     });
     this._ro.observe(this);
+    window.addEventListener("resize", this._onResize);
+  }
+
+  /** Compatta se richiesto, oppure (auto) quando c'è spazio in larghezza ma lo schermo è basso. */
+  private _updateCompact(): void {
+    const opt = this._config?.compact ?? "auto";
+    const compact = opt === true || (opt === "auto" && this._width >= 900 && window.innerHeight < 850);
+    if (compact !== this._compact) this._compact = compact;
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this._ro?.disconnect();
+    window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
   }
 
@@ -158,6 +174,7 @@ export class ImpiantoOverviewCard extends LitElement {
   setConfig(config: PlantCardConfig): void {
     if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
     this._config = config;
+    this._updateCompact();
   }
 
   getCardSize(): number {
@@ -232,7 +249,7 @@ export class ImpiantoOverviewCard extends LitElement {
     const btn = boostButton(this._s(e.boost_state), this._armed);
 
     return html`
-      <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : "0 0 700 840"} role="img" aria-label="Boiler solare">
+      <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : this._compact ? "0 66 700 762" : "0 0 700 840"} role="img" aria-label="Boiler solare">
         <defs>
           <linearGradient id="acqua" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color=${cTop} />
@@ -445,10 +462,10 @@ export class ImpiantoOverviewCard extends LitElement {
           ${this._tile("Fiamma", `${fmt(this._n(e.flame), 0)} °C`)}
           ${this._tile("Potenza reale", `${fmt(this._n(e.power), 0)} %`)}
           ${this._tile("Pressione acqua", `${fmt(this._n(e.water_pressure), 1)} bar`)}
-          ${this._tile("Pressione braciere", fmt(this._n(e.brazier_pressure), 1))}
-          ${this._tile("Estrattore fumi", `${fmt(this._n(e.extractor), 0)} giri`)}
+          ${this._compact ? nothing : this._tile("Pressione braciere", fmt(this._n(e.brazier_pressure), 1))}
+          ${this._compact ? nothing : this._tile("Estrattore fumi", `${fmt(this._n(e.extractor), 0)} giri`)}
           ${this._tile("Circolatore", pump === undefined ? "–" : pumpOn ? "ON" : "OFF", pumpOn ? "#22c55e" : undefined)}
-          ${this._tile("Accensioni ieri", fmt(this._n(e.starts_yesterday), 0))}
+          ${this._compact ? nothing : this._tile("Accensioni ieri", fmt(this._n(e.starts_yesterday), 0))}
           ${this._tile("Allarme", noAlarm ? "nessuno" : alarmRaw, noAlarm ? "#22c55e" : "#ef4444")}
         </div>
         <div class="counters">
@@ -474,7 +491,7 @@ export class ImpiantoOverviewCard extends LitElement {
     return html`
       <ha-card>
         ${this._config.title ? html`<div class="ctitle">${this._config.title}</div>` : nothing}
-        <div class="layout">${this._renderBoiler()} ${this._renderStove()}</div>
+        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()} ${this._renderStove()}</div>
       </ha-card>
     `;
   }
@@ -827,6 +844,66 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .look {
       display: none;
+    }
+    /* modalità compatta: tutto in una schermata di tablet */
+    .compact svg.boiler {
+      max-height: calc(100vh - 150px);
+    }
+    .compact .stove {
+      padding: 10px 12px;
+    }
+    .compact .stove h3 {
+      margin: 0 0 6px;
+      font-size: 15px;
+    }
+    .compact .top {
+      grid-template-columns: 130px 1fr;
+      gap: 8px;
+    }
+    .compact .stoveimg {
+      max-width: 120px;
+    }
+    .compact .statecard {
+      padding: 6px;
+      gap: 2px;
+    }
+    .compact .statepill {
+      font-size: 17px;
+      margin-bottom: 4px;
+    }
+    .compact .water {
+      font-size: 26px;
+      margin-bottom: 4px;
+    }
+    .compact .legendbar {
+      display: none;
+    }
+    .compact .tiles {
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .compact .tile {
+      padding: 4px 8px;
+    }
+    .compact .tv {
+      font-size: 15px;
+    }
+    .compact .counters {
+      margin-top: 8px;
+      padding: 4px 10px;
+    }
+    .compact .counters > div {
+      font-size: 14px;
+    }
+    .compact .chips {
+      margin-top: 8px;
+    }
+    .compact .chip {
+      padding: 3px 4px;
+    }
+    .compact .guard {
+      margin-top: 8px;
+      padding: 6px 12px;
     }
     .guard {
       display: flex;
