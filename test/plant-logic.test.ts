@@ -63,7 +63,7 @@ test("pulsante: accensione in corso si puo annullare", () => {
 });
 
 test("pulsante: gli stati bloccati non sono cliccabili", () => {
-  for (const s of ["non_serve", "puffer_caldo", "accesa", "in_arresto", "allarme", "limite", "non_disponibile"]) {
+  for (const s of ["non_serve", "puffer_caldo", "accesa", "in_attesa", "in_arresto", "allarme", "limite", "non_disponibile"]) {
     assert.equal(boostButton(s, false).action, "none", s);
     assert.equal(boostButton(s, true).action, "none", s);
   }

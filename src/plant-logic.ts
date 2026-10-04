@@ -104,6 +104,7 @@ export type BoostState =
   | "non_serve"
   | "puffer_caldo"
   | "accesa"
+  | "in_attesa"
   | "in_arresto"
   | "allarme"
   | "limite"
@@ -121,7 +122,8 @@ const BOOST_LABEL: Record<BoostState, [string, string]> = {
   attiva: ["Annulla", "accensione in corso"],
   non_serve: ["Non serve", "acqua già calda"],
   puffer_caldo: ["Puffer caldo", "il calore c'è già"],
-  accesa: ["Già accesa", ""],
+  accesa: ["Già accesa", "in accensione o al lavoro"],
+  in_attesa: ["In attesa", "ECO STOP: riparte da sola"],
   in_arresto: ["In spegnimento", "riprova tra poco"],
   allarme: ["Allarme", "caldaia bloccata"],
   limite: ["Limite di oggi", "accensioni rapide"],

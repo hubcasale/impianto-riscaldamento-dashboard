@@ -669,7 +669,8 @@ var BOOST_LABEL = {
   attiva: ["Annulla", "accensione in corso"],
   non_serve: ["Non serve", "acqua gi\xE0 calda"],
   puffer_caldo: ["Puffer caldo", "il calore c'\xE8 gi\xE0"],
-  accesa: ["Gi\xE0 accesa", ""],
+  accesa: ["Gi\xE0 accesa", "in accensione o al lavoro"],
+  in_attesa: ["In attesa", "ECO STOP: riparte da sola"],
   in_arresto: ["In spegnimento", "riprova tra poco"],
   allarme: ["Allarme", "caldaia bloccata"],
   limite: ["Limite di oggi", "accensioni rapide"],
@@ -1018,7 +1019,7 @@ var ImpiantoOverviewCard = class extends i4 {
           </div>
         </div>
         <div class="legendbar">
-          <div><span class="dot"></span><b>Spenta</b><small>ECO STOP / OFF</small></div>
+          <div><span class="dot"></span><b>Senza fiamma</b><small>ECO STOP / OFF</small></div>
           <div>${this._legendFlame(0.38)}<b class="amber">Accensione</b><small>START</small></div>
           <div>${this._legendFlame(0.62)}<b class="red">In lavoro</b><small>WORK</small></div>
         </div>
@@ -2361,7 +2362,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.2.0";
+var VERSION = "0.2.1";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

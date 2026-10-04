@@ -147,22 +147,24 @@ template:
           {% elif not is_number(alto) or stato in ['UNKNOWN', 'UNAVAILABLE', ''] %}non_disponibile
           {% elif allarme not in ['', 'unknown', 'unavailable'] and allarme | replace('_', '') | replace('-', '') | trim != '' and allarme != '0' %}allarme
           {% elif stato in ['STOP', 'SPEGNIMENTO'] %}in_arresto
-          {% elif stato != 'OFF' %}accesa
           {% elif alto | float >= states('input_number.caldaia_t_uso_acqua') | float(45) %}non_serve
+          {% elif stato in ['ECO STOP', 'STAND BY', 'STANDBY'] %}in_attesa
+          {% elif stato != 'OFF' %}accesa
           {% elif is_number(puffer) and puffer | float >= states('input_number.caldaia_boost_t_puffer_spegni') | float(50) %}puffer_caldo
           {% elif states('counter.caldaia_boost_oggi') | int(0) >= states('input_number.caldaia_boost_max_al_giorno') | int(2) %}limite
           {% else %}pronta{% endif %}
         attributes:
           etichetta: >
             {{ {'attiva': 'In corso', 'non_disponibile': 'Non disponibile', 'allarme': 'Allarme', 'in_arresto': 'In spegnimento',
-                'accesa': 'Già accesa', 'non_serve': 'Non serve', 'puffer_caldo': 'Puffer caldo', 'limite': 'Limite giornaliero',
+                'accesa': 'Già accesa', 'in_attesa': 'In attesa', 'non_serve': 'Non serve', 'puffer_caldo': 'Puffer caldo', 'limite': 'Limite giornaliero',
                 'pronta': 'Avvia caldaia'}[this.state] | default('') }}
           motivo: >
             {{ {'attiva': 'Accensione rapida in corso',
                 'non_disponibile': 'Mancano i dati della sonda o della caldaia',
                 'allarme': 'La caldaia ha un allarme attivo',
                 'in_arresto': 'La caldaia si sta spegnendo, riprova tra qualche minuto',
-                'accesa': 'La caldaia è già accesa (in attesa o al lavoro)',
+                'accesa': 'La caldaia è già in accensione o al lavoro',
+                'in_attesa': 'La caldaia è accesa ma in attesa (ECO STOP): riparte da sola quando serve',
                 'non_serve': 'L\'acqua è già a temperatura d\'uso',
                 'puffer_caldo': 'Il puffer è già caldo: l\'integrazione porta il calore al boiler',
                 'limite': 'Raggiunto il numero di accensioni rapide di oggi',

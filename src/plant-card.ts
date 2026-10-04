@@ -433,7 +433,7 @@ export class ImpiantoOverviewCard extends LitElement {
           </div>
         </div>
         <div class="legendbar">
-          <div><span class="dot"></span><b>Spenta</b><small>ECO STOP / OFF</small></div>
+          <div><span class="dot"></span><b>Senza fiamma</b><small>ECO STOP / OFF</small></div>
           <div>${this._legendFlame(0.38)}<b class="amber">Accensione</b><small>START</small></div>
           <div>${this._legendFlame(0.62)}<b class="red">In lavoro</b><small>WORK</small></div>
         </div>
