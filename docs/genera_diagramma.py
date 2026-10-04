@@ -113,7 +113,7 @@ a(f'<text x="{bx}" y="840" font-size="11" fill="{COL["sub"]}" text-anchor="middl
 
 # ---------------------------------------------------------------- C
 cx = 1230
-oval(cx, 160, 330, 52, ["La Polygon passa da OFF a WAIT/START"])
+oval(cx, 160, 330, 52, ["La Polygon passa da OFF o ECO STOP a WAIT/START"])
 arrow([(cx, 186), (cx, 232)])
 diamond(cx, 280, 250, 96, ["Salvaguardia attiva?", "(interruttore dashboard)"])
 arrow([(cx + 125, 280), (cx + 160, 280)], color=COL["no"])

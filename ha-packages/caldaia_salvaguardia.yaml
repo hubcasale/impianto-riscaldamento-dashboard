@@ -1,12 +1,13 @@
 # Salvaguardia contro le partenze inutili della caldaia.
 #
-# Quando la Polygon passa da OFF a WAIT/START (per esempio perche' inizia un programma) ma il puffer e' gia' caldo, il
-# boiler solare e' gia' a temperatura d'uso e il termostato non chiede riscaldamento, la partenza e' inutile e viene
-# annullata (la caldaia viene spenta in fase di accensione, prima di bruciare pellet).
+# Quando la Polygon passa a WAIT/START da OFF (per esempio perche' inizia un programma) oppure da ECO STOP (riaccensione
+# decisa da Comfort Clima quando l'acqua della caldaia scende sotto set acqua meno isteresi, per esempio 65 - 15 = 50 C)
+# ma il puffer e' gia' caldo, il boiler solare e' gia' a temperatura d'uso e il termostato non chiede riscaldamento, la
+# partenza e' inutile e viene annullata (la caldaia viene spenta in fase di accensione, prima di bruciare pellet).
+# La Polygon decide la riaccensione solo in base alla sua acqua, senza sapere che il boiler solare e' gia' caldo.
 #
 # - Non interviene se il termostato dei radiatori chiede calore.
-# - Interviene solo sulla partenza di un programma (non su accensioni a mano) e non sulle riaccensioni da ECO STOP
-#   (quelle dipendono dalla temperatura e le decide la Polygon).
+# - Interviene solo se un programma e' attivo o sta per partire (non su accensioni a mano o con il pulsante).
 # - Non interviene durante un'accensione rapida voluta con il pulsante.
 # - Si disattiva con input_boolean.caldaia_salvaguardia_attiva (interruttore nella scheda della dashboard).
 #
@@ -39,14 +40,14 @@ automation:
   - id: caldaia_salvaguardia_annulla_partenza
     alias: Caldaia - salvaguardia, annulla partenza inutile
     description: >
-      Parte da OFF; dopo 10 secondi controlla che sia davvero la partenza di un programma (con una tolleranza di 3 minuti
+      Parte da OFF o da ECO STOP; dopo 10 secondi controlla che sia davvero la partenza di un programma (con una tolleranza di 3 minuti
       sull'orologio) e che puffer e boiler siano gia' caldi. Il ritardo vero e' quello del sondaggio del cloud
       (opzione "update_interval" dell'integrazione, 60 s di serie).
     mode: single
     triggers:
       - trigger: state
         entity_id: sensor.casale_stato
-        from: "OFF"
+        from: ["OFF", "ECO STOP"]
         to: ["WAIT", "START"]
     conditions:
       - condition: state
@@ -87,7 +88,7 @@ automation:
         data:
           name: Caldaia
           message: >
-            partenza del programma annullata dalla salvaguardia (puffer {{ states('sensor.casale_temperatura_boiler') }} °C,
+            partenza annullata dalla salvaguardia (puffer {{ states('sensor.casale_temperatura_boiler') }} °C,
             boiler {{ states('sensor.boiler_solare_alto_stimato') }} °C, nessuna richiesta del termostato)
 
   - id: caldaia_salvaguardia_riaccendi

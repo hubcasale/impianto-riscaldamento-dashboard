@@ -31,6 +31,7 @@ del sistema, quali scelte sono state fatte e perché, e che cosa resta da verifi
 | Acqua pronta | Dopo l'accensione, la sonda alta del boiler (corretta) supera 45 °C in circa **34 minuti** e 50 °C in circa 48 (4/10). Non serve un'ora. |
 | Orologio della caldaia | Andava **13 minuti avanti** (programmi partiti 13 min prima: 05:30→05:17, 07:00→06:46, 12:00→11:47; fine 09:30→09:17). Il 4/10 l'utente l'ha allineato. |
 | Programmi e puffer | Un programma accende la caldaia anche con il puffer già caldo (4/10 alle 11:47 con puffer 45 °C): da qui la salvaguardia. |
+| Riaccensione da ECO STOP | Il 4/10 alle 17:13 la Polygon è ripartita da ECO STOP con acqua a 50 °C (= set acqua 65 − isteresi 15), pur con il boiler solare a 56 °C: decide solo in base alla sua acqua. |
 | Raffreddamento | Il puffer da fermo perde circa 0,13 °C/min. Riaccensione di Comfort Clima osservata a circa 41-45 °C con set 45. |
 | Circolatore Polygon | In ECO STOP fa impulsi di circa 1 minuto ogni 10-11 minuti; da OFF resta spento. Il registro della pompa è di sola lettura. |
 | Sonde ESP32 del boiler | Leggono più basso di S3/S2 dell'Elios per contatto termico scarso: sentono in parte l'aria del garage. Correzione con modello di accoppiamento `stimata = T_ambiente + (grezza - T_ambiente) / k`, con **T_ambiente 16 °C**, **k alto 0,766**, **k basso 0,73** (5 letture di confronto, errore sotto 0,1 °C su quei punti). Il collettore stimato dal modello solare è invece già esatto (44,7 contro 44,8). |
@@ -52,7 +53,7 @@ e *nient'altro* la tiene accesa (termostato che chiede calore, programma attivo 
 scende a 50 °C con il boiler a 45 °C o più, oppure dopo 2 ore. Non spegne mai in START o WORK. Dopo 3 ore chiude la
 richiesta senza spegnere. «Annulla» o spegnimento a mano chiudono la richiesta.
 
-**C. Salvaguardia partenze inutili.** Quando la Polygon passa da OFF a WAIT/START, dopo **10 secondi** controlla: è un
+**C. Salvaguardia partenze inutili.** Quando la Polygon passa da OFF **o da ECO STOP** a WAIT/START (programma che parte, oppure riaccensione di Comfort Clima quando l'acqua della caldaia scende sotto set acqua meno isteresi, es. 65 − 15 = 50 °C), dopo **10 secondi** controlla: è un
 programma attivo o in partenza (±3 min), non un'accensione a mano o col pulsante? Il termostato non chiede calore?
 Puffer ≥ 45 °C e boiler ≥ 45 °C? Se sì, spegne la caldaia (partenza inutile). Finché il programma è attivo la
 **riaccende** se il termostato chiede riscaldamento o se l'acqua si raffredda con il puffer sotto 45 °C.
