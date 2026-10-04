@@ -8,6 +8,11 @@
 #     stimata = T_ambiente + (grezza - T_ambiente) / k + delta
 # con T_ambiente = 16 C (garage), k_alto = 0.766, k_basso = 0.73 (ricavati da 5 letture di S3/S2 della centralina,
 # errore sotto 0.3 C). Il delta serve per ritocchi fini. Quando arrivano le sonde nuove: k = 1 e delta = 0.
+#
+# CURVA DI ADATTAMENTO: ogni volta che si legge S3 o S2 sulla centralina, si scrive il valore nel campo
+# "lettura" e si preme "registra": il sistema salva la coppia (grezza, reale) e, con almeno 3 punti ben distanziati
+# (deviazione standard di almeno 1,5 C sulla grezza), calcola la retta  reale = a * grezza + b  (minimi quadrati) e la usa al posto del
+# modello. Con meno punti usa il modello. Si tengono gli ultimi 15 punti per sonda.
 
 input_boolean:
   boiler_solare_defaults_impostati:
@@ -19,8 +24,35 @@ input_boolean:
   boiler_solare_defaults_v3_impostati:
     name: Boiler solare - valori iniziali v3 impostati
     icon: mdi:check
+  boiler_solare_defaults_v4_impostati:
+    name: Boiler solare - valori iniziali v4 impostati
+    icon: mdi:check
+
+input_text:
+  boiler_cal_punti_alto:
+    name: Boiler solare - punti di taratura sonda alta (grezza:reale)
+    max: 255
+    icon: mdi:chart-scatter-plot
+  boiler_cal_punti_basso:
+    name: Boiler solare - punti di taratura sonda bassa (grezza:reale)
+    max: 255
+    icon: mdi:chart-scatter-plot
 
 input_number:
+  boiler_cal_s3:
+    name: Boiler solare - lettura S3 della centralina
+    min: 10
+    max: 90
+    step: 0.1
+    unit_of_measurement: °C
+    mode: box
+  boiler_cal_s2:
+    name: Boiler solare - lettura S2 della centralina
+    min: 10
+    max: 90
+    step: 0.1
+    unit_of_measurement: °C
+    mode: box
   boiler_solare_t_ambiente:
     name: Boiler solare - temperatura ambiente delle sonde (garage)
     min: 0
@@ -85,6 +117,127 @@ input_number:
 
 template:
   - sensor:
+      - name: Boiler solare - curva sonda alta
+        unique_id: boiler_solare_curva_alto
+        icon: mdi:chart-line
+        state: >
+          {% set ns = namespace(n=0, sx=0.0, sy=0.0, sxx=0.0, sxy=0.0) %}
+          {% for p in states('input_text.boiler_cal_punti_alto').split(',') if p %}
+            {% set xy = p.split(':') %}
+            {% if xy | length == 2 %}
+              {% set x = xy[0] | float(none) %}{% set y = xy[1] | float(none) %}
+              {% if x is not none and y is not none %}
+                {% set ns.n = ns.n + 1 %}{% set ns.sx = ns.sx + x %}{% set ns.sy = ns.sy + y %}
+                {% set ns.sxx = ns.sxx + x * x %}{% set ns.sxy = ns.sxy + x * y %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {% set d = ns.n * ns.sxx - ns.sx * ns.sx %}
+          {% if ns.n >= 3 and d > 0 and d / (ns.n * ns.n) >= 2.25 %}
+            {% set a = (ns.n * ns.sxy - ns.sx * ns.sy) / d %}
+            {% if 1.0 <= a <= 1.8 %}regressione{% else %}modello{% endif %}
+          {% else %}modello{% endif %}
+        attributes:
+          punti: >
+            {{ states('input_text.boiler_cal_punti_alto').split(',') | reject('equalto', '') | list | length }}
+          a: >
+            {% set ns = namespace(n=0, sx=0.0, sy=0.0, sxx=0.0, sxy=0.0) %}
+            {% for p in states('input_text.boiler_cal_punti_alto').split(',') if p %}
+              {% set xy = p.split(':') %}
+              {% if xy | length == 2 %}
+                {% set x = xy[0] | float(none) %}{% set y = xy[1] | float(none) %}
+                {% if x is not none and y is not none %}
+                  {% set ns.n = ns.n + 1 %}{% set ns.sx = ns.sx + x %}{% set ns.sy = ns.sy + y %}
+                  {% set ns.sxx = ns.sxx + x * x %}{% set ns.sxy = ns.sxy + x * y %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% set d = ns.n * ns.sxx - ns.sx * ns.sx %}
+            {% set k = states('input_number.boiler_solare_k_alto') | float(1) %}
+            {% set modello = 1 / k %}
+            {% if ns.n >= 3 and d > 0 and d / (ns.n * ns.n) >= 2.25 %}
+              {% set a = (ns.n * ns.sxy - ns.sx * ns.sy) / d %}
+              {{ (a if 1.0 <= a <= 1.8 else modello) | round(4) }}
+            {% else %}{{ modello | round(4) }}{% endif %}
+          b: >
+            {% set ns = namespace(n=0, sx=0.0, sy=0.0, sxx=0.0, sxy=0.0) %}
+            {% for p in states('input_text.boiler_cal_punti_alto').split(',') if p %}
+              {% set xy = p.split(':') %}
+              {% if xy | length == 2 %}
+                {% set x = xy[0] | float(none) %}{% set y = xy[1] | float(none) %}
+                {% if x is not none and y is not none %}
+                  {% set ns.n = ns.n + 1 %}{% set ns.sx = ns.sx + x %}{% set ns.sy = ns.sy + y %}
+                  {% set ns.sxx = ns.sxx + x * x %}{% set ns.sxy = ns.sxy + x * y %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% set d = ns.n * ns.sxx - ns.sx * ns.sx %}
+            {% set amb = states('input_number.boiler_solare_t_ambiente') | float(16) %}
+            {% set k = states('input_number.boiler_solare_k_alto') | float(1) %}
+            {% set a = (ns.n * ns.sxy - ns.sx * ns.sy) / d if (ns.n >= 3 and d > 0 and d / (ns.n * ns.n) >= 2.25) else 0 %}
+            {% if 1.0 <= a <= 1.8 %}{{ ((ns.sy - a * ns.sx) / ns.n) | round(3) }}
+            {% else %}{{ (amb * (1 - 1 / k)) | round(3) }}{% endif %}
+
+      - name: Boiler solare - curva sonda bassa
+        unique_id: boiler_solare_curva_basso
+        icon: mdi:chart-line
+        state: >
+          {% set ns = namespace(n=0, sx=0.0, sy=0.0, sxx=0.0, sxy=0.0) %}
+          {% for p in states('input_text.boiler_cal_punti_basso').split(',') if p %}
+            {% set xy = p.split(':') %}
+            {% if xy | length == 2 %}
+              {% set x = xy[0] | float(none) %}{% set y = xy[1] | float(none) %}
+              {% if x is not none and y is not none %}
+                {% set ns.n = ns.n + 1 %}{% set ns.sx = ns.sx + x %}{% set ns.sy = ns.sy + y %}
+                {% set ns.sxx = ns.sxx + x * x %}{% set ns.sxy = ns.sxy + x * y %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {% set d = ns.n * ns.sxx - ns.sx * ns.sx %}
+          {% if ns.n >= 3 and d > 0 and d / (ns.n * ns.n) >= 2.25 %}
+            {% set a = (ns.n * ns.sxy - ns.sx * ns.sy) / d %}
+            {% if 1.0 <= a <= 1.8 %}regressione{% else %}modello{% endif %}
+          {% else %}modello{% endif %}
+        attributes:
+          punti: >
+            {{ states('input_text.boiler_cal_punti_basso').split(',') | reject('equalto', '') | list | length }}
+          a: >
+            {% set ns = namespace(n=0, sx=0.0, sy=0.0, sxx=0.0, sxy=0.0) %}
+            {% for p in states('input_text.boiler_cal_punti_basso').split(',') if p %}
+              {% set xy = p.split(':') %}
+              {% if xy | length == 2 %}
+                {% set x = xy[0] | float(none) %}{% set y = xy[1] | float(none) %}
+                {% if x is not none and y is not none %}
+                  {% set ns.n = ns.n + 1 %}{% set ns.sx = ns.sx + x %}{% set ns.sy = ns.sy + y %}
+                  {% set ns.sxx = ns.sxx + x * x %}{% set ns.sxy = ns.sxy + x * y %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% set d = ns.n * ns.sxx - ns.sx * ns.sx %}
+            {% set k = states('input_number.boiler_solare_k_basso') | float(1) %}
+            {% set modello = 1 / k %}
+            {% if ns.n >= 3 and d > 0 and d / (ns.n * ns.n) >= 2.25 %}
+              {% set a = (ns.n * ns.sxy - ns.sx * ns.sy) / d %}
+              {{ (a if 1.0 <= a <= 1.8 else modello) | round(4) }}
+            {% else %}{{ modello | round(4) }}{% endif %}
+          b: >
+            {% set ns = namespace(n=0, sx=0.0, sy=0.0, sxx=0.0, sxy=0.0) %}
+            {% for p in states('input_text.boiler_cal_punti_basso').split(',') if p %}
+              {% set xy = p.split(':') %}
+              {% if xy | length == 2 %}
+                {% set x = xy[0] | float(none) %}{% set y = xy[1] | float(none) %}
+                {% if x is not none and y is not none %}
+                  {% set ns.n = ns.n + 1 %}{% set ns.sx = ns.sx + x %}{% set ns.sy = ns.sy + y %}
+                  {% set ns.sxx = ns.sxx + x * x %}{% set ns.sxy = ns.sxy + x * y %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% set d = ns.n * ns.sxx - ns.sx * ns.sx %}
+            {% set amb = states('input_number.boiler_solare_t_ambiente') | float(16) %}
+            {% set k = states('input_number.boiler_solare_k_basso') | float(1) %}
+            {% set a = (ns.n * ns.sxy - ns.sx * ns.sy) / d if (ns.n >= 3 and d > 0 and d / (ns.n * ns.n) >= 2.25) else 0 %}
+            {% if 1.0 <= a <= 1.8 %}{{ ((ns.sy - a * ns.sx) / ns.n) | round(3) }}
+            {% else %}{{ (amb * (1 - 1 / k)) | round(3) }}{% endif %}
       - name: Boiler solare - alto stimato
         unique_id: boiler_solare_alto_stimato
         unit_of_measurement: °C
@@ -96,9 +249,14 @@ template:
              and states('sensor.solare_termico_boiler_alto') | float > -20
              and is_number(states('input_number.boiler_solare_k_alto')) }}
         state: >
-          {% set amb = states('input_number.boiler_solare_t_ambiente') | float(16) %}
-          {% set k = states('input_number.boiler_solare_k_alto') | float(1) %}
-          {{ (amb + (states('sensor.solare_termico_boiler_alto') | float - amb) / k
+          {% set a = state_attr('sensor.boiler_solare_curva_sonda_alta', 'a') | float(none) %}
+          {% set b = state_attr('sensor.boiler_solare_curva_sonda_alta', 'b') | float(none) %}
+          {% if a is none or b is none %}
+            {% set amb = states('input_number.boiler_solare_t_ambiente') | float(16) %}
+            {% set k = states('input_number.boiler_solare_k_alto') | float(1) %}
+            {% set a = 1 / k %}{% set b = amb * (1 - 1 / k) %}
+          {% endif %}
+          {{ (a * states('sensor.solare_termico_boiler_alto') | float + b
               + states('input_number.boiler_solare_delta_alto') | float(0)) | round(1) }}
 
       - name: Boiler solare - basso stimato
@@ -112,9 +270,14 @@ template:
              and states('sensor.garage_solare_termico_boiler_basso') | float > -20
              and is_number(states('input_number.boiler_solare_k_basso')) }}
         state: >
-          {% set amb = states('input_number.boiler_solare_t_ambiente') | float(16) %}
-          {% set k = states('input_number.boiler_solare_k_basso') | float(1) %}
-          {{ (amb + (states('sensor.garage_solare_termico_boiler_basso') | float - amb) / k
+          {% set a = state_attr('sensor.boiler_solare_curva_sonda_bassa', 'a') | float(none) %}
+          {% set b = state_attr('sensor.boiler_solare_curva_sonda_bassa', 'b') | float(none) %}
+          {% if a is none or b is none %}
+            {% set amb = states('input_number.boiler_solare_t_ambiente') | float(16) %}
+            {% set k = states('input_number.boiler_solare_k_basso') | float(1) %}
+            {% set a = 1 / k %}{% set b = amb * (1 - 1 / k) %}
+          {% endif %}
+          {{ (a * states('sensor.garage_solare_termico_boiler_basso') | float + b
               + states('input_number.boiler_solare_delta_basso') | float(0)) | round(1) }}
 
       - name: Boiler solare - temperatura media
@@ -223,6 +386,26 @@ automation:
       - action: input_boolean.turn_on
         target: {entity_id: input_boolean.boiler_solare_defaults_v2_impostati}
 
+  - id: boiler_solare_valori_iniziali_v4
+    alias: Boiler solare - valori iniziali v4
+    description: Punti di taratura raccolti il 4 ottobre 2026 (sonda ESP32 grezza e lettura della centralina).
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.boiler_solare_defaults_v4_impostati
+        state: "off"
+    actions:
+      - action: input_text.set_value
+        target: {entity_id: input_text.boiler_cal_punti_alto}
+        data: {value: "45.1:54.0,47.2:56.8,49.5:59.6"}
+      - action: input_text.set_value
+        target: {entity_id: input_text.boiler_cal_punti_basso}
+        data: {value: "21.4:23.4,27.8:32.2"}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.boiler_solare_defaults_v4_impostati}
+
   - id: boiler_solare_valori_iniziali_v3
     alias: Boiler solare - valori iniziali v3
     description: Passa dalla correzione fissa al modello di accoppiamento (una sola volta).
@@ -251,3 +434,53 @@ automation:
         data: {value: 0}
       - action: input_boolean.turn_on
         target: {entity_id: input_boolean.boiler_solare_defaults_v3_impostati}
+
+script:
+  boiler_cal_registra_alto:
+    alias: Boiler solare - registra punto di taratura S3
+    icon: mdi:plus-circle-outline
+    sequence:
+      - condition: template
+        value_template: >
+          {{ is_number(states('sensor.solare_termico_boiler_alto'))
+             and states('sensor.solare_termico_boiler_alto') | float > -20
+             and is_number(states('input_number.boiler_cal_s3')) }}
+      - action: input_text.set_value
+        target: {entity_id: input_text.boiler_cal_punti_alto}
+        data:
+          value: >
+            {{ (states('input_text.boiler_cal_punti_alto').split(',') | reject('equalto', '') | list
+                + [(states('sensor.solare_termico_boiler_alto') | float | round(2) | string) ~ ':'
+                   ~ (states('input_number.boiler_cal_s3') | float | round(1) | string)])[-15:] | join(',') }}
+  boiler_cal_registra_basso:
+    alias: Boiler solare - registra punto di taratura S2
+    icon: mdi:plus-circle-outline
+    sequence:
+      - condition: template
+        value_template: >
+          {{ is_number(states('sensor.garage_solare_termico_boiler_basso'))
+             and states('sensor.garage_solare_termico_boiler_basso') | float > -20
+             and is_number(states('input_number.boiler_cal_s2')) }}
+      - action: input_text.set_value
+        target: {entity_id: input_text.boiler_cal_punti_basso}
+        data:
+          value: >
+            {{ (states('input_text.boiler_cal_punti_basso').split(',') | reject('equalto', '') | list
+                + [(states('sensor.garage_solare_termico_boiler_basso') | float | round(2) | string) ~ ':'
+                   ~ (states('input_number.boiler_cal_s2') | float | round(1) | string)])[-15:] | join(',') }}
+  boiler_cal_annulla_alto:
+    alias: Boiler solare - annulla ultimo punto S3
+    icon: mdi:undo
+    sequence:
+      - action: input_text.set_value
+        target: {entity_id: input_text.boiler_cal_punti_alto}
+        data:
+          value: "{{ (states('input_text.boiler_cal_punti_alto').split(',') | reject('equalto', '') | list)[:-1] | join(',') }}"
+  boiler_cal_annulla_basso:
+    alias: Boiler solare - annulla ultimo punto S2
+    icon: mdi:undo
+    sequence:
+      - action: input_text.set_value
+        target: {entity_id: input_text.boiler_cal_punti_basso}
+        data:
+          value: "{{ (states('input_text.boiler_cal_punti_basso').split(',') | reject('equalto', '') | list)[:-1] | join(',') }}"

@@ -36,6 +36,11 @@ del sistema, quali scelte sono state fatte e perché, e che cosa resta da verifi
 | Sonde ESP32 del boiler | Leggono più basso di S3/S2 dell'Elios per contatto termico scarso: sentono in parte l'aria del garage. Correzione con modello di accoppiamento `stimata = T_ambiente + (grezza - T_ambiente) / k`, con **T_ambiente 16 °C**, **k alto 0,766**, **k basso 0,73** (5 letture di confronto, errore sotto 0,1 °C su quei punti). Il collettore stimato dal modello solare è invece già esatto (44,7 contro 44,8). |
 | Polling cloud | Home Assistant legge la caldaia ogni **60 s** (opzione `update_interval`), perciò vede una partenza con fino a 60 s di ritardo. |
 
+**Curva di taratura.** Per ogni sonda del boiler si registrano coppie (valore grezzo ESP32, lettura S3/S2 della centralina).
+Con almeno 3 punti con deviazione standard di almeno 1,5 °C sulla grezza, il sistema calcola da solo la retta
+`reale = a · grezza + b` (minimi quadrati, ultimi 15 punti) e la usa; con meno punti usa il modello di accoppiamento.
+Punti iniziali (4/10/2026): alta `45.1:54.0, 47.2:56.8, 49.5:59.6` (a = 1,272, b = −3,32); bassa `21.4:23.4, 27.8:32.2`.
+
 ## 3. Come funziona il sistema (vedi diagramma)
 
 **A. Accensione rapida (pulsante «Avvia caldaia»).** Funziona solo se la Polygon è **OFF**, senza allarme, con boiler
@@ -102,7 +107,8 @@ flowchart TD
 | Boiler alto / basso, grezzi (ESP32) | `sensor.solare_termico_boiler_alto`, `sensor.garage_solare_termico_boiler_basso` |
 | Boiler alto / basso, corretti (S3 / S2) | `sensor.boiler_solare_alto_stimato`, `sensor.boiler_solare_basso_stimato` |
 | Media, stratificazione, energia, acqua equivalente | `sensor.boiler_solare_temperatura_media`, `..._stratificazione`, `..._energia_accumulata`, `..._acqua_calda_equivalente` |
-| Correzione delle sonde | `input_number.boiler_solare_t_ambiente` (16), `..._k_alto` (0,766), `..._k_basso` (0,73); `..._delta_alto` / `..._delta_basso` (0) per ritocchi fini |
+| Curva di taratura (si adatta da sola) | `sensor.boiler_solare_curva_sonda_alta` / `..._bassa` (attributi `a`, `b`, `punti`), `input_text.boiler_cal_punti_alto` / `..._basso`, `input_number.boiler_cal_s3` / `..._s2`, script `boiler_cal_registra_*` e `boiler_cal_annulla_*` (scheda: `examples/taratura.yaml`) |
+| Modello di partenza (usato con meno di 3 punti) | `input_number.boiler_solare_t_ambiente` (16), `..._k_alto` (0,766), `..._k_basso` (0,73); `..._delta_alto` / `..._delta_basso` (0) per ritocchi fini |
 | Stato e puffer della Polygon | `sensor.casale_stato`, `sensor.casale_temperatura_boiler` (= puffer da 50 L), `sensor.casale_temperatura_acqua` |
 | Accensione / spegnimento | `climate.casale_acqua` (heat / off) |
 | Programmi (N = 1..4) | `time.casale_crono_pN_accensione`, `..._spegnimento`, `number.casale_crono_pN_setpoint_boiler`, `..._setpoint_acqua`, `switch.casale_crono_pN_<giorno>`, `switch.casale_cronotermostato_settimanale` |

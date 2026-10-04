@@ -1,0 +1,87 @@
+# Scheda per tarare le sonde del boiler: scrivi la lettura della centralina (S3 o S2) e premi "Registra".
+# Il sistema salva la coppia (grezza, reale) e rifà la retta di correzione da solo.
+type: entities
+title: Taratura sonde boiler
+show_header_toggle: false
+state_color: false
+entities:
+  - type: section
+    label: Sonda alta (S3)
+  - entity: sensor.solare_termico_boiler_alto
+    name: Sonda ESP32 grezza adesso
+  - entity: input_number.boiler_cal_s3
+    name: Lettura S3 della centralina (°C)
+  - type: button
+    name: Registra punto S3
+    icon: mdi:plus-circle-outline
+    action_name: REGISTRA
+    tap_action:
+      action: call-service
+      service: script.turn_on
+      target:
+        entity_id: script.boiler_cal_registra_alto
+  - type: button
+    name: Annulla ultimo punto S3
+    icon: mdi:undo
+    action_name: ANNULLA
+    tap_action:
+      action: call-service
+      service: script.turn_on
+      target:
+        entity_id: script.boiler_cal_annulla_alto
+  - entity: sensor.boiler_solare_curva_sonda_alta
+    name: Curva usata (regressione o modello)
+  - type: attribute
+    entity: sensor.boiler_solare_curva_sonda_alta
+    attribute: punti
+    name: Punti registrati
+  - type: attribute
+    entity: sensor.boiler_solare_curva_sonda_alta
+    attribute: a
+    name: Pendenza a
+  - type: attribute
+    entity: sensor.boiler_solare_curva_sonda_alta
+    attribute: b
+    name: Intercetta b
+  - entity: sensor.boiler_solare_alto_stimato
+    name: S3 stimata adesso
+  - type: section
+    label: Sonda bassa (S2)
+  - entity: sensor.garage_solare_termico_boiler_basso
+    name: Sonda ESP32 grezza adesso
+  - entity: input_number.boiler_cal_s2
+    name: Lettura S2 della centralina (°C)
+  - type: button
+    name: Registra punto S2
+    icon: mdi:plus-circle-outline
+    action_name: REGISTRA
+    tap_action:
+      action: call-service
+      service: script.turn_on
+      target:
+        entity_id: script.boiler_cal_registra_basso
+  - type: button
+    name: Annulla ultimo punto S2
+    icon: mdi:undo
+    action_name: ANNULLA
+    tap_action:
+      action: call-service
+      service: script.turn_on
+      target:
+        entity_id: script.boiler_cal_annulla_basso
+  - entity: sensor.boiler_solare_curva_sonda_bassa
+    name: Curva usata (regressione o modello)
+  - type: attribute
+    entity: sensor.boiler_solare_curva_sonda_bassa
+    attribute: punti
+    name: Punti registrati
+  - type: attribute
+    entity: sensor.boiler_solare_curva_sonda_bassa
+    attribute: a
+    name: Pendenza a
+  - type: attribute
+    entity: sensor.boiler_solare_curva_sonda_bassa
+    attribute: b
+    name: Intercetta b
+  - entity: sensor.boiler_solare_basso_stimato
+    name: S2 stimata adesso
