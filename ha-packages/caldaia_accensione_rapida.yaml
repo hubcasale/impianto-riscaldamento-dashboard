@@ -88,6 +88,40 @@ template:
             {{ ns.att }}
           {% endif %}
 
+      - name: Caldaia programma attivo o in partenza
+        unique_id: caldaia_programma_attivo_o_in_partenza
+        icon: mdi:calendar-clock
+        state: >
+          {% if not is_state('switch.casale_cronotermostato_settimanale', 'on') %}
+            false
+          {% else %}
+            {# valuta l'ora fra 3 minuti: la partenza di un programma e' vista subito, anche con l'orologio della caldaia avanti di 1-2 minuti #}
+            {% set ora = now() + timedelta(minutes=3) %}
+            {% set giorni = ['lunedi','martedi','mercoledi','giovedi','venerdi','sabato','domenica'] %}
+            {% set oggi = giorni[ora.weekday()] %}
+            {% set ieri = giorni[(ora.weekday() + 6) % 7] %}
+            {% set t = ora.hour * 60 + ora.minute %}
+            {% set ns = namespace(att=false) %}
+            {% for p in [1, 2, 3, 4] %}
+              {% set a = states('time.casale_crono_p' ~ p ~ '_accensione') %}
+              {% set b = states('time.casale_crono_p' ~ p ~ '_spegnimento') %}
+              {% if a[2:3] == ':' and b[2:3] == ':' %}
+                {% set on = a[0:2] | int(0) * 60 + a[3:5] | int(0) %}
+                {% set off = b[0:2] | int(0) * 60 + b[3:5] | int(0) %}
+                {% if on != off %}
+                  {% if is_state('switch.casale_crono_p' ~ p ~ '_' ~ oggi, 'on') %}
+                    {% set fine = 1440 if (off == 0 or off < on) else off %}
+                    {% if on <= t < fine %}{% set ns.att = true %}{% endif %}
+                  {% endif %}
+                  {% if is_state('switch.casale_crono_p' ~ p ~ '_' ~ ieri, 'on') and 0 < off < on and t < off %}
+                    {% set ns.att = true %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.att }}
+          {% endif %}
+
       - name: Caldaia da tenere accesa per altri motivi
         unique_id: caldaia_da_tenere_accesa
         icon: mdi:fire-alert

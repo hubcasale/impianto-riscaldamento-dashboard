@@ -39,8 +39,9 @@ automation:
   - id: caldaia_salvaguardia_annulla_partenza
     alias: Caldaia - salvaguardia, annulla partenza inutile
     description: >
-      Parte da OFF; dopo 2 minuti (tolleranza sull'orologio) controlla che sia davvero la partenza di un programma e che
-      puffer e boiler siano gia' caldi.
+      Parte da OFF; dopo 10 secondi controlla che sia davvero la partenza di un programma (con una tolleranza di 3 minuti
+      sull'orologio) e che puffer e boiler siano gia' caldi. Il ritardo vero e' quello del sondaggio del cloud
+      (opzione "update_interval" dell'integrazione, 60 s di serie).
     mode: single
     triggers:
       - trigger: state
@@ -52,7 +53,7 @@ automation:
         entity_id: input_boolean.caldaia_salvaguardia_attiva
         state: "on"
     actions:
-      - delay: "00:02:00"
+      - delay: "00:00:10"
       - condition: state
         entity_id: sensor.casale_stato
         state: ["WAIT", "START"]
@@ -61,7 +62,7 @@ automation:
         state: "on"
       # solo se e' la partenza di un programma: un'accensione a mano o con il pulsante non si tocca
       - condition: state
-        entity_id: binary_sensor.caldaia_programma_attivo_ora
+        entity_id: binary_sensor.caldaia_programma_attivo_o_in_partenza
         state: "on"
       - condition: state
         entity_id: input_boolean.caldaia_boost_attivo

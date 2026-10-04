@@ -36,7 +36,7 @@ def make_env(states, attrs, now):
     def state_attr(eid, a):
         return attrs.get((eid, a))
 
-    env.globals.update(states=st, is_state=is_state, is_number=is_number, state_attr=state_attr, now=lambda: now)
+    env.globals.update(timedelta=dt.timedelta, states=st, is_state=is_state, is_number=is_number, state_attr=state_attr, now=lambda: now)
     return env
 
 
@@ -75,6 +75,15 @@ check("programma: scavalcamento, martedi 02:00", render(prog, wrap, now=LUN.repl
 mezz = {"switch.casale_cronotermostato_settimanale": "on", "time.casale_crono_p4_accensione": "12:00:00", "time.casale_crono_p4_spegnimento": "00:00:00", "switch.casale_crono_p4_lunedi": "on"}
 check("programma: fino a mezzanotte, lunedi 23:50", render(prog, mezz, now=LUN.replace(hour=23, minute=50)), "True")
 check("programma: orari non disponibili", render(prog, {"switch.casale_cronotermostato_settimanale": "on"}, now=LUN.replace(hour=6)), "False")
+
+# ---------------------------------------------------------------- programma attivo o in partenza (tolleranza 3 minuti)
+tol = find("binary_sensor", "Caldaia programma attivo o in partenza")["state"]
+check("tolleranza: 3 minuti prima della partenza", render(tol, base, now=LUN.replace(hour=5, minute=27)), "True")
+check("tolleranza: 4 minuti prima, ancora no", render(tol, base, now=LUN.replace(hour=5, minute=26)), "False")
+check("tolleranza: dentro il programma", render(tol, base, now=LUN.replace(hour=6)), "True")
+check("tolleranza: mezzanotte, programma del giorno dopo", render(tol, {"switch.casale_cronotermostato_settimanale": "on", "time.casale_crono_p1_accensione": "00:10:00", "time.casale_crono_p1_spegnimento": "03:00:00", "switch.casale_crono_p1_martedi": "on"}, now=LUN.replace(hour=23, minute=58)), "False")
+check("tolleranza: mezzanotte, programma che parte alle 00:00", render(tol, {"switch.casale_cronotermostato_settimanale": "on", "time.casale_crono_p1_accensione": "00:00:00", "time.casale_crono_p1_spegnimento": "03:00:00", "switch.casale_crono_p1_martedi": "on"}, now=LUN.replace(hour=23, minute=58)), "True")
+check("tolleranza: cronotermostato spento", render(tol, off_master, now=LUN.replace(hour=5, minute=28)), "False")
 
 # ---------------------------------------------------------------- stato accensione rapida
 stato = find("sensor", "Caldaia accensione rapida stato")["state"]
