@@ -1,0 +1,25 @@
+{
+  "name": "impianto-riscaldamento-dashboard",
+  "version": "0.1.0",
+  "description": "Schede Lovelace per l'impianto di riscaldamento e acqua calda: boiler solare, puffer e caldaia a pellet Micronova (panoramica) e programmazione settimanale con vista a barre, avvisi di sovrapposizione e preset.",
+  "license": "MIT",
+  "author": "Corrado Gamberoni",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hubcasale/impianto-riscaldamento-dashboard"
+  },
+  "scripts": {
+    "build": "esbuild src/impianto-riscaldamento-dashboard.ts --bundle --format=esm --outfile=dist/impianto-riscaldamento-dashboard.js",
+    "watch": "npm run build -- --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "esbuild test/*.test.ts --bundle --platform=node --format=cjs --outdir=.test-build --log-level=warning && node --test .test-build/",
+    "build:dev": "esbuild src/impianto-riscaldamento-dashboard.ts --bundle --format=iife --outfile=dev/bundle.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "lit": "^3.2.0"
+  }
+}

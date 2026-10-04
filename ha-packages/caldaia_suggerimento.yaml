@@ -1,0 +1,233 @@
+# Suggerimento di consenso per la caldaia a biomassa (Nobis Polygon): SOLO INFORMATIVO, non comanda nulla.
+#
+# La caldaia e' necessaria solo se c'e' almeno una richiesta:
+#   1) riscaldamento: il termostato (climate.termostato) sta chiamando calore, oppure la pompa dei radiatori e' accesa;
+#   2) ACS: la pompa di integrazione (avviata dalla centralina solare) e' accesa.
+#      Se la pompa non e' configurata, si usa la temperatura stimata in alto nel boiler solare
+#      (sensor.boiler_solare_alto_stimato, cioe' la sonda ESP32 piu' la correzione verso S3):
+#        - sotto "t_accendi" (come il TAH dell'Elios, 45 C) si chiede la caldaia;
+#        - fino a "t_spegni" (TAH + HYT, 55 C) la richiesta resta (isteresi);
+#        - se il sole produce almeno "potenza solare min" si aspetta, a meno di scendere sotto "t_emergenza".
+#      Se la sonda non e' disponibile, si ricade sulla stima dall'energia solare delle ultime 24 h.
+# Dopo la fine delle richieste il suggerimento resta acceso per il tempo di attesa (evita accensioni a raffica).
+#
+# Le entita' delle due pompe (Shelly) si scelgono da "Caldaia - entita pompa ..." (campo di testo, es. switch.xxx
+# o binary_sensor.xxx): lasciandole vuote vengono ignorate.
+
+input_boolean:
+  caldaia_suggerimento_defaults_impostati:
+    name: Caldaia suggerimento - valori iniziali impostati
+    icon: mdi:check
+  caldaia_suggerimento_defaults_v2_impostati:
+    name: Caldaia suggerimento - valori iniziali v2 impostati
+    icon: mdi:check
+
+input_text:
+  caldaia_entita_pompa_radiatori:
+    name: Caldaia - entita pompa radiatori
+    max: 120
+  caldaia_entita_pompa_integrazione:
+    name: Caldaia - entita pompa integrazione ACS
+    max: 120
+
+
+input_number:
+  caldaia_acs_t_accendi:
+    name: Caldaia - ACS richiesta sotto (alto boiler stimato)
+    min: 30
+    max: 60
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+  caldaia_acs_t_spegni:
+    name: Caldaia - ACS fine richiesta sopra (alto boiler stimato)
+    min: 35
+    max: 70
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+  caldaia_acs_t_emergenza:
+    name: Caldaia - ACS richiesta anche con sole sotto
+    min: 25
+    max: 55
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+  caldaia_acs_potenza_solare_min:
+    name: Caldaia - ACS potenza solare che fa attendere
+    min: 0
+    max: 5
+    step: 0.1
+    unit_of_measurement: kW
+    mode: box
+  caldaia_soglia_solare_acs:
+    name: Caldaia - energia solare 24h che copre l'ACS
+    min: 0
+    max: 20
+    step: 0.1
+    unit_of_measurement: kWh
+    mode: box
+  caldaia_attesa_spegnimento:
+    name: Caldaia - attesa prima di suggerire lo spegnimento
+    min: 0
+    max: 180
+    step: 5
+    unit_of_measurement: min
+    mode: box
+
+sensor:
+  - platform: statistics
+    name: Solare termico energia 24h
+    unique_id: solare_termico_energia_24h
+    entity_id: sensor.solare_termico_energia
+    state_characteristic: change
+    max_age:
+      hours: 24
+    sampling_size: 2000
+    precision: 2
+  # Contatori della caldaia, dallo stato di sensor.casale_stato (START = accensione, STAND BY = spegnimento forzato).
+  - platform: history_stats
+    name: Caldaia accensioni oggi
+    unique_id: caldaia_accensioni_oggi
+    entity_id: sensor.casale_stato
+    state: "START"
+    type: count
+    start: "{{ now().replace(hour=0, minute=0, second=0, microsecond=0) }}"
+    end: "{{ now() }}"
+  - platform: history_stats
+    name: Caldaia accensioni ieri
+    unique_id: caldaia_accensioni_ieri
+    entity_id: sensor.casale_stato
+    state: "START"
+    type: count
+    start: "{{ (now() - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0) }}"
+    end: "{{ now().replace(hour=0, minute=0, second=0, microsecond=0) }}"
+  - platform: history_stats
+    name: Caldaia STAND BY oggi
+    unique_id: caldaia_stand_by_oggi
+    entity_id: sensor.casale_stato
+    state: "STAND BY"
+    type: count
+    start: "{{ now().replace(hour=0, minute=0, second=0, microsecond=0) }}"
+    end: "{{ now() }}"
+  - platform: history_stats
+    name: Caldaia ore in lavoro oggi
+    unique_id: caldaia_ore_lavoro_oggi
+    entity_id: sensor.casale_stato
+    state: "WORK"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0, microsecond=0) }}"
+    end: "{{ now() }}"
+
+template:
+  - binary_sensor:
+      - name: Caldaia richiesta riscaldamento
+        unique_id: caldaia_richiesta_riscaldamento
+        icon: mdi:radiator
+        state: >
+          {% set pompa = states('input_text.caldaia_entita_pompa_radiatori') %}
+          {{ state_attr('climate.termostato', 'hvac_action') == 'heating'
+             or ('.' in pompa and is_state(pompa, 'on')) }}
+
+      - name: Caldaia richiesta ACS
+        unique_id: caldaia_richiesta_acs
+        icon: mdi:water-boiler
+        state: >
+          {% set pompa = states('input_text.caldaia_entita_pompa_integrazione') %}
+          {% set t = states('sensor.boiler_solare_alto_stimato') %}
+          {% if '.' in pompa %}
+            {{ is_state(pompa, 'on') }}
+          {% elif is_number(t) %}
+            {% set t = t | float %}
+            {% set on = states('input_number.caldaia_acs_t_accendi') | float(45) %}
+            {% set off = states('input_number.caldaia_acs_t_spegni') | float(55) %}
+            {% set em = states('input_number.caldaia_acs_t_emergenza') | float(38) %}
+            {% set sole = states('sensor.solare_termico_potenza') | float(0)
+                          >= states('input_number.caldaia_acs_potenza_solare_min') | float(1) %}
+            {% if t < em %}
+              true
+            {% elif t < on %}
+              {{ not sole }}
+            {% elif t >= off %}
+              false
+            {% else %}
+              {{ this.state == 'on' }}
+            {% endif %}
+          {% else %}
+            {{ states('sensor.solare_termico_energia_24h') | float(0) < states('input_number.caldaia_soglia_solare_acs') | float(3) }}
+          {% endif %}
+        attributes:
+          origine: >
+            {% if '.' in states('input_text.caldaia_entita_pompa_integrazione') %}pompa di integrazione
+            {% elif is_number(states('sensor.boiler_solare_alto_stimato')) %}temperatura alta del boiler (stimata)
+            {% else %}stima dal solare (ultime 24 h){% endif %}
+          temperatura_alta_stimata: "{{ states('sensor.boiler_solare_alto_stimato') }}"
+
+      - name: Caldaia consenso suggerito
+        unique_id: caldaia_consenso_suggerito
+        icon: mdi:fire
+        delay_off: "{{ (states('input_number.caldaia_attesa_spegnimento') | float(30) * 60) | int }}"
+        state: >
+          {{ is_state('binary_sensor.caldaia_richiesta_riscaldamento', 'on')
+             or is_state('binary_sensor.caldaia_richiesta_acs', 'on') }}
+        attributes:
+          motivo: >
+            {% set r = is_state('binary_sensor.caldaia_richiesta_riscaldamento', 'on') %}
+            {% set a = is_state('binary_sensor.caldaia_richiesta_acs', 'on') %}
+            {{ 'riscaldamento e ACS' if r and a else 'riscaldamento' if r else 'ACS' if a else 'nessuna richiesta' }}
+
+      - name: Caldaia accesa senza richiesta
+        unique_id: caldaia_accesa_senza_richiesta
+        icon: mdi:fire-alert
+        device_class: problem
+        delay_on: "00:10:00"
+        state: >
+          {{ states('sensor.casale_stato') in ['AVVIO', 'START', 'LAVORO', 'WORK']
+             and is_state('binary_sensor.caldaia_consenso_suggerito', 'off') }}
+
+automation:
+  - id: caldaia_suggerimento_valori_iniziali
+    alias: Caldaia suggerimento - valori iniziali
+    description: Imposta una sola volta i valori di partenza (poi restano quelli scelti da te).
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_suggerimento_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_soglia_solare_acs}
+        data: {value: 3}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_attesa_spegnimento}
+        data: {value: 30}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_suggerimento_defaults_impostati}
+
+  - id: caldaia_suggerimento_valori_iniziali_v2
+    alias: Caldaia suggerimento - valori iniziali v2
+    description: Soglie ACS basate sulla temperatura del boiler solare (una sola volta, poi restano quelle scelte da te).
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_suggerimento_defaults_v2_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_acs_t_accendi}
+        data: {value: 45}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_acs_t_spegni}
+        data: {value: 55}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_acs_t_emergenza}
+        data: {value: 38}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_acs_potenza_solare_min}
+        data: {value: 1.0}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_suggerimento_defaults_v2_impostati}

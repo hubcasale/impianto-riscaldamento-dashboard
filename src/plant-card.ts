@@ -1,0 +1,734 @@
+import { LitElement, html, css, svg, nothing } from "lit";
+import { property, state } from "lit/decorators.js";
+import type { HomeAssistant } from "./types";
+import { DEFAULT_MODEL, fmt, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type StoveLook } from "./plant-logic";
+
+const CARD_TAG = "impianto-overview-card";
+
+/** Entità lette dalla scheda. Tutte facoltative: i valori predefiniti sono quelli dell'impianto di casa. */
+export interface PlantEntities {
+  boiler_top: string;
+  boiler_bottom: string;
+  /** temperatura dell'acqua in uscita; se assente si usa la sonda alta */
+  outlet?: string;
+  solar_power: string;
+  collector_temp: string;
+  puffer: string;
+  stove_state: string;
+  stove_water: string;
+  smoke: string;
+  flame: string;
+  power: string;
+  water_pressure: string;
+  brazier_pressure: string;
+  extractor: string;
+  pump: string;
+  alarm: string;
+  set_boiler: string;
+  set_water: string;
+  starts_today: string;
+  starts_yesterday: string;
+  standby_today: string;
+  work_hours_today: string;
+  request_acs: string;
+  request_heating: string;
+  consent: string;
+}
+
+export const DEFAULT_ENTITIES: PlantEntities = {
+  boiler_top: "sensor.boiler_solare_alto_stimato",
+  boiler_bottom: "sensor.boiler_solare_basso_stimato",
+  solar_power: "sensor.solare_termico_potenza",
+  collector_temp: "sensor.solare_termico_t_collettore_stimata",
+  puffer: "sensor.casale_temperatura_boiler",
+  stove_state: "sensor.casale_stato",
+  stove_water: "sensor.casale_temperatura_acqua",
+  smoke: "sensor.casale_temperatura_fumi",
+  flame: "sensor.casale_temperatura_fiamma",
+  power: "sensor.casale_potenza_reale",
+  water_pressure: "sensor.casale_pressione_acqua",
+  brazier_pressure: "sensor.casale_pressione_braciere",
+  extractor: "sensor.casale_estrattore_fumi",
+  pump: "sensor.casale_pompa_acqua",
+  alarm: "sensor.casale_allarme",
+  set_boiler: "number.casale_setpoint_boiler",
+  set_water: "climate.casale_acqua",
+  starts_today: "sensor.caldaia_accensioni_oggi",
+  starts_yesterday: "sensor.caldaia_accensioni_ieri",
+  standby_today: "sensor.caldaia_stand_by_oggi",
+  work_hours_today: "sensor.caldaia_ore_in_lavoro_oggi",
+  request_acs: "binary_sensor.caldaia_richiesta_acs",
+  request_heating: "binary_sensor.caldaia_richiesta_riscaldamento",
+  consent: "binary_sensor.caldaia_consenso_suggerito",
+};
+
+/** Un numero oppure l'id di un'entità numerica. */
+type NumOrEntity = number | string;
+
+export interface PlantCardConfig {
+  type: string;
+  title?: string;
+  entities?: Partial<PlantEntities>;
+  model?: {
+    /** litri del boiler solare (utili: 190 per un Bolly 2 da 200 L) */
+    volume?: NumOrEntity;
+    /** quota di volume rappresentata dalla sonda alta, in % (o 0..1) */
+    top_share?: NumOrEntity;
+    /** temperatura dell'acqua di rete, °C */
+    mains_temp?: NumOrEntity;
+    shower_volume?: NumOrEntity;
+    shower_temp?: NumOrEntity;
+  };
+}
+
+const DEFAULT_MODEL_ENTITIES = {
+  volume: "input_number.boiler_solare_volume",
+  top_share: "input_number.boiler_solare_peso_alto",
+  mains_temp: "input_number.boiler_solare_t_rete",
+};
+
+const FLAME_PATH =
+  "M0,-100 C10,-70 45,-50 45,-15 C45,12 25,25 0,25 C-25,25 -45,12 -45,-15 C-45,-32 -35,-45 -25,-58 C-22,-40 -12,-32 -6,-34 C-14,-60 -8,-82 0,-100 Z";
+
+const LOOK_LABEL: Record<StoveLook, string> = {
+  off: "spenta",
+  wait: "in attesa",
+  start: "accensione",
+  work: "in lavoro",
+  standby: "stand-by",
+  stopping: "spegnimento",
+};
+
+export class ImpiantoOverviewCard extends LitElement {
+  @property({ attribute: false }) hass!: HomeAssistant;
+  @state() private _config!: PlantCardConfig;
+  @state() private _narrow = false;
+  private _ro?: ResizeObserver;
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    // su schermi stretti (telefono) lo schema del boiler perde il puffer per restare leggibile
+    this._ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 1000;
+      const narrow = w < 560;
+      if (narrow !== this._narrow) this._narrow = narrow;
+    });
+    this._ro.observe(this);
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._ro?.disconnect();
+  }
+
+  setConfig(config: PlantCardConfig): void {
+    if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
+    this._config = config;
+  }
+
+  getCardSize(): number {
+    return 12;
+  }
+
+  static getStubConfig(): PlantCardConfig {
+    return { type: `custom:${CARD_TAG}` };
+  }
+
+  // ---- lettura -------------------------------------------------------------
+
+  private get _e(): PlantEntities {
+    return { ...DEFAULT_ENTITIES, ...(this._config.entities ?? {}) };
+  }
+
+  private _s(id: string | undefined): string | undefined {
+    return id ? this.hass.states[id]?.state : undefined;
+  }
+
+  private _n(id: string | undefined): number | null {
+    if (!id) return null;
+    const st = this.hass.states[id];
+    if (!st) return null;
+    if (id.startsWith("climate.")) return toNumber(String(st.attributes.temperature ?? ""));
+    return toNumber(st.state);
+  }
+
+  private _val(v: NumOrEntity | undefined, fallbackEntity?: string): number | null {
+    if (typeof v === "number") return v;
+    if (typeof v === "string") return this._n(v);
+    return fallbackEntity ? this._n(fallbackEntity) : null;
+  }
+
+  private _model(): BoilerModel {
+    const m = this._config.model ?? {};
+    const vol = this._val(m.volume, DEFAULT_MODEL_ENTITIES.volume);
+    let share = this._val(m.top_share, DEFAULT_MODEL_ENTITIES.top_share);
+    if (share !== null && share > 1) share = share / 100;
+    return {
+      volume: vol ?? DEFAULT_MODEL.volume,
+      topShare: share ?? DEFAULT_MODEL.topShare,
+      mainsTemp: this._val(m.mains_temp, DEFAULT_MODEL_ENTITIES.mains_temp) ?? DEFAULT_MODEL.mainsTemp,
+      showerVolume: this._val(m.shower_volume) ?? DEFAULT_MODEL.showerVolume,
+      showerTemp: this._val(m.shower_temp) ?? DEFAULT_MODEL.showerTemp,
+    };
+  }
+
+  private _yes(id: string): boolean | null {
+    const s = this._s(id);
+    return s === "on" ? true : s === "off" ? false : null;
+  }
+
+  // ---- boiler solare + puffer (SVG) ---------------------------------------
+
+  private _renderBoiler() {
+    const e = this._e;
+    const m = this._model();
+    const top = this._n(e.boiler_top);
+    const bottom = this._n(e.boiler_bottom);
+    const outlet = this._n(e.outlet) ?? top;
+    const showers = showersEstimate(top, bottom, m);
+    const puffer = this._n(e.puffer);
+    const solarKw = this._n(e.solar_power);
+    const collector = this._n(e.collector_temp);
+    const cTop = tempColor(top);
+    const cBot = tempColor(bottom);
+    const cMid = tempColor(top !== null && bottom !== null ? m.topShare * top + (1 - m.topShare) * bottom : top ?? bottom);
+    const cPuf = tempColor(puffer);
+    const midAt = `${Math.round(m.topShare * 100)}%`;
+
+    return html`
+      <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : "0 0 700 840"} role="img" aria-label="Boiler solare">
+        <defs>
+          <linearGradient id="acqua" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color=${cTop} />
+            <stop offset=${midAt} stop-color=${cMid} />
+            <stop offset="1" stop-color=${cBot} />
+          </linearGradient>
+          <linearGradient id="puffer" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color=${cPuf} />
+            <stop offset="1" stop-color=${tempColor(puffer !== null ? puffer - 12 : null)} />
+          </linearGradient>
+          <linearGradient id="iso" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" style="stop-color:var(--divider-color)" />
+            <stop offset="0.5" style="stop-color:var(--secondary-background-color)" />
+            <stop offset="1" style="stop-color:var(--divider-color)" />
+          </linearGradient>
+          <linearGradient id="lucido" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#fff" stop-opacity="0.28" />
+            <stop offset="0.35" stop-color="#fff" stop-opacity="0" />
+          </linearGradient>
+        </defs>
+
+        <!-- tubi -->
+        <path d="M420 135 H520 V95" class="pipe hot" />
+        <path d="M420 745 H520 V775" class="pipe cold" />
+        <g class="pufgroup">
+          <path d="M440 208 H575" class="pipe hot thin" />
+          <path d="M440 268 H520 V315 H575" class="pipe warm thin" />
+          <path d="M685 215 H700" class="pipe hot thin" />
+          <path d="M685 300 H700" class="pipe warm thin" />
+          <text x="452" y="196" class="t2 s13">mandata</text>
+          <text x="528" y="338" class="t2 s13">ritorno</text>
+        </g>
+
+        <!-- boiler -->
+        <rect x="200" y="100" width="240" height="660" rx="52" fill="url(#iso)" class="outline" />
+        <rect x="222" y="122" width="196" height="616" rx="38" fill="url(#acqua)" />
+        <g class="coil">
+          <path d="M238 200 H398 M398 200 q14 12 0 24 H238 q-14 12 0 24 H398 q14 12 0 24 H238" stroke="#7c3aed" />
+          <path d="M238 560 H398 M398 560 q14 12 0 24 H238 q-14 12 0 24 H398 q14 12 0 24 H238 q-14 12 0 24 H398" stroke="#15803d" />
+        </g>
+        <rect x="246" y="150" width="160" height="26" rx="13" class="pill" />
+        <text x="326" y="168" class="s14 b" text-anchor="middle" fill="#a78bfa">Integrazione (caldaia)</text>
+        <rect x="266" y="522" width="120" height="26" rx="13" class="pill" />
+        <text x="326" y="540" class="s14 b" text-anchor="middle" fill="#4ade80">Solare</text>
+        <rect x="222" y="122" width="196" height="616" rx="38" fill="url(#lucido)" />
+
+        <!-- scheda centrale -->
+        <rect x="236" y="338" width="168" height="176" rx="22" class="pill big" />
+        <text x="320" y="372" class="t2 s14" text-anchor="middle">Uscita acqua calda</text>
+        <text x="320" y="434" class="t1 b" font-size="50" text-anchor="middle">${fmt(outlet, 1)}<tspan font-size="24" dy="-16"> °C</tspan></text>
+        <line x1="262" y1="456" x2="378" y2="456" class="sep" />
+        <text x="320" y="490" class="t1 b" font-size="22" text-anchor="middle">${showers === null ? "(–)" : `(≈ ${showers} ${showers === 1 ? "doccia" : "docce"})`}</text>
+
+        <!-- sonde -->
+        <circle cx="222" cy="168" r="8" class="probe" />
+        <line x1="214" y1="168" x2="150" y2="168" class="lead" />
+        <rect x="14" y="132" width="136" height="72" rx="14" class="card hi" />
+        <text x="82" y="156" class="t2 s14" text-anchor="middle">Alto (S3)</text>
+        <text x="82" y="190" class="b" font-size="27" text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
+
+        <circle cx="222" cy="676" r="8" class="probe" />
+        <line x1="214" y1="676" x2="150" y2="676" class="lead" />
+        <rect x="14" y="640" width="136" height="72" rx="14" class="card lo" />
+        <text x="82" y="664" class="t2 s14" text-anchor="middle">Basso (S2)</text>
+        <text x="82" y="698" class="b" font-size="27" text-anchor="middle" fill="#3b82f6">${fmt(bottom, 1)} °C</text>
+
+        <!-- solare -->
+        <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
+        <text x="82" y="752" class="t2 s14" text-anchor="middle">Solare ${fmt(solarKw, 1)} kW</text>
+        <text x="82" y="786" class="b" font-size="24" text-anchor="middle" fill="#22c55e">${fmt(collector, 0)} °C</text>
+
+        <text x="532" y="80" class="b s14" fill="#ef4444">Acqua calda</text>
+        <text x="532" y="98" class="t2 s13">verso utenze</text>
+        <text x="532" y="796" class="b s14" fill="#3b82f6">Acqua fredda</text>
+        <text x="532" y="814" class="t2 s13">dalla rete</text>
+
+        <g class="pufgroup">
+        <text x="630" y="158" class="t1 b s14" text-anchor="middle">Puffer 50 L</text>
+        <rect x="575" y="170" width="110" height="170" rx="26" fill="url(#puffer)" class="outline" />
+        <rect x="587" y="224" width="86" height="64" rx="14" class="pill big" />
+        <text x="630" y="247" class="t2 s13" text-anchor="middle">temperatura</text>
+        <text x="630" y="276" class="t1 b" font-size="23" text-anchor="middle">${fmt(puffer, 0)} °C</text>
+        </g>
+      </svg>
+    `;
+  }
+
+  // ---- caldaia -----------------------------------------------------------
+
+  private _flame(cx: number, cy: number, k: number, opacity = 1) {
+    return svg`<g transform="translate(${cx},${cy}) scale(${k})" opacity=${opacity}>
+      <path d=${FLAME_PATH} fill="url(#fiamma)" />
+      <path d=${FLAME_PATH} fill="#fde047" transform="translate(0,6) scale(0.52)" />
+    </g>`;
+  }
+
+  private _renderStoveImage(look: StoveLook) {
+    const flame =
+      look === "work"
+        ? this._flame(90, 168, 1.0)
+        : look === "start"
+          ? this._flame(90, 168, 0.4)
+          : look === "stopping"
+            ? this._flame(90, 168, 0.22, 0.55)
+            : nothing;
+    const glow = look === "work" ? 0.55 : look === "start" ? 0.3 : 0;
+    return html`
+      <svg class="stoveimg ${look}" viewBox="0 0 180 250" role="img" aria-label="Caldaia a pellet">
+        <defs>
+          <linearGradient id="fiamma" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stop-color="#f59e0b" /><stop offset="0.55" stop-color="#f97316" /><stop offset="1" stop-color="#dc2626" />
+          </linearGradient>
+          <linearGradient id="vetro" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#05080f" /><stop offset="1" stop-color="#1e293b" /></linearGradient>
+          <radialGradient id="bagliore" cx="0.5" cy="0.85" r="0.6">
+            <stop offset="0" stop-color="#f97316" stop-opacity=${glow} /><stop offset="1" stop-color="#f97316" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <rect x="20" y="4" width="140" height="26" rx="6" fill="#475569" />
+        <text x="90" y="22" font-size="12" text-anchor="middle" fill="#e2e8f0">pellet</text>
+        <rect x="0" y="30" width="180" height="214" rx="16" fill="#1f2937" stroke="#64748b" stroke-width="2" />
+        <rect x="20" y="52" width="140" height="130" rx="12" fill="url(#vetro)" stroke="#94a3b8" stroke-width="3" />
+        <rect x="20" y="52" width="140" height="130" rx="12" fill="url(#bagliore)" />
+        <g class="flicker">${flame}</g>
+        <rect x="20" y="190" width="140" height="8" rx="4" fill="#374151" />
+        <circle cx="22" cy="222" r="5" fill="#64748b" /><circle cx="42" cy="222" r="5" fill="#64748b" />
+      </svg>
+    `;
+  }
+
+  private _legendFlame(k: number) {
+    return html`<svg viewBox="-30 -40 60 60" class="lg"><g transform="scale(${k})"><path d=${FLAME_PATH} fill="url(#fiamma)" /><path d=${FLAME_PATH} fill="#fde047" transform="translate(0,6) scale(0.52)" /></g></svg>`;
+  }
+
+  private _tile(label: string, value: string, color?: string) {
+    return html`<div class="tile"><span class="tl">${label}</span><span class="tv" style=${color ? `color:${color}` : ""}>${value}</span></div>`;
+  }
+
+  private _chip(label: string, v: boolean | null) {
+    return html`<div class="chip ${v ? "yes" : ""}"><span>${label}</span><b>${v === null ? "–" : v ? "SÌ" : "NO"}</b></div>`;
+  }
+
+  private _renderStove() {
+    const e = this._e;
+    const stateRaw = this._s(e.stove_state);
+    const look = stoveLook(stateRaw);
+    const changed = this.hass.states[e.stove_state]?.last_changed;
+    const since = changed ? new Date(changed).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
+    const alarmRaw = (this._s(e.alarm) ?? "").trim();
+    const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown";
+    const pump = this._s(e.pump);
+    const pumpOn = pump !== undefined && pump !== "OFF" && pump !== "unknown" && pump !== "unavailable";
+    const work = this._n(e.work_hours_today);
+
+    return html`
+      <section class="stove">
+        <h3>Caldaia a pellet (Polygon)</h3>
+        <div class="top">
+          ${this._renderStoveImage(look)}
+          <div class="statecard">
+            <span class="tl">Stato caldaia</span>
+            <span class="statepill ${look}">${stateRaw ?? "–"}</span>
+            <span class="tl">Acqua caldaia</span>
+            <span class="water">${fmt(this._n(e.stove_water), 1)}<small> °C</small></span>
+            <span class="tl">Ultimo cambio stato</span>
+            <span class="since">${since ? `alle ${since}` : "–"}</span>
+          </div>
+        </div>
+        <div class="legendbar">
+          <div><span class="dot"></span><b>Spenta</b><small>ECO STOP / OFF</small></div>
+          <div>${this._legendFlame(0.38)}<b class="amber">Accensione</b><small>START</small></div>
+          <div>${this._legendFlame(0.62)}<b class="red">In lavoro</b><small>WORK</small></div>
+        </div>
+        <div class="tiles">
+          ${this._tile("Puffer 50 L", `${fmt(this._n(e.puffer), 1)} °C`, "#f59e0b")}
+          ${this._tile("Set boiler", `${fmt(this._n(e.set_boiler), 0)} °C`)}
+          ${this._tile("Set acqua", `${fmt(this._n(e.set_water), 0)} °C`)}
+          ${this._tile("Fumi", `${fmt(this._n(e.smoke), 0)} °C`)}
+          ${this._tile("Fiamma", `${fmt(this._n(e.flame), 0)} °C`)}
+          ${this._tile("Potenza reale", `${fmt(this._n(e.power), 0)} %`)}
+          ${this._tile("Pressione acqua", `${fmt(this._n(e.water_pressure), 1)} bar`)}
+          ${this._tile("Pressione braciere", fmt(this._n(e.brazier_pressure), 1))}
+          ${this._tile("Estrattore fumi", `${fmt(this._n(e.extractor), 0)} giri`)}
+          ${this._tile("Circolatore", pump === undefined ? "–" : pumpOn ? "ON" : "OFF", pumpOn ? "#22c55e" : undefined)}
+          ${this._tile("Accensioni ieri", fmt(this._n(e.starts_yesterday), 0))}
+          ${this._tile("Allarme", noAlarm ? "nessuno" : alarmRaw, noAlarm ? "#22c55e" : "#ef4444")}
+        </div>
+        <div class="counters">
+          <span class="tl">Oggi</span>
+          <div>
+            <b>${fmt(this._n(e.starts_today), 0)} accensioni</b>
+            <b>${fmt(work, 1)} h in lavoro</b>
+            <b>${fmt(this._n(e.standby_today), 0)} stand-by</b>
+          </div>
+        </div>
+        <div class="chips">
+          ${this._chip("Richiesta ACS", this._yes(e.request_acs))} ${this._chip("Riscaldamento", this._yes(e.request_heating))}
+          ${this._chip("Consenso suggerito", this._yes(e.consent))}
+        </div>
+        <p class="look">${LOOK_LABEL[look]}</p>
+      </section>
+    `;
+  }
+
+  render() {
+    if (!this._config || !this.hass) return nothing;
+    return html`
+      <ha-card>
+        ${this._config.title ? html`<div class="ctitle">${this._config.title}</div>` : nothing}
+        <div class="layout">${this._renderBoiler()} ${this._renderStove()}</div>
+      </ha-card>
+    `;
+  }
+
+  static styles = css`
+    :host {
+      display: block;
+      container-type: inline-size;
+    }
+    ha-card {
+      padding: 12px;
+      color: var(--primary-text-color);
+    }
+    .ctitle {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 4px 4px 8px;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @container (min-width: 900px) {
+      .layout {
+        grid-template-columns: 7fr 6fr;
+      }
+    }
+    svg.boiler {
+      width: 100%;
+      height: auto;
+      display: block;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    svg.narrow .pufgroup {
+      display: none;
+    }
+    svg.narrow .s13 {
+      font-size: 15px;
+    }
+    svg.narrow .s14 {
+      font-size: 16px;
+    }
+    /* testi e forme dell'SVG, colori dal tema di Home Assistant */
+    .t1 {
+      fill: var(--primary-text-color);
+    }
+    .t2 {
+      fill: var(--secondary-text-color);
+    }
+    .b {
+      font-weight: 700;
+    }
+    .s13 {
+      font-size: 13px;
+    }
+    .s14 {
+      font-size: 14px;
+    }
+    .sep {
+      stroke: var(--divider-color);
+      stroke-width: 2;
+    }
+    .outline {
+      stroke: var(--divider-color);
+      stroke-width: 3;
+    }
+    .pill {
+      fill: var(--card-background-color);
+      fill-opacity: 0.9;
+    }
+    .pill.big {
+      fill-opacity: 0.94;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+    }
+    .card {
+      fill: var(--secondary-background-color);
+      stroke-width: 2;
+    }
+    .card.hi {
+      stroke: #ef4444;
+    }
+    .card.lo {
+      stroke: #3b82f6;
+    }
+    .card.sun {
+      stroke: #22c55e;
+    }
+    .probe {
+      fill: var(--card-background-color);
+      stroke: var(--primary-text-color);
+      stroke-width: 3;
+    }
+    .lead {
+      stroke: var(--secondary-text-color);
+      stroke-width: 2;
+    }
+    .pipe {
+      fill: none;
+      stroke-width: 10;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .pipe.thin {
+      stroke-width: 8;
+    }
+    .pipe.hot {
+      stroke: #dc2626;
+    }
+    .pipe.warm {
+      stroke: #f97316;
+    }
+    .pipe.cold {
+      stroke: #2563eb;
+    }
+    .coil {
+      fill: none;
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-opacity: 0.9;
+    }
+    /* pannello caldaia */
+    .stove {
+      background: var(--secondary-background-color);
+      border-radius: 20px;
+      padding: 14px;
+      border: 1px solid var(--divider-color);
+    }
+    .stove h3 {
+      margin: 0 0 12px;
+      text-align: center;
+      font-size: 17px;
+    }
+    .top {
+      display: grid;
+      grid-template-columns: minmax(120px, 1fr) minmax(150px, 1fr);
+      gap: 12px;
+    }
+    .stoveimg {
+      width: 100%;
+      max-width: 200px;
+      height: auto;
+      justify-self: center;
+    }
+    .flicker {
+      transform-origin: 90px 168px;
+    }
+    .stoveimg.work .flicker,
+    .stoveimg.start .flicker {
+      animation: flicker 1.6s ease-in-out infinite;
+    }
+    @keyframes flicker {
+      0%,
+      100% {
+        transform: scale(1, 1);
+      }
+      50% {
+        transform: scale(1.03, 1.06);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .stoveimg .flicker {
+        animation: none !important;
+      }
+    }
+    .statecard {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: center;
+      justify-content: center;
+      background: var(--card-background-color);
+      border-radius: 16px;
+      padding: 12px;
+      text-align: center;
+    }
+    .tl {
+      font-size: 12px;
+      color: var(--secondary-text-color);
+    }
+    .statepill {
+      font-weight: 700;
+      font-size: 20px;
+      border-radius: 20px;
+      padding: 4px 18px;
+      margin-bottom: 8px;
+      background: var(--divider-color);
+    }
+    .statepill.work {
+      background: color-mix(in srgb, #22c55e 28%, transparent);
+      color: #22c55e;
+    }
+    .statepill.start {
+      background: color-mix(in srgb, #f59e0b 28%, transparent);
+      color: #f59e0b;
+    }
+    .statepill.standby {
+      background: color-mix(in srgb, #ef4444 28%, transparent);
+      color: #ef4444;
+    }
+    .water {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .water small {
+      font-size: 16px;
+    }
+    .since {
+      font-weight: 600;
+    }
+    .legendbar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 12px;
+      padding: 8px;
+      background: var(--card-background-color);
+      border-radius: 12px;
+      font-size: 12px;
+    }
+    .legendbar > div {
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      grid-template-rows: auto auto;
+      column-gap: 6px;
+      align-items: center;
+    }
+    .legendbar .lg,
+    .legendbar .dot {
+      grid-row: 1 / span 2;
+      width: 28px;
+      height: 28px;
+    }
+    .legendbar .dot {
+      border-radius: 50%;
+      background: var(--divider-color);
+      border: 2px solid var(--secondary-text-color);
+      box-sizing: border-box;
+    }
+    .legendbar small {
+      color: var(--secondary-text-color);
+      font-size: 11px;
+    }
+    .legendbar .amber {
+      color: #f59e0b;
+    }
+    .legendbar .red {
+      color: #ef4444;
+    }
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+    @container (max-width: 520px) {
+      .tiles {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    .tile {
+      background: var(--card-background-color);
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .tv {
+      font-size: 18px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .counters {
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: color-mix(in srgb, #f59e0b 14%, transparent);
+    }
+    .counters > div {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 18px;
+      font-size: 15px;
+    }
+    .chips {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 6px 4px;
+      border-radius: 18px;
+      background: var(--card-background-color);
+      border: 1px solid var(--divider-color);
+      font-size: 11px;
+      color: var(--secondary-text-color);
+      text-align: center;
+    }
+    .chip b {
+      font-size: 14px;
+      color: var(--primary-text-color);
+    }
+    .chip.yes {
+      border-color: #22c55e;
+    }
+    .chip.yes b {
+      color: #22c55e;
+    }
+    .look {
+      display: none;
+    }
+  `;
+}
+
+customElements.define(CARD_TAG, ImpiantoOverviewCard);

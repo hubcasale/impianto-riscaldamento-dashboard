@@ -1,0 +1,296 @@
+# Sonde di temperatura del solare termico: 4 x NTC 10k B3950 lette da un ADS1115 (ESP32 dev)
+# + 2 sonde NTC del boiler (alto e basso) sugli ingressi analogici GPIO34 e GPIO35.
+# Il puffer NON si misura qui: la Polygon lo legge con le sue sonde (schema 02) e lo espone nel cloud.
+#
+# COLLEGAMENTO (per ciascuna delle 4 sonde, tutte con la stessa regola):
+#
+#   3,3 V ──[ resistenza 10 kOhm, 0,1 % ]──┬── ingresso ADS1115 (A0, A1, A2 o A3)
+#                                          │
+#                                  [ sonda NTC 10k ]
+#                                          │
+#                                         GND
+#
+#   ADS1115: VDD = 3,3 V (NON 5 V), GND, SDA = GPIO21, SCL = GPIO22, ADDR a GND (indirizzo 0x48).
+#   Consigli: un condensatore da 100 nF tra ogni ingresso e GND, cavo schermato per le sonde lunghe
+#   (schermo a GND da un solo lato), sonda a contatto con il tubo con pasta termoconduttiva e isolata.
+#   Misura con un tester la tensione reale sul pin 3,3 V dell'ESP32 e scrivila in `reference_voltage`.
+#
+# Canali:  A0 = solare ingresso   A1 = solare uscita   A2 = integrazione ingresso   A3 = integrazione uscita
+#
+# TARATURA: metti tutte e 4 le sonde insieme in un bagno d'acqua (circa 50 C) vicino a un termometro di
+# riferimento, leggi le differenze e scrivi la correzione nel filtro `offset` di ciascuna sonda.
+# Questo conta piu' della precisione assoluta, perche' l'apporto di calore dipende da (uscita - ingresso).
+
+substitutions:
+  device_name: solare-termico
+  # Tensione reale di alimentazione misurata sul pin 3,3 V (modificala dopo la misura)
+  vcc: 3.3V
+
+esphome:
+  name: ${device_name}
+  friendly_name: Solare termico
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: sonde_caldaia_hotspot
+    password: !secret hotspot_password
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+
+ads1115:
+  - address: 0x48
+    id: ads_solare
+
+sensor:
+  # ---------- tensioni grezze (nascoste) ----------
+  - platform: ads1115
+    ads1115_id: ads_solare
+    multiplexer: A0_GND
+    gain: 4.096
+    sample_rate: 64
+    id: v_solare_ingresso
+    name: "Tensione solare ingresso"
+    internal: true
+    update_interval: 5s
+  - platform: ads1115
+    ads1115_id: ads_solare
+    multiplexer: A1_GND
+    gain: 4.096
+    sample_rate: 64
+    id: v_solare_uscita
+    name: "Tensione solare uscita"
+    internal: true
+    update_interval: 5s
+  - platform: ads1115
+    ads1115_id: ads_solare
+    multiplexer: A2_GND
+    gain: 4.096
+    sample_rate: 64
+    id: v_integrazione_ingresso
+    name: "Tensione integrazione ingresso"
+    internal: true
+    update_interval: 5s
+  - platform: ads1115
+    ads1115_id: ads_solare
+    multiplexer: A3_GND
+    gain: 4.096
+    sample_rate: 64
+    id: v_integrazione_uscita
+    name: "Tensione integrazione uscita"
+    internal: true
+    update_interval: 5s
+
+  # ---------- resistenze (nascoste) ----------
+  - platform: resistance
+    sensor: v_solare_ingresso
+    configuration: DOWNSTREAM
+    resistor: 10kOhm
+    reference_voltage: ${vcc}
+    id: r_solare_ingresso
+    name: "Resistenza solare ingresso"
+    internal: true
+  - platform: resistance
+    sensor: v_solare_uscita
+    configuration: DOWNSTREAM
+    resistor: 10kOhm
+    reference_voltage: ${vcc}
+    id: r_solare_uscita
+    name: "Resistenza solare uscita"
+    internal: true
+  - platform: resistance
+    sensor: v_integrazione_ingresso
+    configuration: DOWNSTREAM
+    resistor: 10kOhm
+    reference_voltage: ${vcc}
+    id: r_integrazione_ingresso
+    name: "Resistenza integrazione ingresso"
+    internal: true
+  - platform: resistance
+    sensor: v_integrazione_uscita
+    configuration: DOWNSTREAM
+    resistor: 10kOhm
+    reference_voltage: ${vcc}
+    id: r_integrazione_uscita
+    name: "Resistenza integrazione uscita"
+    internal: true
+
+  # ---------- temperature (visibili in Home Assistant) ----------
+  - platform: ntc
+    sensor: r_solare_ingresso
+    name: "Solare serpentina ingresso"
+    id: t_solare_ingresso
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 2
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+    filters:
+      - median:
+          window_size: 5
+          send_every: 3
+          send_first_at: 1
+      - offset: 0.0   # correzione da taratura
+
+  - platform: ntc
+    sensor: r_solare_uscita
+    name: "Solare serpentina uscita"
+    id: t_solare_uscita
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 2
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+    filters:
+      - median:
+          window_size: 5
+          send_every: 3
+          send_first_at: 1
+      - offset: 0.0
+
+  - platform: ntc
+    sensor: r_integrazione_ingresso
+    name: "Integrazione serpentina ingresso"
+    id: t_integrazione_ingresso
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 2
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+    filters:
+      - median:
+          window_size: 5
+          send_every: 3
+          send_first_at: 1
+      - offset: 0.0
+
+  - platform: ntc
+    sensor: r_integrazione_uscita
+    name: "Integrazione serpentina uscita"
+    id: t_integrazione_uscita
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 2
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+    filters:
+      - median:
+          window_size: 5
+          send_every: 3
+          send_first_at: 1
+      - offset: 0.0
+
+  # ---------- boiler: alto e basso (ingressi analogici ESP32, precisione ridotta ma sufficiente) ----------
+  # Usare solo pin ADC1 (GPIO32-39): l'ADC2 non funziona con il Wi-Fi acceso.
+  - platform: adc
+    pin: GPIO34
+    attenuation: 12db
+    samples: 16
+    update_interval: 10s
+    id: v_boiler_alto
+    name: "Tensione boiler alto"
+    internal: true
+  - platform: adc
+    pin: GPIO35
+    attenuation: 12db
+    samples: 16
+    update_interval: 10s
+    id: v_boiler_basso
+    name: "Tensione boiler basso"
+    internal: true
+
+  - platform: resistance
+    sensor: v_boiler_alto
+    configuration: DOWNSTREAM
+    resistor: 10kOhm
+    reference_voltage: ${vcc}
+    id: r_boiler_alto
+    name: "Resistenza boiler alto"
+    internal: true
+  - platform: resistance
+    sensor: v_boiler_basso
+    configuration: DOWNSTREAM
+    resistor: 10kOhm
+    reference_voltage: ${vcc}
+    id: r_boiler_basso
+    name: "Resistenza boiler basso"
+    internal: true
+
+  - platform: ntc
+    sensor: r_boiler_alto
+    name: "Boiler alto"
+    id: t_boiler_alto
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+    filters:
+      - median:
+          window_size: 5
+          send_every: 3
+          send_first_at: 1
+      - offset: 0.0   # correzione da taratura
+
+  - platform: ntc
+    sensor: r_boiler_basso
+    name: "Boiler basso"
+    id: t_boiler_basso
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+    filters:
+      - median:
+          window_size: 5
+          send_every: 3
+          send_first_at: 1
+      - offset: 0.0
+
+  - platform: wifi_signal
+    name: "Segnale Wi-Fi"
+    update_interval: 120s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: "Tempo di attivita"
+    entity_category: diagnostic
+
+web_server:

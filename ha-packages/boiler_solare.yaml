@@ -1,0 +1,194 @@
+# Boiler solare (ACS, 200 L): stima di temperatura media, energia accumulata e acqua calda disponibile
+# a partire da due sonde (alto e basso) lette dall'ESP32 "solare-termico".
+# Modello semplice: il serbatoio e' diviso in due zone. La parte alta e' rappresentata dalla sonda alta,
+# il resto dalla sonda bassa (sul fondo del serbatoio).
+# Il peso della zona alta e' regolabile (default 40 %).
+# Le sonde NTC dell'ESP32 hanno oggi uno scarso contatto termico: leggono piu' basso della centralina Elios
+# (S3 alta, S2 bassa). Provvisoriamente si somma una correzione costante (delta) alle letture; quando arrivano
+# le sonde nuove si sostituisce il delta con gli offset in ESPHome (e qui il delta torna a 0).
+
+input_boolean:
+  boiler_solare_defaults_impostati:
+    name: Boiler solare - valori iniziali impostati
+    icon: mdi:check
+  boiler_solare_defaults_v2_impostati:
+    name: Boiler solare - valori iniziali v2 impostati
+    icon: mdi:check
+
+input_number:
+  boiler_solare_delta_alto:
+    name: Boiler solare - correzione sonda alta (S3 meno ESP32)
+    min: -20
+    max: 20
+    step: 0.1
+    unit_of_measurement: °C
+    mode: box
+  boiler_solare_delta_basso:
+    name: Boiler solare - correzione sonda bassa (S2 meno ESP32)
+    min: -20
+    max: 20
+    step: 0.1
+    unit_of_measurement: °C
+    mode: box
+  boiler_solare_volume:
+    name: Boiler solare - volume
+    min: 50
+    max: 1000
+    step: 5
+    unit_of_measurement: L
+    mode: box
+  boiler_solare_peso_alto:
+    name: Boiler solare - quota di volume della zona alta
+    min: 10
+    max: 90
+    step: 5
+    unit_of_measurement: "%"
+    mode: box
+  boiler_solare_t_rete:
+    name: Boiler solare - temperatura acqua di rete
+    min: 5
+    max: 25
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
+  boiler_solare_t_utile:
+    name: Boiler solare - temperatura utile dell'acqua calda
+    min: 30
+    max: 55
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+
+template:
+  - sensor:
+      - name: Boiler solare - alto stimato
+        unique_id: boiler_solare_alto_stimato
+        unit_of_measurement: °C
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-high
+        availability: >
+          {{ is_number(states('sensor.solare_termico_boiler_alto'))
+             and is_number(states('input_number.boiler_solare_delta_alto')) }}
+        state: >
+          {{ (states('sensor.solare_termico_boiler_alto') | float
+              + states('input_number.boiler_solare_delta_alto') | float) | round(1) }}
+
+      - name: Boiler solare - basso stimato
+        unique_id: boiler_solare_basso_stimato
+        unit_of_measurement: °C
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-low
+        availability: >
+          {{ is_number(states('sensor.garage_solare_termico_boiler_basso'))
+             and is_number(states('input_number.boiler_solare_delta_basso')) }}
+        state: >
+          {{ (states('sensor.garage_solare_termico_boiler_basso') | float
+              + states('input_number.boiler_solare_delta_basso') | float) | round(1) }}
+
+      - name: Boiler solare - temperatura media
+        unique_id: boiler_solare_temperatura_media
+        unit_of_measurement: °C
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:water-boiler
+        availability: >
+          {{ is_number(states('sensor.boiler_solare_alto_stimato'))
+             and is_number(states('sensor.boiler_solare_basso_stimato'))
+             and is_number(states('input_number.boiler_solare_peso_alto')) }}
+        state: >
+          {% set w = states('input_number.boiler_solare_peso_alto') | float / 100 %}
+          {{ (w * states('sensor.boiler_solare_alto_stimato') | float
+              + (1 - w) * states('sensor.boiler_solare_basso_stimato') | float) | round(1) }}
+
+      - name: Boiler solare - stratificazione
+        unique_id: boiler_solare_stratificazione
+        unit_of_measurement: °C
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:arrow-collapse-vertical
+        availability: >
+          {{ is_number(states('sensor.boiler_solare_alto_stimato'))
+             and is_number(states('sensor.boiler_solare_basso_stimato')) }}
+        state: >
+          {{ (states('sensor.boiler_solare_alto_stimato') | float
+              - states('sensor.boiler_solare_basso_stimato') | float) | round(1) }}
+
+      - name: Boiler solare - energia accumulata
+        unique_id: boiler_solare_energia_accumulata
+        unit_of_measurement: kWh
+        device_class: energy_storage
+        state_class: measurement
+        icon: mdi:battery-charging-medium
+        availability: >
+          {{ is_number(states('sensor.boiler_solare_temperatura_media'))
+             and is_number(states('input_number.boiler_solare_volume'))
+             and is_number(states('input_number.boiler_solare_t_rete')) }}
+        state: >
+          {% set dt = states('sensor.boiler_solare_temperatura_media') | float
+                      - states('input_number.boiler_solare_t_rete') | float %}
+          {{ ([dt, 0] | max * states('input_number.boiler_solare_volume') | float * 1.163 / 1000) | round(2) }}
+
+      - name: Boiler solare - acqua calda equivalente
+        unique_id: boiler_solare_acqua_calda_equivalente
+        unit_of_measurement: L
+        state_class: measurement
+        icon: mdi:water-thermometer
+        availability: >
+          {{ is_number(states('sensor.boiler_solare_temperatura_media'))
+             and is_number(states('input_number.boiler_solare_volume'))
+             and is_number(states('input_number.boiler_solare_t_rete'))
+             and is_number(states('input_number.boiler_solare_t_utile')) }}
+        state: >
+          {% set tr = states('input_number.boiler_solare_t_rete') | float %}
+          {% set tu = states('input_number.boiler_solare_t_utile') | float %}
+          {% set dt = states('sensor.boiler_solare_temperatura_media') | float - tr %}
+          {{ ([dt, 0] | max * states('input_number.boiler_solare_volume') | float / ([tu - tr, 1] | max)) | round(0) }}
+
+automation:
+  - id: boiler_solare_valori_iniziali
+    alias: Boiler solare - valori iniziali
+    description: Imposta volume, quota zona alta, temperatura di rete e temperatura utile una sola volta.
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.boiler_solare_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_volume}
+        data: {value: 200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_peso_alto}
+        data: {value: 40}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_t_rete}
+        data: {value: 15}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_t_utile}
+        data: {value: 40}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.boiler_solare_defaults_impostati}
+
+  - id: boiler_solare_valori_iniziali_v2
+    alias: Boiler solare - valori iniziali v2
+    description: Imposta le correzioni provvisorie delle sonde una sola volta (S3 meno ESP32 circa 9,5; S2 meno ESP32 circa 2).
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.boiler_solare_defaults_v2_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_delta_alto}
+        data: {value: 9.5}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_delta_basso}
+        data: {value: 2.0}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.boiler_solare_defaults_v2_impostati}

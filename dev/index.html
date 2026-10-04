@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Banco di prova - impianto riscaldamento dashboard</title>
+<!--
+  Pagina per provare le schede nel browser senza Home Assistant:
+    npm run build:dev    poi apri dev/index.html nel browser (anche da file, senza server)
+  Parametri: ?tema=chiaro|scuro  ?stato=WORK|START|ECO%20STOP|STAND%20BY  ?larghezza=380
+-->
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; font-family: Roboto, Helvetica, Arial, sans-serif; background: var(--lovelace-background, #fafafa); color: var(--primary-text-color); }
+  body.chiaro {
+    --primary-text-color: #212121; --secondary-text-color: #727272; --card-background-color: #ffffff;
+    --secondary-background-color: #e5e5e5; --divider-color: rgba(0,0,0,.12); --primary-color: #03a9f4;
+    --text-primary-color: #fff; --success-color: #43a047; --warning-color: #ffa600; --error-color: #db4437; --lovelace-background: #fafafa;
+  }
+  body.scuro {
+    --primary-text-color: #e1e1e1; --secondary-text-color: #9b9b9b; --card-background-color: #1c1c1c;
+    --secondary-background-color: #282828; --divider-color: rgba(225,225,225,.12); --primary-color: #03a9f4;
+    --text-primary-color: #fff; --success-color: #43a047; --warning-color: #ffa600; --error-color: #db4437; --lovelace-background: #111111;
+  }
+  .page { max-width: 1200px; margin: 0 auto; padding: 12px; display: grid; gap: 14px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+  .bar button, .bar select { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); cursor: pointer; }
+  ha-card { display: block; background: var(--card-background-color); border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  ha-icon { display: inline-block; width: 18px; text-align: center; }
+  pre { font-size: 12px; background: var(--card-background-color); padding: 8px; border-radius: 8px; max-height: 160px; overflow: auto; margin: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="bar">
+    <b>Banco di prova</b>
+    <button id="t">Tema chiaro/scuro</button>
+    <select id="stato">
+      <option>WORK</option><option>START</option><option>WAIT</option><option>ECO STOP</option><option>STAND BY</option><option>OFF</option>
+    </select>
+    <span id="info"></span>
+  </div>
+  <div id="cards"></div>
+  <pre id="log">Chiamate ai servizi:\n</pre>
+</div>
+
+<script src="bundle.js"></script>
+<script>
+
+const q = new URLSearchParams(location.search);
+document.body.classList.add(q.get("tema") === "chiaro" ? "chiaro" : "scuro");
+if (q.get("larghezza")) document.querySelector(".page").style.maxWidth = q.get("larghezza") + "px";
+
+// ha-card minimale (in Home Assistant esiste già)
+if (!customElements.get("ha-card")) customElements.define("ha-card", class extends HTMLElement {});
+if (!customElements.get("ha-icon")) customElements.define("ha-icon", class extends HTMLElement {
+  set icon(v) { this.textContent = ({"mdi:calendar-week":"📅","mdi:briefcase-outline":"💼","mdi:home-heart":"🏠","mdi:palm-tree":"🌴"})[v] || "•"; }
+});
+
+const now = new Date().toISOString();
+const S = {};
+const set = (id, state, attributes = {}) => (S[id] = { entity_id: id, state: String(state), last_changed: now, attributes });
+
+// boiler solare e stime
+set("sensor.boiler_solare_alto_stimato", 55.6, { unit_of_measurement: "°C" });
+set("sensor.boiler_solare_basso_stimato", 23.1, { unit_of_measurement: "°C" });
+set("input_number.boiler_solare_volume", 190);
+set("input_number.boiler_solare_peso_alto", 50);
+set("input_number.boiler_solare_t_rete", 15);
+set("sensor.solare_termico_potenza", 0.81, { unit_of_measurement: "kW" });
+set("sensor.solare_termico_t_collettore_stimata", 28, { unit_of_measurement: "°C" });
+// caldaia
+set("sensor.casale_stato", q.get("stato") || "WORK");
+set("sensor.casale_temperatura_acqua", 56);
+set("sensor.casale_temperatura_boiler", 61);
+set("sensor.casale_temperatura_fumi", 55);
+set("sensor.casale_temperatura_fiamma", 53);
+set("sensor.casale_potenza_reale", 100);
+set("sensor.casale_pressione_acqua", 1.2);
+set("sensor.casale_pressione_braciere", 0.9);
+set("sensor.casale_estrattore_fumi", 0);
+set("sensor.casale_pompa_acqua", "OFF");
+set("sensor.casale_allarme", "____");
+set("number.casale_setpoint_boiler", 45);
+set("climate.casale_acqua", "heat", { temperature: 65 });
+set("sensor.caldaia_accensioni_oggi", 6);
+set("sensor.caldaia_accensioni_ieri", 7);
+set("sensor.caldaia_stand_by_oggi", 0);
+set("sensor.caldaia_ore_in_lavoro_oggi", 2.4);
+set("binary_sensor.caldaia_richiesta_acs", "off");
+set("binary_sensor.caldaia_richiesta_riscaldamento", "off");
+set("binary_sensor.caldaia_consenso_suggerito", "off");
+// programmazione (dati reali del 4 ottobre 2026; P3 volutamente sovrapposto a P1 il lunedì per vedere l'avviso)
+set("switch.casale_cronotermostato_settimanale", "on");
+const slugs = ["lunedi","martedi","mercoledi","giovedi","venerdi","sabato","domenica"];
+const P = [
+  ["05:30:00","08:00:00",[0,1,2,3,4,5]],
+  ["12:00:00","00:00:00",[]],
+  ["07:00:00","09:30:00",[0]],
+  ["12:00:00","00:00:00",[]],
+];
+P.forEach(([on, off, days], i) => {
+  const n = i + 1;
+  set(`time.casale_crono_p${n}_accensione`, on);
+  set(`time.casale_crono_p${n}_spegnimento`, off);
+  set(`number.casale_crono_p${n}_setpoint_boiler`, 45, { min: 45, max: 70, step: 1 });
+  set(`number.casale_crono_p${n}_setpoint_acqua`, 65, { min: 50, max: 75, step: 1 });
+  slugs.forEach((s, d) => set(`switch.casale_crono_p${n}_${s}`, days.includes(d) ? "on" : "off"));
+});
+
+const log = document.getElementById("log");
+const cards = [];
+function push() { cards.forEach((c) => (c.hass = hass)); }
+const hass = {
+  states: S,
+  async callService(domain, service, data) {
+    log.textContent += `${domain}.${service} ${JSON.stringify(data)}\n`;
+    log.scrollTop = log.scrollHeight;
+    await new Promise((r) => setTimeout(r, 250));
+    // simula la risposta del cloud dopo un po'
+    setTimeout(() => {
+      const e = S[data.entity_id];
+      if (!e) return;
+      if (domain === "switch") e.state = service === "turn_on" ? "on" : service === "turn_off" ? "off" : e.state === "on" ? "off" : "on";
+      if (domain === "time") e.state = data.time;
+      if (domain === "number") e.state = String(data.value);
+      hass.states = { ...S };
+      push();
+    }, 600);
+  },
+};
+
+const wrap = document.getElementById("cards");
+for (const [tag, cfg] of [
+  ["impianto-overview-card", { type: "custom:impianto-overview-card" }],
+  ["caldaia-schedule-card", { type: "custom:caldaia-schedule-card" }],
+]) {
+  const el = document.createElement(tag);
+  el.style.display = "block";
+  el.style.marginBottom = "14px";
+  el.setConfig(cfg);
+  wrap.appendChild(el);
+  cards.push(el);
+}
+push();
+
+document.getElementById("t").onclick = () => document.body.classList.toggle("chiaro") | document.body.classList.toggle("scuro");
+document.getElementById("stato").value = q.get("stato") || "WORK";
+document.getElementById("stato").onchange = (e) => { S["sensor.casale_stato"].state = e.target.value; hass.states = { ...S }; push(); };
+document.getElementById("info").textContent = "Valori di esempio. Il lunedì P1 e P3 si sovrappongono apposta.";
+</script>
+</body>
+</html>

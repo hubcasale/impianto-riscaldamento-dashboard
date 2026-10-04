@@ -1,0 +1,34 @@
+# 1) Scheda panoramica dell'impianto (boiler solare + puffer + caldaia).
+#    Con la configurazione minima usa le entità dell'impianto di casa (vedi README).
+type: custom:impianto-overview-card
+title: Impianto acqua calda
+
+---
+# 2) Pulsante che apre la programmazione (richiede bubble-card)
+type: custom:bubble-card
+card_type: button
+button_type: name
+name: Programmazione
+icon: mdi:calendar-clock
+tap_action:
+  action: navigate
+  navigation_path: '#programmazione-caldaia'
+
+---
+# 3) Finestra con la programmazione, nella stessa vista del pulsante
+type: vertical-stack
+cards:
+  - type: custom:bubble-card
+    card_type: pop-up
+    hash: '#programmazione-caldaia'
+    name: Programmazione caldaia
+    icon: mdi:calendar-clock
+  - type: custom:caldaia-schedule-card
+    # prefix: casale            # prefisso delle entità dell'integrazione (predefinito: casale)
+    # hide: [weekly]            # nasconde la vista settimanale
+    # presets: []               # sostituisce i preset predefiniti (vedi README)
+
+---
+# 4) Senza bubble-card: la programmazione come scheda normale in una vista
+type: custom:caldaia-schedule-card
+title: Programmazione caldaia
