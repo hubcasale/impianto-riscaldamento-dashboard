@@ -146,6 +146,7 @@ Lo spegnimento avviene solo in ECO STOP, mai durante START o WORK. Un tocco su *
 ## Documentazione
 
 - [`docs/MEMORIA.md`](docs/MEMORIA.md): come funziona il sistema, scelte fatte, entità, cose da verificare.
+- [`docs/schema-cablaggio.png`](docs/schema-cablaggio.png): schema dei collegamenti dello Shelly 1PM sulla pompa di integrazione (Elios OUT2 come segnale).
 - [`docs/funzionamento.png`](docs/funzionamento.png): diagramma di flusso (accensione rapida, spegnimento, salvaguardia, misura dei tempi).
 
 ## Sviluppo
