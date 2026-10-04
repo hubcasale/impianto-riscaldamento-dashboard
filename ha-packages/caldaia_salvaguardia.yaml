@@ -1,0 +1,174 @@
+# Salvaguardia contro le partenze inutili della caldaia.
+#
+# Quando la Polygon passa da OFF a WAIT/START (per esempio perche' inizia un programma) ma il puffer e' gia' caldo, il
+# boiler solare e' gia' a temperatura d'uso e il termostato non chiede riscaldamento, la partenza e' inutile e viene
+# annullata (la caldaia viene spenta in fase di accensione, prima di bruciare pellet).
+#
+# - Non interviene se il termostato dei radiatori chiede calore.
+# - Interviene solo sulla partenza di un programma (non su accensioni a mano) e non sulle riaccensioni da ECO STOP
+#   (quelle dipendono dalla temperatura e le decide la Polygon).
+# - Non interviene durante un'accensione rapida voluta con il pulsante.
+# - Si disattiva con input_boolean.caldaia_salvaguardia_attiva (interruttore nella scheda della dashboard).
+#
+# Poiche' una Polygon spenta non parte da sola quando poi il termostato chiede calore, dopo un'annullamento la
+# salvaguardia la RIACCENDE se, finche' il programma e' attivo, succede una di queste due cose:
+#   - il termostato chiede riscaldamento;
+#   - l'acqua del boiler scende sotto la temperatura d'uso e il puffer non e' piu' abbastanza caldo.
+
+input_boolean:
+  caldaia_salvaguardia_attiva:
+    name: Caldaia - evita partenze inutili
+    icon: mdi:shield-check
+  caldaia_salvaguardia_ha_spento:
+    name: Caldaia - spenta dalla salvaguardia
+    icon: mdi:shield-off
+  caldaia_salvaguardia_defaults_impostati:
+    name: Caldaia - salvaguardia, valori iniziali impostati
+    icon: mdi:check
+
+input_number:
+  caldaia_salvaguardia_t_puffer:
+    name: Caldaia - partenza inutile se il puffer e' gia' sopra
+    min: 30
+    max: 70
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+
+automation:
+  - id: caldaia_salvaguardia_annulla_partenza
+    alias: Caldaia - salvaguardia, annulla partenza inutile
+    description: >
+      Parte da OFF; dopo 2 minuti (tolleranza sull'orologio) controlla che sia davvero la partenza di un programma e che
+      puffer e boiler siano gia' caldi.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.casale_stato
+        from: "OFF"
+        to: ["WAIT", "START"]
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_salvaguardia_attiva
+        state: "on"
+    actions:
+      - delay: "00:02:00"
+      - condition: state
+        entity_id: sensor.casale_stato
+        state: ["WAIT", "START"]
+      - condition: state
+        entity_id: input_boolean.caldaia_salvaguardia_attiva
+        state: "on"
+      # solo se e' la partenza di un programma: un'accensione a mano o con il pulsante non si tocca
+      - condition: state
+        entity_id: binary_sensor.caldaia_programma_attivo_ora
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.caldaia_boost_attivo
+        state: "off"
+      # il termostato ha sempre la precedenza
+      - condition: state
+        entity_id: binary_sensor.caldaia_richiesta_riscaldamento
+        state: "off"
+      - condition: template
+        value_template: >
+          {% set puffer = states('sensor.casale_temperatura_boiler') %}
+          {% set alto = states('sensor.boiler_solare_alto_stimato') %}
+          {{ is_number(puffer) and is_number(alto)
+             and puffer | float >= states('input_number.caldaia_salvaguardia_t_puffer') | float(45)
+             and alto | float >= states('input_number.caldaia_t_uso_acqua') | float(45) }}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_salvaguardia_ha_spento}
+      - action: climate.set_hvac_mode
+        target: {entity_id: climate.casale_acqua}
+        data: {hvac_mode: "off"}
+      - action: logbook.log
+        data:
+          name: Caldaia
+          message: >
+            partenza del programma annullata dalla salvaguardia (puffer {{ states('sensor.casale_temperatura_boiler') }} °C,
+            boiler {{ states('sensor.boiler_solare_alto_stimato') }} °C, nessuna richiesta del termostato)
+
+  - id: caldaia_salvaguardia_riaccendi
+    alias: Caldaia - salvaguardia, riaccendi se serve
+    description: Dopo una partenza annullata, riaccende la caldaia se il termostato chiede calore o se l'acqua si raffredda.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.caldaia_richiesta_riscaldamento
+        to: "on"
+      - trigger: state
+        entity_id: binary_sensor.caldaia_richiesta_acs
+        to: "on"
+      - trigger: time_pattern
+        minutes: "/5"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_salvaguardia_ha_spento
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.caldaia_programma_attivo_ora
+        state: "on"
+      - condition: state
+        entity_id: sensor.casale_stato
+        state: ["OFF", "STOP"]
+      - condition: template
+        value_template: >
+          {% set puffer = states('sensor.casale_temperatura_boiler') | float(999) %}
+          {{ is_state('binary_sensor.caldaia_richiesta_riscaldamento', 'on')
+             or (is_state('binary_sensor.caldaia_richiesta_acs', 'on')
+                 and puffer < states('input_number.caldaia_salvaguardia_t_puffer') | float(45)) }}
+    actions:
+      - action: climate.set_hvac_mode
+        target: {entity_id: climate.casale_acqua}
+        data: {hvac_mode: heat}
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_salvaguardia_ha_spento}
+      - action: logbook.log
+        data:
+          name: Caldaia
+          message: riaccesa dalla salvaguardia (il termostato chiede calore o l'acqua si e' raffreddata)
+
+  - id: caldaia_salvaguardia_fine_programma
+    alias: Caldaia - salvaguardia, fine del programma
+    description: Quando nessun programma e' piu' attivo, la salvaguardia smette di tenere d'occhio la caldaia.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.caldaia_programma_attivo_ora
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_salvaguardia_ha_spento
+        state: "on"
+    actions:
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_salvaguardia_ha_spento}
+
+  - id: caldaia_salvaguardia_disattivata
+    alias: Caldaia - salvaguardia, disattivata
+    description: Disattivando l'interruttore si azzera il ricordo di un annullamento precedente.
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.caldaia_salvaguardia_attiva
+        to: "off"
+    actions:
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_salvaguardia_ha_spento}
+
+  - id: caldaia_salvaguardia_valori_iniziali
+    alias: Caldaia - salvaguardia, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_salvaguardia_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_salvaguardia_t_puffer}
+        data: {value: 45}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_salvaguardia_attiva}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_salvaguardia_defaults_impostati}

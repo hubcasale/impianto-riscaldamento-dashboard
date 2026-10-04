@@ -39,6 +39,10 @@ export interface PlantEntities {
   boost_state: string;
   boost_start_script: string;
   boost_cancel_script: string;
+  /** interruttore della salvaguardia contro le partenze inutili */
+  guard: string;
+  /** acceso quando la salvaguardia ha annullato una partenza e tiene d'occhio la caldaia */
+  guard_flag: string;
 }
 
 export const DEFAULT_ENTITIES: PlantEntities = {
@@ -70,6 +74,8 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   boost_state: "sensor.caldaia_accensione_rapida_stato",
   boost_start_script: "script.caldaia_accensione_rapida",
   boost_cancel_script: "script.caldaia_accensione_rapida_annulla",
+  guard: "input_boolean.caldaia_salvaguardia_attiva",
+  guard_flag: "input_boolean.caldaia_salvaguardia_ha_spento",
 };
 
 /** Un numero oppure l'id di un'entità numerica. */
@@ -380,6 +386,26 @@ export class ImpiantoOverviewCard extends LitElement {
     return html`<div class="chip ${v ? "yes" : ""}"><span>${label}</span><b>${v === null ? "–" : v ? "SÌ" : "NO"}</b></div>`;
   }
 
+  private _toggleGuard(): void {
+    void this.hass.callService("input_boolean", "toggle", { entity_id: this._e.guard });
+  }
+
+  private _renderGuard() {
+    const e = this._e;
+    if (!this.hass.states[e.guard]) return nothing;
+    const on = this._s(e.guard) === "on";
+    const flagged = this._s(e.guard_flag) === "on";
+    return html`
+      <button class="guard ${on ? "on" : "off"}" @click=${() => this._toggleGuard()} aria-pressed=${on}>
+        <span class="gtxt">
+          <b>Evita partenze inutili</b>
+          <small>${on ? (flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze con puffer e boiler già caldi") : "disattivata: i programmi partono sempre"}</small>
+        </span>
+        <span class="gsw"><i></i></span>
+      </button>
+    `;
+  }
+
   private _renderStove() {
     const e = this._e;
     const stateRaw = this._s(e.stove_state);
@@ -437,6 +463,7 @@ export class ImpiantoOverviewCard extends LitElement {
           ${this._chip("Richiesta ACS", this._yes(e.request_acs))} ${this._chip("Riscaldamento", this._yes(e.request_heating))}
           ${this._chip("Consenso suggerito", this._yes(e.consent))}
         </div>
+        ${this._renderGuard()}
         <p class="look">${LOOK_LABEL[look]}</p>
       </section>
     `;
@@ -800,6 +827,56 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .look {
       display: none;
+    }
+    .guard {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .guard .gtxt {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .guard small {
+      color: var(--secondary-text-color);
+      font-size: 12px;
+    }
+    .guard .gsw {
+      flex: none;
+      width: 44px;
+      height: 24px;
+      border-radius: 12px;
+      background: var(--disabled-text-color, #9e9e9e);
+      position: relative;
+      transition: background 0.2s;
+    }
+    .guard .gsw i {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transition: left 0.2s;
+    }
+    .guard.on .gsw {
+      background: #22c55e;
+    }
+    .guard.on .gsw i {
+      left: 23px;
     }
   `;
 }

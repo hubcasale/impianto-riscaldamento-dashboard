@@ -717,7 +717,9 @@ var DEFAULT_ENTITIES = {
   eta: "sensor.caldaia_acqua_pronta_tra",
   boost_state: "sensor.caldaia_accensione_rapida_stato",
   boost_start_script: "script.caldaia_accensione_rapida",
-  boost_cancel_script: "script.caldaia_accensione_rapida_annulla"
+  boost_cancel_script: "script.caldaia_accensione_rapida_annulla",
+  guard: "input_boolean.caldaia_salvaguardia_attiva",
+  guard_flag: "input_boolean.caldaia_salvaguardia_ha_spento"
 };
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
@@ -972,6 +974,24 @@ var ImpiantoOverviewCard = class extends i4 {
   _chip(label, v2) {
     return b2`<div class="chip ${v2 ? "yes" : ""}"><span>${label}</span><b>${v2 === null ? "\u2013" : v2 ? "S\xCC" : "NO"}</b></div>`;
   }
+  _toggleGuard() {
+    void this.hass.callService("input_boolean", "toggle", { entity_id: this._e.guard });
+  }
+  _renderGuard() {
+    const e5 = this._e;
+    if (!this.hass.states[e5.guard]) return A;
+    const on = this._s(e5.guard) === "on";
+    const flagged = this._s(e5.guard_flag) === "on";
+    return b2`
+      <button class="guard ${on ? "on" : "off"}" @click=${() => this._toggleGuard()} aria-pressed=${on}>
+        <span class="gtxt">
+          <b>Evita partenze inutili</b>
+          <small>${on ? flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze con puffer e boiler gi\xE0 caldi" : "disattivata: i programmi partono sempre"}</small>
+        </span>
+        <span class="gsw"><i></i></span>
+      </button>
+    `;
+  }
   _renderStove() {
     const e5 = this._e;
     const stateRaw = this._s(e5.stove_state);
@@ -1028,6 +1048,7 @@ var ImpiantoOverviewCard = class extends i4 {
           ${this._chip("Richiesta ACS", this._yes(e5.request_acs))} ${this._chip("Riscaldamento", this._yes(e5.request_heating))}
           ${this._chip("Consenso suggerito", this._yes(e5.consent))}
         </div>
+        ${this._renderGuard()}
         <p class="look">${LOOK_LABEL[look]}</p>
       </section>
     `;
@@ -1390,6 +1411,56 @@ var ImpiantoOverviewCard = class extends i4 {
     }
     .look {
       display: none;
+    }
+    .guard {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .guard .gtxt {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .guard small {
+      color: var(--secondary-text-color);
+      font-size: 12px;
+    }
+    .guard .gsw {
+      flex: none;
+      width: 44px;
+      height: 24px;
+      border-radius: 12px;
+      background: var(--disabled-text-color, #9e9e9e);
+      position: relative;
+      transition: background 0.2s;
+    }
+    .guard .gsw i {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transition: left 0.2s;
+    }
+    .guard.on .gsw {
+      background: #22c55e;
+    }
+    .guard.on .gsw i {
+      left: 23px;
     }
   `;
   }
