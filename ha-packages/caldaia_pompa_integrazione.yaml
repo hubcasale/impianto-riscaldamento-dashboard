@@ -1,0 +1,30 @@
+# Pompa di integrazione ACS (circolatore che porta il calore dal puffer alla serpentina del boiler solare).
+# Si legge dalla potenza della presa: circa 60 W = in funzione. All'avvio la potenza oscilla (1-25 W) per qualche secondo,
+# quindi si accende sopra 40 W e si spegne sotto 20 W, con un ritardo in spegnimento per non farla "sfarfallare".
+#
+# Sensore sorgente: sensor.garage_pompa_integrazione_acs_boiler_potenza
+
+template:
+  - binary_sensor:
+      - name: Caldaia pompa integrazione attiva
+        unique_id: caldaia_pompa_integrazione_attiva
+        icon: mdi:pump
+        device_class: running
+        delay_off: "00:00:30"
+        state: >
+          {% set w = states('sensor.garage_pompa_integrazione_acs_boiler_potenza') %}
+          {% if not is_number(w) %}
+            {{ this.state == 'on' }}
+          {% elif w | float >= 40 %}true
+          {% elif w | float < 20 %}false
+          {% else %}{{ this.state == 'on' }}{% endif %}
+
+sensor:
+  - platform: history_stats
+    name: Caldaia pompa integrazione ore oggi
+    unique_id: caldaia_pompa_integrazione_ore_oggi
+    entity_id: binary_sensor.caldaia_pompa_integrazione_attiva
+    state: "on"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0, microsecond=0) }}"
+    end: "{{ now() }}"

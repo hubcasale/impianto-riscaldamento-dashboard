@@ -112,6 +112,7 @@ flowchart TD
 | Modello di partenza (usato con meno di 3 punti) | `input_number.boiler_solare_t_ambiente` (16), `..._k_alto` (0,766), `..._k_basso` (0,73); `..._delta_alto` / `..._delta_basso` (0) per ritocchi fini |
 | Stato e puffer della Polygon | `sensor.casale_stato`, `sensor.casale_temperatura_boiler` (= puffer da 50 L), `sensor.casale_temperatura_acqua` |
 | Accensione / spegnimento | `climate.casale_acqua` (heat / off) |
+| Pompa di integrazione | `sensor.garage_pompa_integrazione_acs_boiler_potenza` (circa 60 W = in funzione), `binary_sensor.caldaia_pompa_integrazione_attiva`; sulla scheda i tubi dell'integrazione si animano e compare «pompa N W» |
 | Pellet | `binary_sensor.casale_riserva_legna` (riserva), `binary_sensor.casale_pellet_empty` (vuoto), `binary_sensor.casale_pellet_hopper_open` (serbatoio aperto): sulla scheda la tramoggia della stufa cambia colore (verde ok, arancione riserva, rosso vuoto, blu aperto) e c'è la riga «Pellet» |
 | Programmi (N = 1..4) | `time.casale_crono_pN_accensione`, `..._spegnimento`, `number.casale_crono_pN_setpoint_boiler`, `..._setpoint_acqua`, `switch.casale_crono_pN_<giorno>`, `switch.casale_cronotermostato_settimanale` |
 | Minuti per avere acqua calda | `sensor.caldaia_acqua_pronta_tra`, `sensor.caldaia_tempo_medio_messa_in_temperatura`, `sensor.caldaia_tempo_stimato_messa_in_temperatura` |
@@ -154,6 +155,8 @@ flowchart TD
 - Non usare `esphome compile` da `docker exec`: solo Install dalla dashboard ESPHome.
 
 ## 7. Da verificare / da fare
+
+0. **Pompa di integrazione**: il 4/10 dalle 17:48 gira (64 W) con il boiler a 53-55 °C e il puffer a 50 °C, con la Polygon spenta; il boiler scende di circa 0,1 °C/min (7 volte il raffreddamento naturale). Da chiarire perché l'Elios la tiene in marcia sopra i 45 °C.
 
 1. **Prima prova vera** del pulsante e dello spegnimento: farla con la caldaia spenta e l'utente presente, guardando il display.
 2. **Salvaguardia**: vederla all'opera alla prossima partenza di un programma con puffer e boiler caldi (resta nel registro/logbook).

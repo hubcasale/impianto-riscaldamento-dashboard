@@ -49,6 +49,8 @@ export interface PlantEntities {
   pellet_empty: string;
   /** coperchio del serbatoio pellet aperto */
   pellet_open: string;
+  /** potenza della presa del circolatore di integrazione (W): sopra la soglia la pompa è in funzione */
+  integration_pump_power: string;
 }
 
 export const DEFAULT_ENTITIES: PlantEntities = {
@@ -85,6 +87,7 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   pellet_reserve: "binary_sensor.casale_riserva_legna",
   pellet_empty: "binary_sensor.casale_pellet_empty",
   pellet_open: "binary_sensor.casale_pellet_hopper_open",
+  integration_pump_power: "sensor.garage_pompa_integrazione_acs_boiler_potenza",
 };
 
 /** Un numero oppure l'id di un'entità numerica. */
@@ -95,6 +98,8 @@ export interface PlantCardConfig {
   title?: string;
   /** "auto" (predefinito): compatta sugli schermi bassi (tablet); true/false per forzare */
   compact?: boolean | "auto";
+  /** watt sopra i quali il circolatore di integrazione conta come in funzione (predefinito 40) */
+  integration_pump_on_above?: number;
   entities?: Partial<PlantEntities>;
   model?: {
     /** litri del boiler solare (utili: 190 per un Bolly 2 da 200 L) */
@@ -263,6 +268,8 @@ export class ImpiantoOverviewCard extends LitElement {
     const cPuf = tempColor(puffer);
     const midAt = `${Math.round(m.topShare * 100)}%`;
     const eta = this._n(e.eta);
+    const pumpW = this._n(e.integration_pump_power);
+    const pumpOn = pumpW !== null && pumpW >= (this._config.integration_pump_on_above ?? 40);
     const btn = boostButton(this._s(e.boost_state), this._armed);
 
     return html`
@@ -292,8 +299,8 @@ export class ImpiantoOverviewCard extends LitElement {
         <path d="M420 135 H520 V95" class="pipe hot" />
         <path d="M420 745 H520 V775" class="pipe cold" />
         <g class="pufgroup">
-          <path d="M440 208 H575" class="pipe hot thin" />
-          <path d="M440 268 H520 V315 H575" class="pipe warm thin" />
+          <path d="M440 208 H575" class=${pumpOn ? "pipe hot thin flow" : "pipe hot thin idle"} />
+          <path d="M440 268 H520 V315 H575" class=${pumpOn ? "pipe warm thin flow" : "pipe warm thin idle"} />
           <path d="M685 215 H700" class="pipe hot thin" />
           <path d="M685 300 H700" class="pipe warm thin" />
           <text x="452" y="196" class="t2 s13">mandata</text>
@@ -309,6 +316,9 @@ export class ImpiantoOverviewCard extends LitElement {
         </g>
         <rect x="246" y="150" width="160" height="26" rx="13" class="pill" />
         <text x="326" y="168" class="s14 b" text-anchor="middle" fill="#a78bfa">Integrazione (caldaia)</text>
+        ${pumpOn
+          ? svg`<rect x="266" y="180" width="120" height="22" rx="11" class="pill" /><circle cx="282" cy="191" r="5" fill="#22c55e" class="pulse" /><text x="330" y="196" class="s13 b" text-anchor="middle" fill="#22c55e">pompa ${fmt(pumpW, 0)} W</text>`
+          : nothing}
         <rect x="266" y="522" width="120" height="26" rx="13" class="pill" />
         <text x="326" y="540" class="s14 b" text-anchor="middle" fill="#4ade80">Solare</text>
         <rect x="222" y="122" width="196" height="616" rx="38" fill="url(#lucido)" />
@@ -650,6 +660,32 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .pipe.thin {
       stroke-width: 8;
+    }
+    .pipe.idle {
+      opacity: 0.4;
+    }
+    .pipe.flow {
+      stroke-dasharray: 14 10;
+      animation: flow 0.9s linear infinite;
+    }
+    @keyframes flow {
+      to {
+        stroke-dashoffset: -24;
+      }
+    }
+    .pulse {
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      50% {
+        opacity: 0.35;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pipe.flow,
+      .pulse {
+        animation: none;
+      }
     }
     .pipe.hot {
       stroke: #dc2626;

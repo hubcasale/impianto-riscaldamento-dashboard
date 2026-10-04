@@ -202,5 +202,19 @@ ann = BOILER["script"]["boiler_cal_annulla_alto"]["sequence"][0]["data"]["value"
 check("annulla: toglie l'ultimo", render(ann, {"input_text.boiler_cal_punti_alto": "1:2,3:4,5:6"}), "1:2,3:4")
 check("annulla: con un solo punto svuota", render(ann, {"input_text.boiler_cal_punti_alto": "1:2"}), "")
 
+# ---------------------------------------------------------------- pompa di integrazione dalla potenza della presa
+POMPA = yaml.safe_load(open("ha-packages/caldaia_pompa_integrazione.yaml"))
+pompa = POMPA["template"][0]["binary_sensor"][0]["state"]
+def pw(w, prima=None):
+    st = {"sensor.garage_pompa_integrazione_acs_boiler_potenza": w}
+    return render(pompa, st, this_state=prima)
+check("pompa: 64 W -> accesa", pw("64.4"), "True")
+check("pompa: 63,9 W -> accesa", pw("63.9"), "True")
+check("pompa: 1 W -> spenta", pw("1.0"), "False")
+check("pompa: 19,6 W (standby) -> spenta", pw("19.6", "off"), "False")
+check("pompa: 25 W mantiene lo stato precedente (acceso)", pw("25.2", "on"), "True")
+check("pompa: 25 W mantiene lo stato precedente (spento)", pw("25.2", "off"), "False")
+check("pompa: sensore non disponibile mantiene lo stato", pw("unavailable", "on"), "True")
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)
