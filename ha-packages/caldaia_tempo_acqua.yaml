@@ -1,0 +1,176 @@
+# Quanto ci mette l'acqua del boiler solare a portarsi a temperatura d'uso dopo un'accensione a freddo della caldaia.
+#
+# Misura: all'accensione (START) con la sonda alta corretta SOTTO la temperatura d'uso parte un cronometro; quando la
+# sonda supera la temperatura d'uso, i minuti trascorsi diventano un campione. Se in quel momento il sole produce
+# abbastanza, la misura e' contaminata e viene scartata. I campioni (gli ultimi 10) stanno in un campo di testo
+# separati da virgole: si possono correggere o cancellare a mano da Home Assistant.
+#
+# Sensori:
+#   sensor.caldaia_tempo_medio_messa_in_temperatura    media dei campioni (min), con mediana e campioni negli attributi
+#   sensor.caldaia_tempo_stimato_messa_in_temperatura  come sopra, ma con un valore iniziale finche' i campioni sono < 3
+
+input_boolean:
+  caldaia_misura_acqua_in_corso:
+    name: Caldaia - misura tempo acqua in corso
+    icon: mdi:timer-sand
+  caldaia_tempo_acqua_defaults_impostati:
+    name: Caldaia - tempo acqua, valori iniziali impostati
+    icon: mdi:check
+
+input_datetime:
+  caldaia_misura_acqua_avvio:
+    name: Caldaia - inizio misura tempo acqua
+    has_date: true
+    has_time: true
+
+input_text:
+  caldaia_campioni_messa_in_temperatura:
+    name: Caldaia - campioni messa in temperatura (min)
+    max: 255
+    icon: mdi:chart-line
+
+input_number:
+  caldaia_t_uso_acqua:
+    name: Caldaia - temperatura d'uso dell'acqua (alto boiler stimato)
+    min: 30
+    max: 60
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+  caldaia_tempo_iniziale_messa_in_temperatura:
+    name: Caldaia - tempo di partenza finche' mancano campioni
+    min: 5
+    max: 180
+    step: 1
+    unit_of_measurement: min
+    mode: box
+
+template:
+  - sensor:
+      - name: Caldaia tempo medio messa in temperatura
+        unique_id: caldaia_tempo_medio_messa_in_temperatura
+        unit_of_measurement: min
+        state_class: measurement
+        icon: mdi:timer-outline
+        state: >
+          {% set v = states('input_text.caldaia_campioni_messa_in_temperatura').split(',')
+                     | reject('equalto', '') | map('float', 0) | list %}
+          {{ (v | sum / v | length) | round(0) if v | length > 0 else none }}
+        availability: >
+          {{ states('input_text.caldaia_campioni_messa_in_temperatura').split(',') | reject('equalto', '') | list | length > 0 }}
+        attributes:
+          campioni: >
+            {{ states('input_text.caldaia_campioni_messa_in_temperatura').split(',') | reject('equalto', '') | list | length }}
+          ultimi: >
+            {{ states('input_text.caldaia_campioni_messa_in_temperatura') }}
+          mediana: >
+            {% set s = states('input_text.caldaia_campioni_messa_in_temperatura').split(',')
+                       | reject('equalto', '') | map('float', 0) | sort | list %}
+            {% set n = s | length %}
+            {{ (s[n // 2] if n % 2 == 1 else (s[n // 2 - 1] + s[n // 2]) / 2) | round(0) if n > 0 else none }}
+
+      - name: Caldaia tempo stimato messa in temperatura
+        unique_id: caldaia_tempo_stimato_messa_in_temperatura
+        unit_of_measurement: min
+        state_class: measurement
+        icon: mdi:clock-start
+        state: >
+          {% set n = state_attr('sensor.caldaia_tempo_medio_messa_in_temperatura', 'campioni') | int(0) %}
+          {% if n >= 3 %}
+            {{ states('sensor.caldaia_tempo_medio_messa_in_temperatura') | int(0) }}
+          {% else %}
+            {{ states('input_number.caldaia_tempo_iniziale_messa_in_temperatura') | int(35) }}
+          {% endif %}
+        attributes:
+          origine: >
+            {{ 'media dei campioni' if state_attr('sensor.caldaia_tempo_medio_messa_in_temperatura', 'campioni') | int(0) >= 3 else 'valore di partenza (campioni insufficienti)' }}
+
+automation:
+  - id: caldaia_tempo_acqua_inizio_misura
+    alias: Caldaia - tempo acqua, inizio misura
+    description: All'accensione a freddo (sonda alta sotto la temperatura d'uso) parte il cronometro.
+    triggers:
+      - trigger: state
+        entity_id: sensor.casale_stato
+        to: "START"
+        not_from: ["START", "unknown", "unavailable"]
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('sensor.boiler_solare_alto_stimato') | float(999) < states('input_number.caldaia_t_uso_acqua') | float(45) }}
+      - condition: state
+        entity_id: input_boolean.caldaia_misura_acqua_in_corso
+        state: "off"
+    actions:
+      - action: input_datetime.set_datetime
+        target: {entity_id: input_datetime.caldaia_misura_acqua_avvio}
+        data:
+          timestamp: "{{ now().timestamp() | int }}"
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_misura_acqua_in_corso}
+
+  - id: caldaia_tempo_acqua_fine_misura
+    alias: Caldaia - tempo acqua, fine misura
+    description: Quando la sonda alta supera la temperatura d'uso, registra i minuti trascorsi (se la misura e' valida).
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.boiler_solare_alto_stimato
+        above: input_number.caldaia_t_uso_acqua
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_misura_acqua_in_corso
+        state: "on"
+    actions:
+      - variables:
+          minuti: >
+            {{ ((now().timestamp() - state_attr('input_datetime.caldaia_misura_acqua_avvio', 'timestamp') | float(0)) / 60) | round(0) | int }}
+          sole: >
+            {{ states('sensor.solare_termico_potenza') | float(0) >= states('input_number.caldaia_acs_potenza_solare_min') | float(1) }}
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_misura_acqua_in_corso}
+      - if:
+          - condition: template
+            value_template: "{{ not sole and 3 <= minuti <= 240 }}"
+        then:
+          - action: input_text.set_value
+            target: {entity_id: input_text.caldaia_campioni_messa_in_temperatura}
+            data:
+              value: >
+                {{ (states('input_text.caldaia_campioni_messa_in_temperatura').split(',')
+                    | reject('equalto', '') | list + [minuti | string])[-10:] | join(',') }}
+
+  - id: caldaia_tempo_acqua_annulla_misura
+    alias: Caldaia - tempo acqua, annulla misura scaduta
+    description: Se dopo 4 ore la soglia non e' stata raggiunta, la misura viene scartata.
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.caldaia_misura_acqua_in_corso
+        to: "on"
+        for: "04:00:00"
+    actions:
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_misura_acqua_in_corso}
+
+  - id: caldaia_tempo_acqua_valori_iniziali
+    alias: Caldaia - tempo acqua, valori iniziali
+    description: Imposta una sola volta soglia, valore di partenza e il primo campione (accensione del 4 ottobre 2026).
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_tempo_acqua_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_t_uso_acqua}
+        data: {value: 45}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_tempo_iniziale_messa_in_temperatura}
+        data: {value: 35}
+      # Primo campione, ricavato dai dati: START 06:47, sonda alta corretta oltre 45 C alle 07:21 -> 34 minuti
+      - action: input_text.set_value
+        target: {entity_id: input_text.caldaia_campioni_messa_in_temperatura}
+        data: {value: "34"}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_tempo_acqua_defaults_impostati}

@@ -118,6 +118,8 @@ Le schede leggono sensori che qui sono forniti come esempio:
   solare), media, stratificazione, energia accumulata e acqua calda equivalente.
 - `ha-packages/caldaia_suggerimento.yaml`: suggerimento informativo di accendere o no la caldaia, contatori di
   accensioni e ore in lavoro. **Non comanda niente.**
+- `ha-packages/caldaia_tempo_acqua.yaml`: misura quanti minuti servono, dopo un'accensione a freddo, per portare il boiler solare
+  alla temperatura d'uso e ne fa la media (ultimi 10 campioni, correggibili a mano).
 - `esphome/solare-termico.yaml`: ESP32 con ADS1115 e sonde NTC 10k B3950 (serpentine) e due sonde sul boiler.
 
 ## Sviluppo
