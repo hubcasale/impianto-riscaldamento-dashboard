@@ -1,7 +1,7 @@
 import "./plant-card";
 import "./schedule-card";
 
-const VERSION = "0.2.2";
+const VERSION = "0.2.3";
 
 declare global {
   interface Window {

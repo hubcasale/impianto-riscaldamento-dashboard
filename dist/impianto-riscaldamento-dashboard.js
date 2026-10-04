@@ -1045,10 +1045,10 @@ var ImpiantoOverviewCard = class extends i4 {
           ${this._tile("Fiamma", `${fmt(this._n(e5.flame), 0)} \xB0C`)}
           ${this._tile("Potenza reale", `${fmt(this._n(e5.power), 0)} %`)}
           ${this._tile("Pressione acqua", `${fmt(this._n(e5.water_pressure), 1)} bar`)}
-          ${this._compact ? A : this._tile("Pressione braciere", fmt(this._n(e5.brazier_pressure), 1))}
-          ${this._compact ? A : this._tile("Estrattore fumi", `${fmt(this._n(e5.extractor), 0)} giri`)}
+          ${this._tile("Pressione braciere", fmt(this._n(e5.brazier_pressure), 1))}
+          ${this._tile("Estrattore fumi", `${fmt(this._n(e5.extractor), 0)} giri`)}
           ${this._tile("Circolatore", pump === void 0 ? "\u2013" : pumpOn ? "ON" : "OFF", pumpOn ? "#22c55e" : void 0)}
-          ${this._compact ? A : this._tile("Accensioni ieri", fmt(this._n(e5.starts_yesterday), 0))}
+          ${this._tile("Accensioni ieri", fmt(this._n(e5.starts_yesterday), 0))}
           ${this._tile("Allarme", noAlarm ? "nessuno" : alarmRaw, noAlarm ? "#22c55e" : "#ef4444")}
         </div>
         <div class="counters">
@@ -1427,65 +1427,109 @@ var ImpiantoOverviewCard = class extends i4 {
     .look {
       display: none;
     }
-    /* modalità compatta: tutto in una schermata di tablet */
+    /* modalità compatta: tutto in una schermata di tablet, senza togliere dati */
     .compact svg.boiler {
       max-height: calc(100vh - 150px);
     }
     .compact .stove {
-      padding: 10px 12px;
+      padding: 8px 10px;
+      border-radius: 16px;
     }
     .compact .stove h3 {
-      margin: 0 0 6px;
-      font-size: 15px;
+      margin: 0 0 4px;
+      font-size: 14px;
     }
     .compact .top {
-      grid-template-columns: 130px 1fr;
+      grid-template-columns: 92px 1fr;
       gap: 8px;
+      align-items: center;
     }
     .compact .stoveimg {
-      max-width: 120px;
+      max-width: 92px;
     }
+    /* stato, acqua e ultimo cambio su una riga: tre colonne, etichetta sopra e valore sotto */
     .compact .statecard {
-      padding: 6px;
-      gap: 2px;
+      display: grid;
+      grid-auto-flow: column;
+      grid-template-rows: auto auto;
+      justify-content: space-around;
+      align-items: center;
+      column-gap: 16px;
+      row-gap: 2px;
+      padding: 6px 8px;
+    }
+    .compact .statecard .tl {
+      font-size: 11px;
+      text-align: center;
+    }
+    .compact .statecard > * {
+      margin: 0;
+      text-align: center;
+      justify-self: center;
     }
     .compact .statepill {
-      font-size: 17px;
-      margin-bottom: 4px;
+      font-size: 15px;
+      padding: 2px 12px;
     }
     .compact .water {
-      font-size: 26px;
-      margin-bottom: 4px;
+      font-size: 22px;
+    }
+    .compact .since {
+      font-size: 13px;
     }
     .compact .legendbar {
       display: none;
     }
     .compact .tiles {
-      gap: 6px;
-      margin-top: 8px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      margin-top: 6px;
     }
     .compact .tile {
-      padding: 4px 8px;
+      padding: 2px 7px;
+      border-radius: 8px;
+    }
+    .compact .tile .tl {
+      font-size: 10.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .compact .tv {
-      font-size: 15px;
-    }
-    .compact .counters {
-      margin-top: 8px;
-      padding: 4px 10px;
-    }
-    .compact .counters > div {
       font-size: 14px;
     }
+    .compact .counters {
+      margin-top: 6px;
+      padding: 3px 10px;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .compact .counters > div {
+      font-size: 13px;
+      gap: 2px 14px;
+    }
     .compact .chips {
-      margin-top: 8px;
+      margin-top: 6px;
+      gap: 6px;
     }
     .compact .chip {
-      padding: 3px 4px;
+      flex-direction: row;
+      justify-content: center;
+      gap: 6px;
+      padding: 2px 4px;
+      border-radius: 14px;
+    }
+    .compact .chip b {
+      font-size: 13px;
     }
     .compact .guard {
-      margin-top: 8px;
-      padding: 6px 12px;
+      margin-top: 6px;
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
+    .compact .guard small {
+      display: none;
     }
     .guard {
       display: flex;
@@ -2439,7 +2483,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.2.2";
+var VERSION = "0.2.3";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

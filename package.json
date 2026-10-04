@@ -1,6 +1,6 @@
 {
   "name": "impianto-riscaldamento-dashboard",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Schede Lovelace per l'impianto di riscaldamento e acqua calda: boiler solare, puffer e caldaia a pellet Micronova (panoramica) e programmazione settimanale con vista a barre, avvisi di sovrapposizione e preset.",
   "license": "MIT",
   "author": "Corrado Gamberoni",
