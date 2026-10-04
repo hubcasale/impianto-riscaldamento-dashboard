@@ -120,13 +120,28 @@ Le schede leggono sensori che qui sono forniti come esempio:
   accensioni e ore in lavoro. **Non comanda niente.**
 - `ha-packages/caldaia_tempo_acqua.yaml`: misura quanti minuti servono, dopo un'accensione a freddo, per portare il boiler solare
   alla temperatura d'uso e ne fa la media (ultimi 10 campioni, correggibili a mano).
+- `ha-packages/caldaia_accensione_rapida.yaml`: pulsante **Avvia caldaia** per quando serve acqua calda e la Polygon è spenta,
+  con spegnimento automatico (vedi sotto) e la stima `sensor.caldaia_acqua_pronta_tra`.
 - `esphome/solare-termico.yaml`: ESP32 con ADS1115 e sonde NTC 10k B3950 (serpentine) e due sonde sul boiler.
+
+## Accensione rapida
+
+Sulla scheda panoramica, sotto la sonda alta, ci sono i minuti stimati per avere l'acqua a temperatura d'uso
+(0 se lo è già) e il pulsante. Il pulsante chiede una **conferma** (secondo tocco entro 4 secondi) e funziona solo se:
+la Polygon è spenta (OFF), non c'è allarme, la sonda alta stimata è sotto la temperatura d'uso (45 °C), il puffer non è
+già sopra la soglia (50 °C) e non si è superato il limite di accensioni rapide del giorno (2).
+
+Quando la caldaia ha lavorato e va in **ECO STOP**, viene spenta per non farla riaccendere, a meno che altro la debba
+tenere accesa: il termostato dei radiatori che chiama calore o un programma della Polygon attivo in quel momento.
+Si spegne quando il puffer scende sotto la soglia (e l'acqua è a temperatura) oppure dopo la durata massima (2 ore).
+Lo spegnimento avviene solo in ECO STOP, mai durante START o WORK. Un tocco su **Annulla** interrompe la richiesta.
 
 ## Sviluppo
 
 ```bash
 npm install
-npm test            # prove della logica (programmazione, sovrapposizioni, preset, docce)
+npm test            # prove della logica (programmazione, sovrapposizioni, preset, docce, pulsante)
+python3 test-ha/test_templates.py   # prove offline dei template Home Assistant dell'accensione rapida
 npm run typecheck
 npm run build       # dist/impianto-riscaldamento-dashboard.js (da pubblicare nel repository)
 npm run build:dev   # dev/bundle.js, poi apri dev/index.html nel browser

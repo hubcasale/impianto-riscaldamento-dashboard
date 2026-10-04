@@ -1,0 +1,133 @@
+"""Prova offline dei template del pacchetto caldaia_accensione_rapida.yaml con un motore Jinja e stati simulati.
+Uso: python3 test-ha/test_templates.py   (richiede PyYAML e jinja2)"""
+import datetime as dt
+import sys
+import types
+import yaml
+from jinja2 import Environment
+
+PKG = yaml.safe_load(open("ha-packages/caldaia_accensione_rapida.yaml"))
+
+
+def find(domain, name):
+    for item in PKG["template"]:
+        for e in item.get(domain, []):
+            if e["name"] == name:
+                return e
+    raise KeyError(name)
+
+
+def make_env(states, attrs, now):
+    env = Environment()
+
+    def st(eid):
+        return states.get(eid, "unknown")
+
+    def is_state(eid, v):
+        return st(eid) == v
+
+    def is_number(v):
+        try:
+            float(v)
+            return True
+        except (TypeError, ValueError):
+            return False
+
+    def state_attr(eid, a):
+        return attrs.get((eid, a))
+
+    env.globals.update(states=st, is_state=is_state, is_number=is_number, state_attr=state_attr, now=lambda: now)
+    return env
+
+
+def render(tpl, states, attrs=None, now=None, this_state=None):
+    now = now or dt.datetime(2026, 10, 5, 6, 0)  # lunedi
+    env = make_env(states, attrs or {}, now)
+    this = types.SimpleNamespace(state=this_state)
+    return env.from_string(tpl).render(this=this).strip()
+
+
+fails = 0
+
+
+def check(label, got, want):
+    global fails
+    ok = got.lower() == want.lower() if isinstance(got, str) and isinstance(want, str) else got == want
+    fails += 0 if ok else 1
+    print(("ok   " if ok else "FAIL ") + label + ("" if ok else f"  -> ottenuto {got!r}, atteso {want!r}"))
+
+
+# ---------------------------------------------------------------- programma attivo ora
+prog = find("binary_sensor", "Caldaia programma attivo ora")["state"]
+days_mon_sat = {f"switch.casale_crono_p1_{d}": "on" for d in ["lunedi", "martedi", "mercoledi", "giovedi", "venerdi", "sabato"]}
+base = {"switch.casale_cronotermostato_settimanale": "on", "time.casale_crono_p1_accensione": "05:30:00", "time.casale_crono_p1_spegnimento": "08:00:00", **days_mon_sat}
+LUN = dt.datetime(2026, 10, 5)  # lunedi
+check("programma: lunedi 06:00 dentro P1", render(prog, base, now=LUN.replace(hour=6)), "True")
+check("programma: lunedi 05:20 prima di P1", render(prog, base, now=LUN.replace(hour=5, minute=20)), "False")
+check("programma: lunedi 08:00 fine esclusa", render(prog, base, now=LUN.replace(hour=8)), "False")
+check("programma: domenica 06:00 giorno spento", render(prog, base, now=dt.datetime(2026, 10, 4, 6)), "False")
+off_master = {**base, "switch.casale_cronotermostato_settimanale": "off"}
+check("programma: cronotermostato spento", render(prog, off_master, now=LUN.replace(hour=6)), "False")
+wrap = {"switch.casale_cronotermostato_settimanale": "on", "time.casale_crono_p2_accensione": "22:00:00", "time.casale_crono_p2_spegnimento": "02:00:00", "switch.casale_crono_p2_lunedi": "on"}
+check("programma: scavalcamento, lunedi 23:00", render(prog, wrap, now=LUN.replace(hour=23)), "True")
+check("programma: scavalcamento, martedi 01:00", render(prog, wrap, now=LUN.replace(hour=1) + dt.timedelta(days=1)), "True")
+check("programma: scavalcamento, martedi 02:00", render(prog, wrap, now=LUN.replace(hour=2) + dt.timedelta(days=1)), "False")
+mezz = {"switch.casale_cronotermostato_settimanale": "on", "time.casale_crono_p4_accensione": "12:00:00", "time.casale_crono_p4_spegnimento": "00:00:00", "switch.casale_crono_p4_lunedi": "on"}
+check("programma: fino a mezzanotte, lunedi 23:50", render(prog, mezz, now=LUN.replace(hour=23, minute=50)), "True")
+check("programma: orari non disponibili", render(prog, {"switch.casale_cronotermostato_settimanale": "on"}, now=LUN.replace(hour=6)), "False")
+
+# ---------------------------------------------------------------- stato accensione rapida
+stato = find("sensor", "Caldaia accensione rapida stato")["state"]
+ok_states = {"sensor.casale_stato": "OFF", "sensor.boiler_solare_alto_stimato": "36.8", "sensor.casale_temperatura_boiler": "40",
+             "sensor.casale_allarme": "____", "input_number.caldaia_t_uso_acqua": "45", "input_number.caldaia_boost_t_puffer_spegni": "50",
+             "counter.caldaia_boost_oggi": "0", "input_number.caldaia_boost_max_al_giorno": "2", "input_boolean.caldaia_boost_attivo": "off"}
+def s(**kw):
+    return {**ok_states, **{k.replace("__", "."): v for k, v in kw.items()}}
+check("stato: pronta", render(stato, ok_states), "pronta")
+check("stato: attiva", render(stato, s(input_boolean__caldaia_boost_attivo="on")), "attiva")
+check("stato: non serve (46 gradi)", render(stato, s(sensor__boiler_solare_alto_stimato="46")), "non_serve")
+check("stato: non serve (esattamente 45)", render(stato, s(sensor__boiler_solare_alto_stimato="45.0")), "non_serve")
+check("stato: puffer caldo", render(stato, s(sensor__casale_temperatura_boiler="58")), "puffer_caldo")
+check("stato: limite giornaliero", render(stato, s(counter__caldaia_boost_oggi="2")), "limite")
+check("stato: sotto il limite", render(stato, s(counter__caldaia_boost_oggi="1")), "pronta")
+check("stato: ECO STOP gia accesa", render(stato, s(sensor__casale_stato="ECO STOP")), "accesa")
+check("stato: WORK gia accesa", render(stato, s(sensor__casale_stato="WORK")), "accesa")
+check("stato: STOP in arresto", render(stato, s(sensor__casale_stato="STOP")), "in_arresto")
+check("stato: allarme", render(stato, s(sensor__casale_allarme="E12")), "allarme")
+check("stato: nessun allarme (trattini)", render(stato, s(sensor__casale_allarme="-----")), "pronta")
+check("stato: sonda non disponibile", render(stato, s(sensor__boiler_solare_alto_stimato="unavailable")), "non_disponibile")
+check("stato: caldaia non disponibile", render(stato, s(sensor__casale_stato="unavailable")), "non_disponibile")
+etich = find("sensor", "Caldaia accensione rapida stato")["attributes"]["etichetta"]
+check("etichetta: pronta", render(etich, {}, this_state="pronta"), "Avvia caldaia")
+check("etichetta: puffer caldo", render(etich, {}, this_state="puffer_caldo"), "Puffer caldo")
+motivo = find("sensor", "Caldaia accensione rapida stato")["attributes"]["motivo"]
+check("motivo: non serve", render(motivo, {}, this_state="non_serve"), "L'acqua è già a temperatura d'uso")
+
+# ---------------------------------------------------------------- acqua pronta tra
+pronta = find("sensor", "Caldaia acqua pronta tra")["state"]
+NOW = dt.datetime(2026, 10, 5, 7, 0)
+ts = lambda minuti_fa: (NOW - dt.timedelta(minutes=minuti_fa)).timestamp()
+p_base = {"sensor.boiler_solare_alto_stimato": "37", "input_number.caldaia_t_uso_acqua": "45", "sensor.caldaia_tempo_stimato_messa_in_temperatura": "35",
+          "input_boolean.caldaia_misura_acqua_in_corso": "off", "input_boolean.caldaia_boost_attivo": "off"}
+check("pronta tra: gia calda -> 0", render(pronta, {**p_base, "sensor.boiler_solare_alto_stimato": "46"}, now=NOW), "0")
+check("pronta tra: esattamente 45 -> 0", render(pronta, {**p_base, "sensor.boiler_solare_alto_stimato": "45"}, now=NOW), "0")
+check("pronta tra: da scaldare, nessuna accensione -> stima", render(pronta, p_base, now=NOW), "35")
+check("pronta tra: boost da 10 min -> 25", render(pronta, {**p_base, "input_boolean.caldaia_boost_attivo": "on"}, {("input_datetime.caldaia_boost_inizio", "timestamp"): ts(10)}, now=NOW), "25")
+check("pronta tra: boost da 50 min -> minimo 1", render(pronta, {**p_base, "input_boolean.caldaia_boost_attivo": "on"}, {("input_datetime.caldaia_boost_inizio", "timestamp"): ts(50)}, now=NOW), "1")
+check("pronta tra: misura in corso da 20 min -> 15", render(pronta, {**p_base, "input_boolean.caldaia_misura_acqua_in_corso": "on"}, {("input_datetime.caldaia_misura_acqua_avvio", "timestamp"): ts(20)}, now=NOW), "15")
+
+# ---------------------------------------------------------------- condizione di spegnimento
+auto = next(a for a in PKG["automation"] if a["id"] == "caldaia_boost_spegni")
+cond = next(c for c in auto["conditions"] if c["condition"] == "template")["value_template"]
+sp_base = {"sensor.casale_temperatura_boiler": "49", "sensor.boiler_solare_alto_stimato": "50", "input_number.caldaia_boost_max_ore": "2",
+           "input_number.caldaia_boost_t_puffer_spegni": "50", "input_number.caldaia_t_uso_acqua": "45"}
+a_ = lambda minuti: {("input_datetime.caldaia_boost_inizio", "timestamp"): ts(minuti)}
+check("spegni: puffer sotto soglia e acqua calda", render(cond, sp_base, a_(40), now=NOW), "True")
+check("spegni: puffer ancora caldo", render(cond, {**sp_base, "sensor.casale_temperatura_boiler": "62"}, a_(40), now=NOW), "False")
+check("spegni: puffer sotto soglia ma acqua fredda", render(cond, {**sp_base, "sensor.boiler_solare_alto_stimato": "40"}, a_(40), now=NOW), "False")
+check("spegni: scaduta la durata massima (2 h)", render(cond, {**sp_base, "sensor.casale_temperatura_boiler": "64", "sensor.boiler_solare_alto_stimato": "40"}, a_(121), now=NOW), "True")
+check("spegni: poco prima delle 2 h", render(cond, {**sp_base, "sensor.casale_temperatura_boiler": "64"}, a_(119), now=NOW), "False")
+check("spegni: puffer non disponibile", render(cond, {**sp_base, "sensor.casale_temperatura_boiler": "unavailable"}, a_(40), now=NOW), "False")
+
+print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
+sys.exit(1 if fails else 0)

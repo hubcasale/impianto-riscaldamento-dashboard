@@ -1,0 +1,302 @@
+# Accensione rapida della caldaia quando serve acqua calda e la Polygon e' spenta.
+#
+# - Il pulsante (script.caldaia_accensione_rapida) accende la Polygon se: e' spenta (OFF), nessun allarme, il boiler solare
+#   NON e' gia' a temperatura d'uso (sonda alta stimata sotto la soglia), il puffer non e' gia' caldo e non si e' superato il
+#   limite di accensioni rapide del giorno.
+# - Quando la caldaia ha lavorato e va in ECO STOP, la spegne per non farla riaccendere, a meno che altro la debba tenere
+#   accesa (termostato dei radiatori che chiama calore, oppure un programma attivo adesso). Spegne quando il puffer scende
+#   sotto la soglia (e l'acqua e' a temperatura) oppure allo scadere della durata massima.
+# - sensor.caldaia_acqua_pronta_tra: minuti stimati per avere l'acqua a temperatura d'uso (0 se lo e' gia').
+#
+# Dipende da: caldaia_tempo_acqua.yaml, boiler_solare.yaml, caldaia_suggerimento.yaml.
+
+counter:
+  caldaia_boost_oggi:
+    name: Caldaia - accensioni rapide oggi
+    initial: 0
+    step: 1
+    restore: true
+    icon: mdi:fire-circle
+
+input_boolean:
+  caldaia_boost_attivo:
+    name: Caldaia - accensione rapida attiva
+    icon: mdi:fire
+  caldaia_boost_defaults_impostati:
+    name: Caldaia - accensione rapida, valori iniziali impostati
+    icon: mdi:check
+
+input_datetime:
+  caldaia_boost_inizio:
+    name: Caldaia - inizio accensione rapida
+    has_date: true
+    has_time: true
+
+input_number:
+  caldaia_boost_max_ore:
+    name: Caldaia - accensione rapida, durata massima
+    min: 1
+    max: 6
+    step: 0.5
+    unit_of_measurement: h
+    mode: box
+  caldaia_boost_max_al_giorno:
+    name: Caldaia - accensioni rapide al giorno
+    min: 1
+    max: 8
+    step: 1
+    mode: box
+  caldaia_boost_t_puffer_spegni:
+    name: Caldaia - spegni quando il puffer scende sotto
+    min: 40
+    max: 70
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+
+template:
+  - binary_sensor:
+      - name: Caldaia programma attivo ora
+        unique_id: caldaia_programma_attivo_ora
+        icon: mdi:calendar-clock
+        state: >
+          {% if not is_state('switch.casale_cronotermostato_settimanale', 'on') %}
+            false
+          {% else %}
+            {% set giorni = ['lunedi','martedi','mercoledi','giovedi','venerdi','sabato','domenica'] %}
+            {% set oggi = giorni[now().weekday()] %}
+            {% set ieri = giorni[(now().weekday() + 6) % 7] %}
+            {% set t = now().hour * 60 + now().minute %}
+            {% set ns = namespace(att=false) %}
+            {% for p in [1, 2, 3, 4] %}
+              {% set a = states('time.casale_crono_p' ~ p ~ '_accensione') %}
+              {% set b = states('time.casale_crono_p' ~ p ~ '_spegnimento') %}
+              {% if a[2:3] == ':' and b[2:3] == ':' %}
+                {% set on = a[0:2] | int(0) * 60 + a[3:5] | int(0) %}
+                {% set off = b[0:2] | int(0) * 60 + b[3:5] | int(0) %}
+                {% if on != off %}
+                  {% if is_state('switch.casale_crono_p' ~ p ~ '_' ~ oggi, 'on') %}
+                    {% set fine = 1440 if (off == 0 or off < on) else off %}
+                    {% if on <= t < fine %}{% set ns.att = true %}{% endif %}
+                  {% endif %}
+                  {% if is_state('switch.casale_crono_p' ~ p ~ '_' ~ ieri, 'on') and 0 < off < on and t < off %}
+                    {% set ns.att = true %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.att }}
+          {% endif %}
+
+      - name: Caldaia da tenere accesa per altri motivi
+        unique_id: caldaia_da_tenere_accesa
+        icon: mdi:fire-alert
+        state: >
+          {{ is_state('binary_sensor.caldaia_richiesta_riscaldamento', 'on')
+             or is_state('binary_sensor.caldaia_programma_attivo_ora', 'on') }}
+        attributes:
+          motivo: >
+            {% if is_state('binary_sensor.caldaia_richiesta_riscaldamento', 'on') %}il termostato chiede riscaldamento
+            {% elif is_state('binary_sensor.caldaia_programma_attivo_ora', 'on') %}c'e' un programma attivo adesso
+            {% else %}nessuno{% endif %}
+
+  - sensor:
+      - name: Caldaia accensione rapida stato
+        unique_id: caldaia_accensione_rapida_stato
+        icon: mdi:fire-circle
+        state: >
+          {% set stato = states('sensor.casale_stato') | upper %}
+          {% set alto = states('sensor.boiler_solare_alto_stimato') %}
+          {% set puffer = states('sensor.casale_temperatura_boiler') %}
+          {% set allarme = states('sensor.casale_allarme') | trim %}
+          {% if is_state('input_boolean.caldaia_boost_attivo', 'on') %}attiva
+          {% elif not is_number(alto) or stato in ['UNKNOWN', 'UNAVAILABLE', ''] %}non_disponibile
+          {% elif allarme not in ['', 'unknown', 'unavailable'] and allarme | replace('_', '') | replace('-', '') | trim != '' and allarme != '0' %}allarme
+          {% elif stato in ['STOP', 'SPEGNIMENTO'] %}in_arresto
+          {% elif stato != 'OFF' %}accesa
+          {% elif alto | float >= states('input_number.caldaia_t_uso_acqua') | float(45) %}non_serve
+          {% elif is_number(puffer) and puffer | float >= states('input_number.caldaia_boost_t_puffer_spegni') | float(50) %}puffer_caldo
+          {% elif states('counter.caldaia_boost_oggi') | int(0) >= states('input_number.caldaia_boost_max_al_giorno') | int(2) %}limite
+          {% else %}pronta{% endif %}
+        attributes:
+          etichetta: >
+            {{ {'attiva': 'In corso', 'non_disponibile': 'Non disponibile', 'allarme': 'Allarme', 'in_arresto': 'In spegnimento',
+                'accesa': 'Già accesa', 'non_serve': 'Non serve', 'puffer_caldo': 'Puffer caldo', 'limite': 'Limite giornaliero',
+                'pronta': 'Avvia caldaia'}[this.state] | default('') }}
+          motivo: >
+            {{ {'attiva': 'Accensione rapida in corso',
+                'non_disponibile': 'Mancano i dati della sonda o della caldaia',
+                'allarme': 'La caldaia ha un allarme attivo',
+                'in_arresto': 'La caldaia si sta spegnendo, riprova tra qualche minuto',
+                'accesa': 'La caldaia è già accesa (in attesa o al lavoro)',
+                'non_serve': 'L\'acqua è già a temperatura d\'uso',
+                'puffer_caldo': 'Il puffer è già caldo: l\'integrazione porta il calore al boiler',
+                'limite': 'Raggiunto il numero di accensioni rapide di oggi',
+                'pronta': 'Pronta: premi per accendere'}[this.state] | default('') }}
+
+      - name: Caldaia acqua pronta tra
+        unique_id: caldaia_acqua_pronta_tra
+        unit_of_measurement: min
+        state_class: measurement
+        icon: mdi:water-thermometer
+        availability: >
+          {{ is_number(states('sensor.boiler_solare_alto_stimato')) }}
+        state: >
+          {% set alto = states('sensor.boiler_solare_alto_stimato') | float(0) %}
+          {% set uso = states('input_number.caldaia_t_uso_acqua') | float(45) %}
+          {% if alto >= uso %}0
+          {% else %}
+            {% set stim = states('sensor.caldaia_tempo_stimato_messa_in_temperatura') | float(35) %}
+            {% set misura = is_state('input_boolean.caldaia_misura_acqua_in_corso', 'on') %}
+            {% set boost = is_state('input_boolean.caldaia_boost_attivo', 'on') %}
+            {% if misura or boost %}
+              {% set ts = state_attr('input_datetime.caldaia_misura_acqua_avvio', 'timestamp') if misura
+                          else state_attr('input_datetime.caldaia_boost_inizio', 'timestamp') %}
+              {% set trascorsi = (now().timestamp() - (ts | float(0))) / 60 %}
+              {{ [stim - trascorsi, 1] | max | round(0) | int }}
+            {% else %}{{ stim | round(0) | int }}{% endif %}
+          {% endif %}
+
+script:
+  caldaia_accensione_rapida:
+    alias: Caldaia - accensione rapida
+    mode: single
+    icon: mdi:fire-circle
+    sequence:
+      - condition: state
+        entity_id: sensor.caldaia_accensione_rapida_stato
+        state: pronta
+      - action: input_datetime.set_datetime
+        target: {entity_id: input_datetime.caldaia_boost_inizio}
+        data:
+          timestamp: "{{ now().timestamp() | int }}"
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_boost_attivo}
+      - action: counter.increment
+        target: {entity_id: counter.caldaia_boost_oggi}
+      - action: climate.set_hvac_mode
+        target: {entity_id: climate.casale_acqua}
+        data: {hvac_mode: heat}
+
+  caldaia_accensione_rapida_annulla:
+    alias: Caldaia - annulla accensione rapida
+    mode: single
+    icon: mdi:fire-off
+    sequence:
+      - condition: state
+        entity_id: input_boolean.caldaia_boost_attivo
+        state: "on"
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_boost_attivo}
+      - if:
+          - condition: state
+            entity_id: binary_sensor.caldaia_da_tenere_accesa_per_altri_motivi
+            state: "off"
+        then:
+          - action: climate.set_hvac_mode
+            target: {entity_id: climate.casale_acqua}
+            data: {hvac_mode: "off"}
+
+automation:
+  - id: caldaia_boost_spegni
+    alias: Caldaia - accensione rapida, spegni in ECO STOP
+    description: Spegne la caldaia in ECO STOP se nient'altro la deve tenere accesa, prima che possa riaccendersi.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.casale_stato
+        to: "ECO STOP"
+      - trigger: time_pattern
+        minutes: "/2"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_boost_attivo
+        state: "on"
+      - condition: state
+        entity_id: sensor.casale_stato
+        state: "ECO STOP"
+      - condition: state
+        entity_id: binary_sensor.caldaia_da_tenere_accesa_per_altri_motivi
+        state: "off"
+      - condition: template
+        value_template: >
+          {% set trascorse = (now().timestamp() - state_attr('input_datetime.caldaia_boost_inizio', 'timestamp') | float(0)) / 3600 %}
+          {% set puffer = states('sensor.casale_temperatura_boiler') | float(999) %}
+          {% set alto = states('sensor.boiler_solare_alto_stimato') | float(0) %}
+          {{ trascorse >= states('input_number.caldaia_boost_max_ore') | float(2)
+             or (puffer <= states('input_number.caldaia_boost_t_puffer_spegni') | float(50)
+                 and alto >= states('input_number.caldaia_t_uso_acqua') | float(45)) }}
+    actions:
+      - action: climate.set_hvac_mode
+        target: {entity_id: climate.casale_acqua}
+        data: {hvac_mode: "off"}
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_boost_attivo}
+      - action: logbook.log
+        data:
+          name: Caldaia
+          message: >
+            spenta dopo l'accensione rapida (puffer {{ states('sensor.casale_temperatura_boiler') }} °C,
+            boiler {{ states('sensor.boiler_solare_alto_stimato') }} °C)
+
+  - id: caldaia_boost_fine_sicurezza
+    alias: Caldaia - accensione rapida, fine di sicurezza
+    description: Se l'accensione rapida resta attiva oltre la durata massima piu' un'ora, la chiude senza spegnere niente.
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.caldaia_boost_attivo
+        to: "on"
+        for:
+          hours: 3
+    actions:
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_boost_attivo}
+      - action: logbook.log
+        data:
+          name: Caldaia
+          message: accensione rapida chiusa per sicurezza (nessuno spegnimento eseguito)
+
+  - id: caldaia_boost_spenta_a_mano
+    alias: Caldaia - accensione rapida, spenta a mano
+    triggers:
+      - trigger: state
+        entity_id: climate.casale_acqua
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_boost_attivo
+        state: "on"
+    actions:
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_boost_attivo}
+
+  - id: caldaia_boost_azzera_contatore
+    alias: Caldaia - accensioni rapide, azzera a mezzanotte
+    triggers:
+      - trigger: time
+        at: "00:00:00"
+    actions:
+      - action: counter.reset
+        target: {entity_id: counter.caldaia_boost_oggi}
+
+  - id: caldaia_boost_valori_iniziali
+    alias: Caldaia - accensione rapida, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_boost_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_boost_max_ore}
+        data: {value: 2}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_boost_max_al_giorno}
+        data: {value: 2}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_boost_t_puffer_spegni}
+        data: {value: 50}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_boost_defaults_impostati}

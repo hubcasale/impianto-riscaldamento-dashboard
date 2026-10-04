@@ -90,6 +90,9 @@ set("sensor.caldaia_ore_in_lavoro_oggi", 2.4);
 set("binary_sensor.caldaia_richiesta_acs", "off");
 set("binary_sensor.caldaia_richiesta_riscaldamento", "off");
 set("binary_sensor.caldaia_consenso_suggerito", "off");
+// accensione rapida (?boost=pronta|attiva|non_serve|puffer_caldo|accesa|limite  ?eta=35)
+set("sensor.caldaia_acqua_pronta_tra", q.get("eta") ?? "35", { unit_of_measurement: "min" });
+set("sensor.caldaia_accensione_rapida_stato", q.get("boost") || "pronta");
 // programmazione (dati reali del 4 ottobre 2026; P3 volutamente sovrapposto a P1 il lunedì per vedere l'avviso)
 set("switch.casale_cronotermostato_settimanale", "on");
 const slugs = ["lunedi","martedi","mercoledi","giovedi","venerdi","sabato","domenica"];
@@ -117,6 +120,13 @@ const hass = {
     log.textContent += `${domain}.${service} ${JSON.stringify(data)}\n`;
     log.scrollTop = log.scrollHeight;
     await new Promise((r) => setTimeout(r, 250));
+    if (domain === "script") {
+      const attiva = data.entity_id === "script.caldaia_accensione_rapida";
+      S["sensor.caldaia_accensione_rapida_stato"].state = attiva ? "attiva" : "pronta";
+      hass.states = { ...S };
+      push();
+      return;
+    }
     // simula la risposta del cloud dopo un po'
     setTimeout(() => {
       const e = S[data.entity_id];

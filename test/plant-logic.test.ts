@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_MODEL, fmt, showersEstimate, stoveLook, tempColor, toNumber } from "../src/plant-logic";
+import { DEFAULT_MODEL, boostButton, etaText, fmt, showersEstimate, stoveLook, tempColor, toNumber } from "../src/plant-logic";
 
 test("docce: boiler caldo in alto, freddo in basso", () => {
   // zona alta 95 L a 55,6 °C -> 95*(40,6)/23 = 167,7 L a 38 °C -> 4 docce da 40 L
@@ -49,4 +49,30 @@ test("colore: freddo blu, caldo rosso", () => {
   assert.equal(tempColor(80), "rgb(239, 68, 68)");
   assert.equal(tempColor(42), "rgb(252, 211, 77)");
   assert.equal(tempColor(null), "#94a3b8");
+});
+
+test("pulsante: pronta chiede conferma al secondo tocco", () => {
+  assert.deepEqual(boostButton("pronta", false), { label: "Avvia caldaia", sub: "", action: "go" });
+  assert.equal(boostButton("pronta", true).label, "Conferma?");
+  assert.equal(boostButton("pronta", true).action, "go");
+});
+
+test("pulsante: accensione in corso si puo annullare", () => {
+  assert.equal(boostButton("attiva", false).action, "cancel");
+  assert.equal(boostButton("attiva", true).label, "Conferma?");
+});
+
+test("pulsante: gli stati bloccati non sono cliccabili", () => {
+  for (const s of ["non_serve", "puffer_caldo", "accesa", "in_arresto", "allarme", "limite", "non_disponibile"]) {
+    assert.equal(boostButton(s, false).action, "none", s);
+    assert.equal(boostButton(s, true).action, "none", s);
+  }
+  assert.equal(boostButton(undefined, false).label, "Non disponibile");
+  assert.equal(boostButton("boh", false).action, "none");
+});
+
+test("minuti stimati", () => {
+  assert.equal(etaText(0), "0 min");
+  assert.equal(etaText(34.6), "35 min");
+  assert.equal(etaText(null), "–");
 });

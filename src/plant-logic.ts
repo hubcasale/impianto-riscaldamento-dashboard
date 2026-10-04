@@ -96,3 +96,49 @@ export function toNumber(state: string | undefined | null): number | null {
   const n = Number(state);
   return Number.isFinite(n) ? n : null;
 }
+
+/** Stati del sensore "accensione rapida" (sensor.caldaia_accensione_rapida_stato). */
+export type BoostState =
+  | "pronta"
+  | "attiva"
+  | "non_serve"
+  | "puffer_caldo"
+  | "accesa"
+  | "in_arresto"
+  | "allarme"
+  | "limite"
+  | "non_disponibile";
+
+export interface BoostButtonModel {
+  label: string;
+  sub: string;
+  /** go = accende, cancel = annulla l'accensione in corso, none = non cliccabile */
+  action: "go" | "cancel" | "none";
+}
+
+const BOOST_LABEL: Record<BoostState, [string, string]> = {
+  pronta: ["Avvia caldaia", ""],
+  attiva: ["Annulla", "accensione in corso"],
+  non_serve: ["Non serve", "acqua già calda"],
+  puffer_caldo: ["Puffer caldo", "il calore c'è già"],
+  accesa: ["Già accesa", ""],
+  in_arresto: ["In spegnimento", "riprova tra poco"],
+  allarme: ["Allarme", "caldaia bloccata"],
+  limite: ["Limite di oggi", "accensioni rapide"],
+  non_disponibile: ["Non disponibile", "mancano dati"],
+};
+
+/** Testo e comportamento del pulsante in base allo stato; `armed` = primo tocco fatto, serve la conferma. */
+export function boostButton(state: string | undefined, armed: boolean): BoostButtonModel {
+  const key = (state && state in BOOST_LABEL ? state : "non_disponibile") as BoostState;
+  const [label, sub] = BOOST_LABEL[key];
+  if (key === "pronta") return armed ? { label: "Conferma?", sub: "tocca ancora", action: "go" } : { label, sub, action: "go" };
+  if (key === "attiva") return armed ? { label: "Conferma?", sub: "annulla e spegni", action: "cancel" } : { label, sub, action: "cancel" };
+  return { label, sub, action: "none" };
+}
+
+/** Testo dei minuti stimati: 0 = non occorre scaldare. */
+export function etaText(minutes: number | null): string {
+  if (minutes === null) return "–";
+  return `${Math.round(minutes)} min`;
+}

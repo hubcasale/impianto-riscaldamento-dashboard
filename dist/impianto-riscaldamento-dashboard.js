@@ -664,6 +664,28 @@ function toNumber(state) {
   const n5 = Number(state);
   return Number.isFinite(n5) ? n5 : null;
 }
+var BOOST_LABEL = {
+  pronta: ["Avvia caldaia", ""],
+  attiva: ["Annulla", "accensione in corso"],
+  non_serve: ["Non serve", "acqua gi\xE0 calda"],
+  puffer_caldo: ["Puffer caldo", "il calore c'\xE8 gi\xE0"],
+  accesa: ["Gi\xE0 accesa", ""],
+  in_arresto: ["In spegnimento", "riprova tra poco"],
+  allarme: ["Allarme", "caldaia bloccata"],
+  limite: ["Limite di oggi", "accensioni rapide"],
+  non_disponibile: ["Non disponibile", "mancano dati"]
+};
+function boostButton(state, armed) {
+  const key = state && state in BOOST_LABEL ? state : "non_disponibile";
+  const [label, sub] = BOOST_LABEL[key];
+  if (key === "pronta") return armed ? { label: "Conferma?", sub: "tocca ancora", action: "go" } : { label, sub, action: "go" };
+  if (key === "attiva") return armed ? { label: "Conferma?", sub: "annulla e spegni", action: "cancel" } : { label, sub, action: "cancel" };
+  return { label, sub, action: "none" };
+}
+function etaText(minutes) {
+  if (minutes === null) return "\u2013";
+  return `${Math.round(minutes)} min`;
+}
 
 // src/plant-card.ts
 var CARD_TAG = "impianto-overview-card";
@@ -691,7 +713,11 @@ var DEFAULT_ENTITIES = {
   work_hours_today: "sensor.caldaia_ore_in_lavoro_oggi",
   request_acs: "binary_sensor.caldaia_richiesta_acs",
   request_heating: "binary_sensor.caldaia_richiesta_riscaldamento",
-  consent: "binary_sensor.caldaia_consenso_suggerito"
+  consent: "binary_sensor.caldaia_consenso_suggerito",
+  eta: "sensor.caldaia_acqua_pronta_tra",
+  boost_state: "sensor.caldaia_accensione_rapida_stato",
+  boost_start_script: "script.caldaia_accensione_rapida",
+  boost_cancel_script: "script.caldaia_accensione_rapida_annulla"
 };
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
@@ -711,6 +737,7 @@ var ImpiantoOverviewCard = class extends i4 {
   constructor() {
     super(...arguments);
     this._narrow = false;
+    this._armed = false;
   }
   connectedCallback() {
     super.connectedCallback();
@@ -724,6 +751,21 @@ var ImpiantoOverviewCard = class extends i4 {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._ro?.disconnect();
+    if (this._armTimer) window.clearTimeout(this._armTimer);
+  }
+  /** Primo tocco = conferma richiesta (4 secondi), secondo tocco = esegue. */
+  _press() {
+    const model = boostButton(this._s(this._e.boost_state), this._armed);
+    if (model.action === "none") return;
+    if (!this._armed) {
+      this._armed = true;
+      this._armTimer = window.setTimeout(() => this._armed = false, 4e3);
+      return;
+    }
+    this._armed = false;
+    if (this._armTimer) window.clearTimeout(this._armTimer);
+    const script = model.action === "go" ? this._e.boost_start_script : this._e.boost_cancel_script;
+    void this.hass.callService("script", "turn_on", { entity_id: script });
   }
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
@@ -787,6 +829,8 @@ var ImpiantoOverviewCard = class extends i4 {
     const cMid = tempColor(top !== null && bottom !== null ? m2.topShare * top + (1 - m2.topShare) * bottom : top ?? bottom);
     const cPuf = tempColor(puffer);
     const midAt = `${Math.round(m2.topShare * 100)}%`;
+    const eta = this._n(e5.eta);
+    const btn = boostButton(this._s(e5.boost_state), this._armed);
     return b2`
       <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : "0 0 700 840"} role="img" aria-label="Boiler solare">
         <defs>
@@ -854,6 +898,18 @@ var ImpiantoOverviewCard = class extends i4 {
         <rect x="14" y="640" width="136" height="72" rx="14" class="card lo" />
         <text x="82" y="664" class="t2 s14" text-anchor="middle">Basso (S2)</text>
         <text x="82" y="698" class="b" font-size="27" text-anchor="middle" fill="#3b82f6">${fmt(bottom, 1)} °C</text>
+
+        <!-- stima e pulsante -->
+        <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
+        <text x="82" y="248" class="t2 s14" text-anchor="middle">Acqua pronta in</text>
+        <text x="82" y="292" class="t1 b" font-size="34" text-anchor="middle">${etaText(eta)}</text>
+        <text x="82" y="314" class="t2 s13" text-anchor="middle">${eta === 0 ? "gi\xE0 a temperatura" : eta === null ? "" : "stima media"}</text>
+        <g class=${btn.action === "none" ? "btn off" : this._armed ? "btn armed" : "btn"} role="button" tabindex=${btn.action === "none" ? "-1" : "0"}
+          aria-label=${btn.label} @click=${() => this._press()} @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._press()}>
+          <rect x="14" y="340" width="136" height="${btn.sub ? 78 : 64}" rx="14" class="btnbg" />
+          <text x="82" y=${btn.sub ? 372 : 380} class="b" font-size="18" text-anchor="middle">${btn.label}</text>
+          ${btn.sub ? w`<text x="82" y="396" class="s13" text-anchor="middle" opacity="0.85">${btn.sub}</text>` : A}
+        </g>
 
         <!-- solare -->
         <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
@@ -1071,6 +1127,37 @@ var ImpiantoOverviewCard = class extends i4 {
     }
     .card.sun {
       stroke: #22c55e;
+    }
+    .card.eta {
+      stroke: var(--divider-color);
+    }
+    .btn {
+      cursor: pointer;
+      outline: none;
+    }
+    .btn text {
+      fill: var(--text-primary-color, #fff);
+    }
+    .btn .btnbg {
+      fill: var(--primary-color, #03a9f4);
+    }
+    .btn.armed .btnbg {
+      fill: #f59e0b;
+    }
+    .btn:focus-visible .btnbg {
+      stroke: var(--primary-text-color);
+      stroke-width: 3;
+    }
+    .btn.off {
+      cursor: default;
+    }
+    .btn.off .btnbg {
+      fill: var(--secondary-background-color);
+      stroke: var(--divider-color);
+      stroke-width: 2;
+    }
+    .btn.off text {
+      fill: var(--secondary-text-color);
     }
     .probe {
       fill: var(--card-background-color);
@@ -1316,6 +1403,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoOverviewCard.prototype, "_narrow", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCard.prototype, "_armed", 2);
 customElements.define(CARD_TAG, ImpiantoOverviewCard);
 
 // src/schedule-logic.ts

@@ -1,7 +1,7 @@
 import { LitElement, html, css, svg, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
-import { DEFAULT_MODEL, fmt, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type StoveLook } from "./plant-logic";
+import { DEFAULT_MODEL, boostButton, etaText, fmt, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type StoveLook } from "./plant-logic";
 
 const CARD_TAG = "impianto-overview-card";
 
@@ -33,6 +33,12 @@ export interface PlantEntities {
   request_acs: string;
   request_heating: string;
   consent: string;
+  /** minuti stimati per avere l'acqua a temperatura d'uso (0 = già calda) */
+  eta: string;
+  /** stato dell'accensione rapida (pronta, attiva, non_serve, ...) */
+  boost_state: string;
+  boost_start_script: string;
+  boost_cancel_script: string;
 }
 
 export const DEFAULT_ENTITIES: PlantEntities = {
@@ -60,6 +66,10 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   request_acs: "binary_sensor.caldaia_richiesta_acs",
   request_heating: "binary_sensor.caldaia_richiesta_riscaldamento",
   consent: "binary_sensor.caldaia_consenso_suggerito",
+  eta: "sensor.caldaia_acqua_pronta_tra",
+  boost_state: "sensor.caldaia_accensione_rapida_stato",
+  boost_start_script: "script.caldaia_accensione_rapida",
+  boost_cancel_script: "script.caldaia_accensione_rapida_annulla",
 };
 
 /** Un numero oppure l'id di un'entità numerica. */
@@ -103,6 +113,8 @@ export class ImpiantoOverviewCard extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @state() private _config!: PlantCardConfig;
   @state() private _narrow = false;
+  @state() private _armed = false;
+  private _armTimer?: number;
   private _ro?: ResizeObserver;
 
   connectedCallback(): void {
@@ -119,6 +131,22 @@ export class ImpiantoOverviewCard extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this._ro?.disconnect();
+    if (this._armTimer) window.clearTimeout(this._armTimer);
+  }
+
+  /** Primo tocco = conferma richiesta (4 secondi), secondo tocco = esegue. */
+  private _press(): void {
+    const model = boostButton(this._s(this._e.boost_state), this._armed);
+    if (model.action === "none") return;
+    if (!this._armed) {
+      this._armed = true;
+      this._armTimer = window.setTimeout(() => (this._armed = false), 4000);
+      return;
+    }
+    this._armed = false;
+    if (this._armTimer) window.clearTimeout(this._armTimer);
+    const script = model.action === "go" ? this._e.boost_start_script : this._e.boost_cancel_script;
+    void this.hass.callService("script", "turn_on", { entity_id: script });
   }
 
   setConfig(config: PlantCardConfig): void {
@@ -194,6 +222,8 @@ export class ImpiantoOverviewCard extends LitElement {
     const cMid = tempColor(top !== null && bottom !== null ? m.topShare * top + (1 - m.topShare) * bottom : top ?? bottom);
     const cPuf = tempColor(puffer);
     const midAt = `${Math.round(m.topShare * 100)}%`;
+    const eta = this._n(e.eta);
+    const btn = boostButton(this._s(e.boost_state), this._armed);
 
     return html`
       <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : "0 0 700 840"} role="img" aria-label="Boiler solare">
@@ -262,6 +292,18 @@ export class ImpiantoOverviewCard extends LitElement {
         <rect x="14" y="640" width="136" height="72" rx="14" class="card lo" />
         <text x="82" y="664" class="t2 s14" text-anchor="middle">Basso (S2)</text>
         <text x="82" y="698" class="b" font-size="27" text-anchor="middle" fill="#3b82f6">${fmt(bottom, 1)} °C</text>
+
+        <!-- stima e pulsante -->
+        <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
+        <text x="82" y="248" class="t2 s14" text-anchor="middle">Acqua pronta in</text>
+        <text x="82" y="292" class="t1 b" font-size="34" text-anchor="middle">${etaText(eta)}</text>
+        <text x="82" y="314" class="t2 s13" text-anchor="middle">${eta === 0 ? "già a temperatura" : eta === null ? "" : "stima media"}</text>
+        <g class=${btn.action === "none" ? "btn off" : this._armed ? "btn armed" : "btn"} role="button" tabindex=${btn.action === "none" ? "-1" : "0"}
+          aria-label=${btn.label} @click=${() => this._press()} @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._press()}>
+          <rect x="14" y="340" width="136" height="${btn.sub ? 78 : 64}" rx="14" class="btnbg" />
+          <text x="82" y=${btn.sub ? 372 : 380} class="b" font-size="18" text-anchor="middle">${btn.label}</text>
+          ${btn.sub ? svg`<text x="82" y="396" class="s13" text-anchor="middle" opacity="0.85">${btn.sub}</text>` : nothing}
+        </g>
 
         <!-- solare -->
         <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
@@ -495,6 +537,37 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .card.sun {
       stroke: #22c55e;
+    }
+    .card.eta {
+      stroke: var(--divider-color);
+    }
+    .btn {
+      cursor: pointer;
+      outline: none;
+    }
+    .btn text {
+      fill: var(--text-primary-color, #fff);
+    }
+    .btn .btnbg {
+      fill: var(--primary-color, #03a9f4);
+    }
+    .btn.armed .btnbg {
+      fill: #f59e0b;
+    }
+    .btn:focus-visible .btnbg {
+      stroke: var(--primary-text-color);
+      stroke-width: 3;
+    }
+    .btn.off {
+      cursor: default;
+    }
+    .btn.off .btnbg {
+      fill: var(--secondary-background-color);
+      stroke: var(--divider-color);
+      stroke-width: 2;
+    }
+    .btn.off text {
+      fill: var(--secondary-text-color);
     }
     .probe {
       fill: var(--card-background-color);
