@@ -1,0 +1,118 @@
+# Pompe della centralina solare Elios, dalla potenza assorbita da tutta la centralina (presa con misura di potenza).
+# Il sensore misura l'insieme: a riposo sotto i 10 W, con la sola pompa del collettore circa 20-26 W, con la sola
+# pompa di integrazione circa 30-40 W (valore ancora da verificare), con entrambe sopra i 55 W.
+# All'accensione di una pompa la potenza oscilla per qualche secondo (picchi e cali), quindi gli stati "pompa attiva"
+# hanno un ritardo in accensione di 20 s e in spegnimento di 30 s.
+#
+# Sensore sorgente: sensor.garage_centralina_solare_pompe_potenza
+# Stato: sensor.caldaia_centralina_solare_pompe_stato = ferme | collettore | integrazione | entrambe | non_disponibile
+
+input_boolean:
+  caldaia_pompe_defaults_impostati:
+    name: Caldaia - soglie pompe, valori iniziali impostati
+    icon: mdi:check
+
+input_number:
+  centralina_pompe_w_ferme:
+    name: Centralina solare - pompe ferme sotto
+    min: 0
+    max: 40
+    step: 0.5
+    unit_of_measurement: W
+    mode: box
+  centralina_pompe_w_collettore_max:
+    name: Centralina solare - solo collettore fino a
+    min: 10
+    max: 60
+    step: 0.5
+    unit_of_measurement: W
+    mode: box
+  centralina_pompe_w_entrambe_min:
+    name: Centralina solare - entrambe le pompe da
+    min: 30
+    max: 120
+    step: 0.5
+    unit_of_measurement: W
+    mode: box
+
+template:
+  - sensor:
+      - name: Caldaia centralina solare pompe stato
+        unique_id: caldaia_centralina_solare_pompe_stato
+        icon: mdi:pump
+        state: >
+          {% set w = states('sensor.garage_centralina_solare_pompe_potenza') %}
+          {% if not is_number(w) %}non_disponibile
+          {% else %}
+            {% set w = w | float %}
+            {% if w < states('input_number.centralina_pompe_w_ferme') | float(10) %}ferme
+            {% elif w <= states('input_number.centralina_pompe_w_collettore_max') | float(26) %}collettore
+            {% elif w < states('input_number.centralina_pompe_w_entrambe_min') | float(55) %}integrazione
+            {% else %}entrambe{% endif %}
+          {% endif %}
+        attributes:
+          potenza: "{{ states('sensor.garage_centralina_solare_pompe_potenza') }}"
+
+  - binary_sensor:
+      - name: Caldaia pompa integrazione attiva
+        unique_id: caldaia_pompa_integrazione_attiva
+        icon: mdi:pump
+        device_class: running
+        delay_on: "00:00:20"
+        delay_off: "00:00:30"
+        state: >
+          {% set s = states('sensor.caldaia_centralina_solare_pompe_stato') %}
+          {% if s == 'non_disponibile' or s in ['unknown', 'unavailable'] %}{{ this.state == 'on' }}
+          {% else %}{{ s in ['integrazione', 'entrambe'] }}{% endif %}
+
+      - name: Caldaia pompa collettore attiva
+        unique_id: caldaia_pompa_collettore_attiva
+        icon: mdi:pump
+        device_class: running
+        delay_on: "00:00:20"
+        delay_off: "00:00:30"
+        state: >
+          {% set s = states('sensor.caldaia_centralina_solare_pompe_stato') %}
+          {% if s == 'non_disponibile' or s in ['unknown', 'unavailable'] %}{{ this.state == 'on' }}
+          {% else %}{{ s in ['collettore', 'entrambe'] }}{% endif %}
+
+sensor:
+  - platform: history_stats
+    name: Caldaia pompa integrazione ore oggi
+    unique_id: caldaia_pompa_integrazione_ore_oggi
+    entity_id: binary_sensor.caldaia_pompa_integrazione_attiva
+    state: "on"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0, microsecond=0) }}"
+    end: "{{ now() }}"
+  - platform: history_stats
+    name: Caldaia pompa collettore ore oggi
+    unique_id: caldaia_pompa_collettore_ore_oggi
+    entity_id: binary_sensor.caldaia_pompa_collettore_attiva
+    state: "on"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0, microsecond=0) }}"
+    end: "{{ now() }}"
+
+automation:
+  - id: caldaia_pompe_valori_iniziali
+    alias: Caldaia - soglie pompe, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_pompe_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.centralina_pompe_w_ferme}
+        data: {value: 10}
+      - action: input_number.set_value
+        target: {entity_id: input_number.centralina_pompe_w_collettore_max}
+        data: {value: 26}
+      - action: input_number.set_value
+        target: {entity_id: input_number.centralina_pompe_w_entrambe_min}
+        data: {value: 55}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_pompe_defaults_impostati}

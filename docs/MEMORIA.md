@@ -112,7 +112,7 @@ flowchart TD
 | Modello di partenza (usato con meno di 3 punti) | `input_number.boiler_solare_t_ambiente` (16), `..._k_alto` (0,766), `..._k_basso` (0,73); `..._delta_alto` / `..._delta_basso` (0) per ritocchi fini |
 | Stato e puffer della Polygon | `sensor.casale_stato`, `sensor.casale_temperatura_boiler` (= puffer da 50 L), `sensor.casale_temperatura_acqua` |
 | Accensione / spegnimento | `climate.casale_acqua` (heat / off) |
-| Pompa di integrazione | `sensor.garage_pompa_integrazione_acs_boiler_potenza` (circa 60 W = in funzione), `binary_sensor.caldaia_pompa_integrazione_attiva`; sulla scheda i tubi dell'integrazione si animano e compare «pompa N W» |
+| Pompe della centralina solare | `sensor.garage_centralina_solare_pompe_potenza` misura **tutta la centralina**: sotto 10 W pompe ferme, fino a 26 W solo collettore, 26-55 W solo integrazione (30-40 W attesi, da verificare), da 55 W entrambe. Stato in `sensor.caldaia_centralina_solare_pompe_stato`, `binary_sensor.caldaia_pompa_integrazione_attiva` e `..._collettore_attiva`; sulla scheda i tubi dell'integrazione si animano e il pallino verde nella casella Solare indica il collettore |
 | Pellet | `binary_sensor.casale_riserva_legna` (riserva), `binary_sensor.casale_pellet_empty` (vuoto), `binary_sensor.casale_pellet_hopper_open` (serbatoio aperto): sulla scheda la tramoggia della stufa cambia colore (verde ok, arancione riserva, rosso vuoto, blu aperto) e c'è la riga «Pellet» |
 | Programmi (N = 1..4) | `time.casale_crono_pN_accensione`, `..._spegnimento`, `number.casale_crono_pN_setpoint_boiler`, `..._setpoint_acqua`, `switch.casale_crono_pN_<giorno>`, `switch.casale_cronotermostato_settimanale` |
 | Minuti per avere acqua calda | `sensor.caldaia_acqua_pronta_tra`, `sensor.caldaia_tempo_medio_messa_in_temperatura`, `sensor.caldaia_tempo_stimato_messa_in_temperatura` |
@@ -156,7 +156,7 @@ flowchart TD
 
 ## 7. Da verificare / da fare
 
-0. **Pompa di integrazione**: il 4/10 dalle 17:48 gira (64 W) con il boiler a 53-55 °C e il puffer a 50 °C, con la Polygon spenta; il boiler scende di circa 0,1 °C/min (7 volte il raffreddamento naturale). Da chiarire perché l'Elios la tiene in marcia sopra i 45 °C.
+0. **Pompe**: il 4/10 dalle 17:45 le pompe hanno girato a lungo (a tratti 64 W = entrambe) con il boiler a 53-55 °C e la Polygon spenta; il boiler è sceso più in fretta del solito. Il sensore all'inizio sembrava della sola integrazione ma misura tutta la centralina: forse erano prove manuali dell'utente sull'Elios. Da verificare quando gira la sola integrazione (valore atteso 30-40 W).
 
 1. **Prima prova vera** del pulsante e dello spegnimento: farla con la caldaia spenta e l'utente presente, guardando il display.
 2. **Salvaguardia**: vederla all'opera alla prossima partenza di un programma con puffer e boiler caldi (resta nel registro/logbook).

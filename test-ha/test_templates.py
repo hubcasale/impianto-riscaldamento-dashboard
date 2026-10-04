@@ -202,19 +202,28 @@ ann = BOILER["script"]["boiler_cal_annulla_alto"]["sequence"][0]["data"]["value"
 check("annulla: toglie l'ultimo", render(ann, {"input_text.boiler_cal_punti_alto": "1:2,3:4,5:6"}), "1:2,3:4")
 check("annulla: con un solo punto svuota", render(ann, {"input_text.boiler_cal_punti_alto": "1:2"}), "")
 
-# ---------------------------------------------------------------- pompa di integrazione dalla potenza della presa
-POMPA = yaml.safe_load(open("ha-packages/caldaia_pompa_integrazione.yaml"))
-pompa = POMPA["template"][0]["binary_sensor"][0]["state"]
-def pw(w, prima=None):
-    st = {"sensor.garage_pompa_integrazione_acs_boiler_potenza": w}
-    return render(pompa, st, this_state=prima)
-check("pompa: 64 W -> accesa", pw("64.4"), "True")
-check("pompa: 63,9 W -> accesa", pw("63.9"), "True")
-check("pompa: 1 W -> spenta", pw("1.0"), "False")
-check("pompa: 19,6 W (standby) -> spenta", pw("19.6", "off"), "False")
-check("pompa: 25 W mantiene lo stato precedente (acceso)", pw("25.2", "on"), "True")
-check("pompa: 25 W mantiene lo stato precedente (spento)", pw("25.2", "off"), "False")
-check("pompa: sensore non disponibile mantiene lo stato", pw("unavailable", "on"), "True")
+# ---------------------------------------------------------------- pompe della centralina solare dalla potenza totale
+POMPE = yaml.safe_load(open("ha-packages/caldaia_pompe_centralina.yaml"))
+stato_p = POMPE["template"][0]["sensor"][0]["state"]
+sogl = {"input_number.centralina_pompe_w_ferme": "10", "input_number.centralina_pompe_w_collettore_max": "26", "input_number.centralina_pompe_w_entrambe_min": "55"}
+def classe(w):
+    return render(stato_p, {**sogl, "sensor.garage_centralina_solare_pompe_potenza": w})
+for w, atteso in [("3.4", "ferme"), ("9.9", "ferme"), ("10", "collettore"), ("19.6", "collettore"), ("24.4", "collettore"), ("26", "collettore"),
+                  ("33.8", "integrazione"), ("44", "integrazione"), ("54.9", "integrazione"), ("55", "entrambe"), ("63.9", "entrambe"), ("79.3", "entrambe"),
+                  ("unavailable", "non_disponibile"), ("unknown", "non_disponibile")]:
+    check(f"pompe: {w} W -> {atteso}", classe(w), atteso)
+bin_int = POMPE["template"][1]["binary_sensor"][0]["state"]
+bin_col = POMPE["template"][1]["binary_sensor"][1]["state"]
+def bs(tpl, s, prima=None):
+    return render(tpl, {"sensor.caldaia_centralina_solare_pompe_stato": s}, this_state=prima)
+check("integrazione attiva con solo integrazione", bs(bin_int, "integrazione"), "True")
+check("integrazione attiva con entrambe", bs(bin_int, "entrambe"), "True")
+check("integrazione non attiva con solo collettore", bs(bin_int, "collettore"), "False")
+check("collettore attivo con solo collettore", bs(bin_col, "collettore"), "True")
+check("collettore attivo con entrambe", bs(bin_col, "entrambe"), "True")
+check("collettore non attivo con solo integrazione", bs(bin_col, "integrazione"), "False")
+check("integrazione: dato mancante mantiene lo stato (acceso)", bs(bin_int, "non_disponibile", "on"), "True")
+check("collettore: dato mancante mantiene lo stato (spento)", bs(bin_col, "non_disponibile", "off"), "False")
 
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

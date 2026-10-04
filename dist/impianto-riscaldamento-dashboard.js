@@ -731,7 +731,8 @@ var DEFAULT_ENTITIES = {
   pellet_reserve: "binary_sensor.casale_riserva_legna",
   pellet_empty: "binary_sensor.casale_pellet_empty",
   pellet_open: "binary_sensor.casale_pellet_hopper_open",
-  integration_pump_power: "sensor.garage_pompa_integrazione_acs_boiler_potenza"
+  integration_pump: "binary_sensor.caldaia_pompa_integrazione_attiva",
+  collector_pump: "binary_sensor.caldaia_pompa_collettore_attiva"
 };
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
@@ -865,8 +866,8 @@ var ImpiantoOverviewCard = class extends i4 {
     const cPuf = tempColor(puffer);
     const midAt = `${Math.round(m2.topShare * 100)}%`;
     const eta = this._n(e5.eta);
-    const pumpW = this._n(e5.integration_pump_power);
-    const pumpOn = pumpW !== null && pumpW >= (this._config.integration_pump_on_above ?? 40);
+    const pumpOn = this._yes(e5.integration_pump) === true;
+    const collectorOn = this._yes(e5.collector_pump) === true;
     const btn = boostButton(this._s(e5.boost_state), this._armed);
     return b2`
       <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : this._compact ? "0 66 700 762" : "0 0 700 840"} role="img" aria-label="Boiler solare">
@@ -912,7 +913,7 @@ var ImpiantoOverviewCard = class extends i4 {
         </g>
         <rect x="246" y="150" width="160" height="26" rx="13" class="pill" />
         <text x="326" y="168" class="s14 b" text-anchor="middle" fill="#a78bfa">Integrazione (caldaia)</text>
-        ${pumpOn ? w`<rect x="266" y="180" width="120" height="22" rx="11" class="pill" /><circle cx="282" cy="191" r="5" fill="#22c55e" class="pulse" /><text x="330" y="196" class="s13 b" text-anchor="middle" fill="#22c55e">pompa ${fmt(pumpW, 0)} W</text>` : A}
+        ${pumpOn ? w`<rect x="258" y="178" width="136" height="20" rx="10" class="pill" /><circle cx="274" cy="188" r="4.5" fill="#22c55e" class="pulse" /><text x="338" y="192.5" class="s13 b" text-anchor="middle" fill="#22c55e">pompa in funzione</text>` : A}
         <rect x="266" y="522" width="120" height="26" rx="13" class="pill" />
         <text x="326" y="540" class="s14 b" text-anchor="middle" fill="#4ade80">Solare</text>
         <rect x="222" y="122" width="196" height="616" rx="38" fill="url(#lucido)" />
@@ -952,6 +953,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <!-- solare -->
         <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
         <text x="82" y="752" class="t2 s14" text-anchor="middle">Solare ${fmt(solarKw, 1)} kW</text>
+        ${collectorOn ? w`<circle cx="136" cy="742" r="5" fill="#22c55e" class="pulse" /><title>pompa del collettore in funzione</title>` : A}
         <text x="82" y="786" class="b" font-size="24" text-anchor="middle" fill="#22c55e">${fmt(collector, 0)} °C</text>
 
         <text x="532" y="80" class="b s14" fill="#ef4444">Acqua calda</text>
@@ -2560,7 +2562,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.1";
+var VERSION = "0.3.2";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
