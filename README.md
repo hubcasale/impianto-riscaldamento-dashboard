@@ -136,6 +136,11 @@ tenere accesa: il termostato dei radiatori che chiama calore o un programma dell
 Si spegne quando il puffer scende sotto la soglia (e l'acqua è a temperatura) oppure dopo la durata massima (2 ore).
 Lo spegnimento avviene solo in ECO STOP, mai durante START o WORK. Un tocco su **Annulla** interrompe la richiesta.
 
+## Documentazione
+
+- [`docs/MEMORIA.md`](docs/MEMORIA.md): come funziona il sistema, scelte fatte, entità, cose da verificare.
+- [`docs/funzionamento.png`](docs/funzionamento.png): diagramma di flusso (accensione rapida, spegnimento, salvaguardia, misura dei tempi).
+
 ## Sviluppo
 
 ```bash

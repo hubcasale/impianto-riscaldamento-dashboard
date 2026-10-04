@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1520 1200" width="1520" height="1200" font-family="Helvetica, Arial, sans-serif">
+<defs><marker id="fr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker></defs>
+<rect width="1520" height="1200" fill="#ffffff"/>
+<text x="760.0" y="43.7" font-size="22" font-weight="700" text-anchor="middle" fill="#0f172a">Impianto acqua calda: come funzionano accensione rapida, spegnimento e salvaguardia</text>
+<text x="760.0" y="64.4" font-size="12.5" font-weight="400" text-anchor="middle" fill="#475569">Stato al 4 ottobre 2026 · soglie di partenza: boiler 45 °C, puffer 45/50 °C, durata massima 2 h, 2 accensioni rapide al giorno</text>
+<rect x="25" y="84" width="430" height="30" rx="15" fill="#0f172a"/>
+<text x="240" y="103.5" font-size="13" font-weight="700" text-anchor="middle" fill="#ffffff">A · ACCENSIONE RAPIDA (pulsante)</text>
+<rect x="525" y="84" width="430" height="30" rx="15" fill="#0f172a"/>
+<text x="740" y="103.5" font-size="13" font-weight="700" text-anchor="middle" fill="#ffffff">B · SPEGNIMENTO DOPO L'ACCENSIONE RAPIDA</text>
+<rect x="1015" y="84" width="430" height="30" rx="15" fill="#0f172a"/>
+<text x="1230" y="103.5" font-size="13" font-weight="700" text-anchor="middle" fill="#ffffff">C · SALVAGUARDIA PARTENZE INUTILI</text>
+<rect x="115.0" y="134.0" width="250" height="52" rx="26.0" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+<text x="240" y="156.1" font-size="13" font-weight="700" text-anchor="middle" fill="#0f172a">Tocco su «Avvia caldaia»</text><text x="240" y="173.1" font-size="13" font-weight="700" text-anchor="middle" fill="#0f172a">(conferma entro 4 s)</text>
+<polyline points="240,186 240,232" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="240,232 235.0,221.0 245.0,221.0" fill="#475569"/>
+<polygon points="240,235.0 365.0,310 240,385.0 115.0,310" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="240" y="308.4" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">Si può avviare?</text>
+<text x="240" y="321.7" font-size="10.5" font-weight="400" text-anchor="middle" fill="#475569">Polygon OFF, nessun allarme</text><text x="240" y="333.7" font-size="10.5" font-weight="400" text-anchor="middle" fill="#475569">boiler &lt; 45 °C, puffer &lt; 50 °C</text><text x="240" y="345.7" font-size="10.5" font-weight="400" text-anchor="middle" fill="#475569">meno di 2 accensioni oggi</text>
+<polyline points="365,310 402,310" fill="none" stroke="#dc2626" stroke-width="2"/>
+<polygon points="402,310 391.0,315.0 391.0,305.0" fill="#dc2626"/>
+<rect x="402.0" y="262.0" width="156" height="96" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<text x="480" y="283.0" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Pulsante grigio</text><text x="480" y="298.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">con il motivo:</text><text x="480" y="314.0" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">non serve, puffer caldo,</text><text x="480" y="329.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">già accesa, allarme,</text><text x="480" y="345.0" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">limite di oggi</text>
+<text x="370" y="302" font-size="12" font-weight="700" fill="#dc2626">No</text>
+<polyline points="240,385 240,420" fill="none" stroke="#16a34a" stroke-width="2"/>
+<polygon points="240,420 235.0,409.0 245.0,409.0" fill="#16a34a"/>
+<text x="248" y="408" font-size="12" font-weight="700" fill="#16a34a">Sì</text>
+<rect x="110.0" y="422.0" width="260" height="66" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+<text x="240" y="451.1" font-size="13" font-weight="400" text-anchor="middle" fill="#0f172a">Segna l'inizio, conta 1 accensione</text><text x="240" y="468.1" font-size="13" font-weight="400" text-anchor="middle" fill="#0f172a">e attiva «accensione rapida»</text>
+<polyline points="240,488 240,526" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="240,526 235.0,515.0 245.0,515.0" fill="#475569"/>
+<rect x="110.0" y="527.0" width="260" height="50" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+<text x="240" y="556.5" font-size="13" font-weight="400" text-anchor="middle" fill="#0f172a">Polygon in riscaldamento (heat)</text>
+<polyline points="240,577 240,618" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="240,618 235.0,607.0 245.0,607.0" fill="#475569"/>
+<rect x="110.0" y="617.0" width="260" height="66" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+<text x="240" y="638.2" font-size="12" font-weight="400" text-anchor="middle" fill="#0f172a">Accensione: WAIT, START (~14 min)</text><text x="240" y="654.2" font-size="12" font-weight="400" text-anchor="middle" fill="#0f172a">poi WORK, poi ECO STOP</text><text x="240" y="670.2" font-size="12" font-weight="400" text-anchor="middle" fill="#0f172a">(puffer ~65 °C)</text>
+<polyline points="240,683 240,725" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="240,725 235.0,714.0 245.0,714.0" fill="#475569"/>
+<rect x="105.0" y="728.0" width="270" height="84" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="240" y="750.2" font-size="12" font-weight="400" text-anchor="middle" fill="#0f172a">Intanto la scheda mostra</text><text x="240" y="766.2" font-size="12" font-weight="400" text-anchor="middle" fill="#0f172a">«Acqua pronta in N min»</text><text x="240" y="782.2" font-size="12" font-weight="400" text-anchor="middle" fill="#0f172a">35 min all'inizio, poi la media</text><text x="240" y="798.2" font-size="12" font-weight="400" text-anchor="middle" fill="#0f172a">delle accensioni misurate</text>
+<polyline points="370,650 592,650 592,290 615,290" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="615,290 604.0,295.0 604.0,285.0" fill="#475569"/>
+<text x="596" y="480" font-size="12" font-weight="700" fill="#475569">ECO STOP</text>
+<rect x="590.0" y="134.0" width="300" height="52" rx="26.0" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+<text x="740" y="164.6" font-size="13" font-weight="700" text-anchor="middle" fill="#0f172a">Ogni 2 minuti e a ogni ECO STOP</text>
+<polyline points="740,186 740,232" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="740,232 735.0,221.0 745.0,221.0" fill="#475569"/>
+<polygon points="740,232.0 865.0,290 740,348.0 615.0,290" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="740" y="286.1" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">Accensione rapida attiva</text><text x="740" y="302.6" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">e stato ECO STOP?</text>
+<polyline points="865,290 910,290" fill="none" stroke="#dc2626" stroke-width="2"/>
+<polygon points="910,290 899.0,295.0 899.0,285.0" fill="#dc2626"/>
+<text x="870" y="282" font-size="12" font-weight="700" fill="#dc2626">No</text>
+<rect x="910.0" y="268.0" width="150" height="44" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<text x="985" y="294.2" font-size="12" font-weight="400" text-anchor="middle" fill="#0f172a">Non fa niente</text>
+<polyline points="740,348 740,392" fill="none" stroke="#16a34a" stroke-width="2"/>
+<polygon points="740,392 735.0,381.0 745.0,381.0" fill="#16a34a"/>
+<text x="748" y="374" font-size="12" font-weight="700" fill="#16a34a">Sì</text>
+<polygon points="740,392.0 865.0,450 740,508.0 615.0,450" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="740" y="446.1" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">Altro la tiene accesa?</text><text x="740" y="462.6" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">(termostato o programma)</text>
+<polyline points="865,450 910,450" fill="none" stroke="#16a34a" stroke-width="2"/>
+<polygon points="910,450 899.0,455.0 899.0,445.0" fill="#16a34a"/>
+<text x="870" y="442" font-size="12" font-weight="700" fill="#16a34a">Sì</text>
+<rect x="910.0" y="407.0" width="170" height="86" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<text x="995" y="430.8" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Non spegne.</text><text x="995" y="446.3" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Dopo 3 ore chiude la</text><text x="995" y="461.8" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">richiesta senza</text><text x="995" y="477.3" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">spegnere niente</text>
+<polyline points="740,508 740,552" fill="none" stroke="#dc2626" stroke-width="2"/>
+<polygon points="740,552 735.0,541.0 745.0,541.0" fill="#dc2626"/>
+<text x="748" y="534" font-size="12" font-weight="700" fill="#dc2626">No</text>
+<polygon points="740,554.0 875.0,612 740,670.0 605.0,612" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="740" y="608.1" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">Puffer ≤ 50 °C e boiler</text><text x="740" y="624.6" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">≥ 45 °C, o passate 2 h?</text>
+<polyline points="875,612 910,612" fill="none" stroke="#dc2626" stroke-width="2"/>
+<polygon points="910,612 899.0,617.0 899.0,607.0" fill="#dc2626"/>
+<text x="878" y="604" font-size="12" font-weight="700" fill="#dc2626">No</text>
+<rect x="910.0" y="585.0" width="150" height="54" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<text x="985" y="608.3" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Aspetta il</text><text x="985" y="623.8" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">prossimo controllo</text>
+<polyline points="740,670 740,712" fill="none" stroke="#16a34a" stroke-width="2"/>
+<polygon points="740,712 735.0,701.0 745.0,701.0" fill="#16a34a"/>
+<text x="748" y="696" font-size="12" font-weight="700" fill="#16a34a">Sì</text>
+<rect x="605.0" y="715.0" width="270" height="80" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+<text x="740" y="742.5" font-size="13" font-weight="700" text-anchor="middle" fill="#0f172a">Spegne la Polygon</text><text x="740" y="759.5" font-size="13" font-weight="700" text-anchor="middle" fill="#0f172a">chiude l'accensione rapida</text><text x="740" y="776.5" font-size="13" font-weight="700" text-anchor="middle" fill="#0f172a">scrive nel registro</text>
+<rect x="575.0" y="843.0" width="330" height="74" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="740" y="868.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Annulla (sulla scheda) o caldaia spenta a mano:</text><text x="740" y="884.0" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">chiude la richiesta; spegne solo se</text><text x="740" y="899.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">nient'altro la deve tenere accesa</text>
+<text x="740" y="840" font-size="11" fill="#475569" text-anchor="middle">solo in ECO STOP, mai durante START o WORK</text>
+<rect x="1065.0" y="134.0" width="330" height="52" rx="26.0" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+<text x="1230" y="164.6" font-size="13" font-weight="700" text-anchor="middle" fill="#0f172a">La Polygon passa da OFF a WAIT/START</text>
+<polyline points="1230,186 1230,232" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="1230,232 1225.0,221.0 1235.0,221.0" fill="#475569"/>
+<polygon points="1230,232.0 1355.0,280 1230,328.0 1105.0,280" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="1230" y="276.1" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">Salvaguardia attiva?</text><text x="1230" y="292.6" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">(interruttore dashboard)</text>
+<polyline points="1355,280 1390,280" fill="none" stroke="#dc2626" stroke-width="2"/>
+<polygon points="1390,280 1379.0,285.0 1379.0,275.0" fill="#dc2626"/>
+<text x="1358" y="272" font-size="12" font-weight="700" fill="#dc2626">No</text>
+<rect x="1390.0" y="258.0" width="110" height="44" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<text x="1445" y="284.0" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Lascia partire</text>
+<polyline points="1230,328 1230,366" fill="none" stroke="#16a34a" stroke-width="2"/>
+<polygon points="1230,366 1225.0,355.0 1235.0,355.0" fill="#16a34a"/>
+<text x="1238" y="352" font-size="12" font-weight="700" fill="#16a34a">Sì</text>
+<rect x="1120.0" y="370.0" width="220" height="44" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+<text x="1230" y="396.6" font-size="13" font-weight="400" text-anchor="middle" fill="#0f172a">Attesa 10 secondi</text>
+<polyline points="1230,414 1230,444" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="1230,444 1225.0,433.0 1235.0,433.0" fill="#475569"/>
+<polygon points="1230,444.0 1375.0,506 1230,568.0 1085.0,506" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="1230" y="493.9" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">Programma attivo o in</text><text x="1230" y="510.4" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">partenza (±3 min) e non</text><text x="1230" y="526.9" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">accensione rapida?</text>
+<polyline points="1375,506 1402,506" fill="none" stroke="#dc2626" stroke-width="2"/>
+<polygon points="1402,506 1391.0,511.0 1391.0,501.0" fill="#dc2626"/>
+<text x="1378" y="498" font-size="12" font-weight="700" fill="#dc2626">No</text>
+<rect x="1402.5" y="478.0" width="105" height="56" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<text x="1455" y="502.4" font-size="11" font-weight="400" text-anchor="middle" fill="#0f172a">Lascia partire</text><text x="1455" y="517.4" font-size="11" font-weight="400" text-anchor="middle" fill="#0f172a">(a mano)</text>
+<polyline points="1230,568 1230,606" fill="none" stroke="#16a34a" stroke-width="2"/>
+<polygon points="1230,606 1225.0,595.0 1235.0,595.0" fill="#16a34a"/>
+<text x="1238" y="592" font-size="12" font-weight="700" fill="#16a34a">Sì</text>
+<polygon points="1230,602.0 1355.0,650 1230,698.0 1105.0,650" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="1230" y="646.1" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">Il termostato chiede</text><text x="1230" y="662.6" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">riscaldamento?</text>
+<polyline points="1355,650 1390,650" fill="none" stroke="#16a34a" stroke-width="2"/>
+<polygon points="1390,650 1379.0,655.0 1379.0,645.0" fill="#16a34a"/>
+<text x="1358" y="642" font-size="12" font-weight="700" fill="#16a34a">Sì</text>
+<rect x="1390.0" y="622.0" width="110" height="56" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<text x="1445" y="646.4" font-size="11" font-weight="400" text-anchor="middle" fill="#0f172a">Lascia partire</text><text x="1445" y="661.4" font-size="11" font-weight="400" text-anchor="middle" fill="#0f172a">(deve scaldare)</text>
+<polyline points="1230,698 1230,736" fill="none" stroke="#dc2626" stroke-width="2"/>
+<polygon points="1230,736 1225.0,725.0 1235.0,725.0" fill="#dc2626"/>
+<text x="1238" y="722" font-size="12" font-weight="700" fill="#dc2626">No</text>
+<polygon points="1230,736.0 1355.0,784 1230,832.0 1105.0,784" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+<text x="1230" y="780.1" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">Puffer ≥ 45 °C e</text><text x="1230" y="796.6" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">boiler ≥ 45 °C?</text>
+<polyline points="1355,784 1390,784" fill="none" stroke="#dc2626" stroke-width="2"/>
+<polygon points="1390,784 1379.0,789.0 1379.0,779.0" fill="#dc2626"/>
+<text x="1358" y="776" font-size="12" font-weight="700" fill="#dc2626">No</text>
+<rect x="1390.0" y="756.0" width="110" height="56" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<text x="1445" y="780.4" font-size="11" font-weight="400" text-anchor="middle" fill="#0f172a">Lascia partire</text><text x="1445" y="795.4" font-size="11" font-weight="400" text-anchor="middle" fill="#0f172a">(serve)</text>
+<polyline points="1230,832 1230,872" fill="none" stroke="#16a34a" stroke-width="2"/>
+<polygon points="1230,872 1225.0,861.0 1235.0,861.0" fill="#16a34a"/>
+<text x="1238" y="858" font-size="12" font-weight="700" fill="#16a34a">Sì</text>
+<rect x="1085.0" y="876.0" width="290" height="64" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+<text x="1230" y="904.2" font-size="12" font-weight="700" text-anchor="middle" fill="#0f172a">Spegne la caldaia (partenza inutile)</text><text x="1230" y="920.2" font-size="12" font-weight="700" text-anchor="middle" fill="#0f172a">e ricorda «spenta dalla salvaguardia»</text>
+<polyline points="1230,940 1230,978" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="1230,978 1225.0,967.0 1235.0,967.0" fill="#475569"/>
+<rect x="1065.0" y="982.0" width="330" height="80" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+<text x="1230" y="1010.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Finché il programma è attivo la riaccende se:</text><text x="1230" y="1026.0" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">il termostato chiede riscaldamento, oppure</text><text x="1230" y="1041.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">l'acqua si raffredda e il puffer scende sotto 45 °C</text>
+<rect x="20" y="1054" width="1000" height="112" rx="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="520" y="1074.4" font-size="12.5" font-weight="700" text-anchor="middle" fill="#0f172a">D · MISURA DEL TEMPO DI MESSA IN TEMPERATURA (alimenta «Acqua pronta in N min»)</text>
+<rect x="30.0" y="1091.0" width="200" height="62" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+<text x="130" y="1110.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Polygon in START e</text><text x="130" y="1126.0" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">boiler &lt; 45 °C:</text><text x="130" y="1141.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">parte il cronometro</text>
+<rect x="270.0" y="1091.0" width="200" height="62" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+<text x="370" y="1110.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Il boiler supera 45 °C:</text><text x="370" y="1126.0" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">i minuti trascorsi</text><text x="370" y="1141.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">diventano un campione</text>
+<rect x="540.0" y="1091.0" width="200" height="62" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+<text x="640" y="1110.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Scartato se il sole</text><text x="640" y="1126.0" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">produce ≥ 1 kW, se &lt; 3 o</text><text x="640" y="1141.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">&gt; 240 minuti, o dopo 4 h</text>
+<rect x="800.0" y="1091.0" width="200" height="62" rx="12" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+<text x="900" y="1110.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">Media degli ultimi 10</text><text x="900" y="1126.0" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">campioni (modificabili</text><text x="900" y="1141.5" font-size="11.5" font-weight="400" text-anchor="middle" fill="#0f172a">a mano nel campo di testo)</text>
+<polyline points="230,1122 270,1122" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="270,1122 259.0,1127.0 259.0,1117.0" fill="#475569"/>
+<polyline points="470,1122 540,1122" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="540,1122 529.0,1127.0 529.0,1117.0" fill="#475569"/>
+<polyline points="740,1122 800,1122" fill="none" stroke="#475569" stroke-width="2"/>
+<polygon points="800,1122 789.0,1127.0 789.0,1117.0" fill="#475569"/>
+</svg>
