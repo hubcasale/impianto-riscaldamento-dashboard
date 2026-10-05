@@ -51,6 +51,8 @@ Senza altro usa questi nomi di entità (cambiali in `entities:` se i tuoi sono d
 | `set_boiler`, `set_water` | `number.casale_setpoint_boiler`, `climate.casale_acqua` (attributo `temperature`) | integrazione |
 | `pellet_reserve`, `pellet_empty`, `pellet_open` | `binary_sensor.casale_riserva_legna` (riserva: sta per finire), `binary_sensor.casale_pellet_empty` (vuoto), `binary_sensor.casale_pellet_hopper_open` (serbatoio aperto) | integrazione `aguaiot_hubcasale` v1.2.7-hubcasale.4 (gli ultimi due) |
 | `integration_pump`, `collector_pump` | `binary_sensor.caldaia_pompa_integrazione_attiva`, `binary_sensor.caldaia_pompa_collettore_attiva` | `ha-packages/caldaia_pompe_centralina.yaml` (dalla potenza della centralina solare) |
+| `integration_power`, `collector_power` | `sensor.garage_bs_pompa_integrazione_potenza` (Shelly 1PM), `sensor.garage_centralina_solare_pompe_potenza` (Shelly EM Mini sull'alimentazione dell'Elios) | i watt accanto alle pompe in marcia |
+| `integration_call`, `integration_block_enabled`, `integration_block_wanted` | `binary_sensor.garage_bs_pompa_integrazione_ingresso_0`, `input_boolean.caldaia_integrazione_blocco_attivo`, `binary_sensor.caldaia_integrazione_inutile` | `ha-packages/caldaia_integrazione_blocco.yaml`: la scritta arancione «integrazione bloccata» compare quando il blocco è acceso, la regola lo chiede e l'Elios chiama la pompa |
 | `starts_today`, `starts_yesterday`, `standby_today`, `work_hours_today` | `sensor.caldaia_*` | `ha-packages/caldaia_suggerimento.yaml` |
 | `request_acs`, `request_heating`, `consent` | `binary_sensor.caldaia_richiesta_acs` … | idem |
 
@@ -126,7 +128,7 @@ Le schede leggono sensori che qui sono forniti come esempio:
   accensioni e ore in lavoro. **Non comanda niente.**
 - `ha-packages/caldaia_tempo_acqua.yaml`: misura quanti minuti servono, dopo un'accensione a freddo, per portare il boiler solare
   alla temperatura d'uso e ne fa la media (ultimi 10 campioni, correggibili a mano).
-- `ha-packages/caldaia_pompe_centralina.yaml`: dalla potenza totale della centralina solare (`sensor.garage_centralina_solare_pompe_potenza`) ricava quale pompa gira (ferme sotto 10 W, solo collettore fino a 26 W, solo integrazione tra 26 e 55 W, entrambe da 55 W; soglie modificabili) e le ore di funzionamento di oggi.
+- `ha-packages/caldaia_pompe_centralina.yaml`: dalla potenza totale della centralina solare (`sensor.garage_centralina_solare_pompe_potenza`) ricava quale pompa gira (ferme sotto 15 W, solo collettore fino a 42 W, solo integrazione tra 42 e 65 W, entrambe da 65 W; soglie modificabili, tarate sulle misure del 5/10/2026) e le ore di funzionamento di oggi.
 - `ha-packages/caldaia_accensione_rapida.yaml`: pulsante **Avvia caldaia** per quando serve acqua calda e la Polygon è spenta,
   con spegnimento automatico (vedi sotto) e la stima `sensor.caldaia_acqua_pronta_tra`.
 - `esphome/solare-termico.yaml`: ESP32 con ADS1115 e sonde NTC 10k B3950 (serpentine) e due sonde sul boiler.

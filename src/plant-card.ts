@@ -1,7 +1,7 @@
 import { LitElement, html, css, svg, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
-import { DEFAULT_MODEL, boostButton, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type StoveLook } from "./plant-logic";
+import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type StoveLook } from "./plant-logic";
 
 const CARD_TAG = "impianto-overview-card";
 
@@ -53,6 +53,16 @@ export interface PlantEntities {
   integration_pump: string;
   /** acceso quando la pompa del collettore solare è in funzione */
   collector_pump: string;
+  /** potenza (W) della pompa di integrazione, dallo Shelly 1PM */
+  integration_power: string;
+  /** ingresso dello Shelly 1PM: acceso quando l'Elios chiama la pompa di integrazione */
+  integration_call: string;
+  /** interruttore del blocco automatico della pompa di integrazione */
+  integration_block_enabled: string;
+  /** acceso quando la regola vuole la pompa ferma (puffer non abbastanza caldo) */
+  integration_block_wanted: string;
+  /** potenza (W) letta sull'alimentazione dell'Elios: con la pompa del collettore in marcia circa 32 W */
+  collector_power: string;
 }
 
 export const DEFAULT_ENTITIES: PlantEntities = {
@@ -91,6 +101,11 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   pellet_open: "binary_sensor.casale_pellet_hopper_open",
   integration_pump: "binary_sensor.caldaia_pompa_integrazione_attiva",
   collector_pump: "binary_sensor.caldaia_pompa_collettore_attiva",
+  integration_power: "sensor.garage_bs_pompa_integrazione_potenza",
+  integration_call: "binary_sensor.garage_bs_pompa_integrazione_ingresso_0",
+  integration_block_enabled: "input_boolean.caldaia_integrazione_blocco_attivo",
+  integration_block_wanted: "binary_sensor.caldaia_integrazione_inutile",
+  collector_power: "sensor.garage_centralina_solare_pompe_potenza",
 };
 
 /** Un numero oppure l'id di un'entità numerica. */
@@ -273,8 +288,16 @@ export class ImpiantoOverviewCard extends LitElement {
     const cPuf = tempColor(puffer);
     const midAt = `${Math.round(m.topShare * 100)}%`;
     const eta = this._n(e.eta);
-    const pumpOn = this._yes(e.integration_pump) === true;
-    const collectorOn = this._yes(e.collector_pump) === true;
+    const integrationPill = integrationPumpPill(
+      this._yes(e.integration_pump),
+      this._yes(e.integration_call),
+      this._yes(e.integration_block_enabled),
+      this._yes(e.integration_block_wanted),
+      this._n(e.integration_power),
+    );
+    const collectorPill = collectorPumpPill(this._yes(e.collector_pump), this._n(e.collector_power));
+    const pumpOn = integrationPill.key === "running";
+    const collectorOn = collectorPill.key === "running";
     const btn = boostButton(this._s(e.boost_state), this._armed);
 
     return html`
@@ -323,11 +346,11 @@ export class ImpiantoOverviewCard extends LitElement {
         ${collectorOn ? svg`<path d=${COIL_SOLAR} class="coilflow" />` : nothing}
         <rect x="246" y="150" width="160" height="26" rx="13" class="pill" />
         <text x="326" y="168" class="s14 b" text-anchor="middle" fill="#a78bfa">Integrazione (caldaia)</text>
-        ${pumpOn
-          ? svg`<rect x="244" y="284" width="164" height="22" rx="11" class="pill" /><circle cx="260" cy="295" r="4.5" fill="#22c55e" class="pulse" /><text x="336" y="299.5" class="s13 b" text-anchor="middle" fill="#22c55e">pompa integrazione</text>`
-          : nothing}
+        ${integrationPill.key === "idle"
+          ? nothing
+          : svg`<rect x="244" y="284" width="164" height="22" rx="11" class="pill" /><circle cx="260" cy="295" r="4.5" fill=${integrationPill.key === "blocked" ? "#f59e0b" : "#22c55e"} class=${integrationPill.key === "blocked" ? "" : "pulse"} /><text x="336" y="299.5" class="s13 b" text-anchor="middle" fill=${integrationPill.key === "blocked" ? "#f59e0b" : "#22c55e"}>${integrationPill.label}</text>`}
         ${collectorOn
-          ? svg`<rect x="250" y="676" width="152" height="22" rx="11" class="pill" /><circle cx="266" cy="687" r="4.5" fill="#22c55e" class="pulse" /><text x="334" y="691.5" class="s13 b" text-anchor="middle" fill="#22c55e">pompa collettore</text>`
+          ? svg`<rect x="250" y="676" width="152" height="22" rx="11" class="pill" /><circle cx="266" cy="687" r="4.5" fill="#22c55e" class="pulse" /><text x="334" y="691.5" class="s13 b" text-anchor="middle" fill="#22c55e">${collectorPill.label}</text>`
           : nothing}
         <rect x="266" y="522" width="120" height="26" rx="13" class="pill" />
         <text x="326" y="540" class="s14 b" text-anchor="middle" fill="#4ade80">Solare</text>

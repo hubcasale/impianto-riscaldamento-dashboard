@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_MODEL, boostButton, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber } from "../src/plant-logic";
+import { DEFAULT_MODEL, boostButton, collectorPumpPill, integrationPumpPill, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber } from "../src/plant-logic";
 
 test("docce: boiler caldo in alto, freddo in basso", () => {
   // zona alta 95 L a 55,6 °C -> 95*(40,6)/23 = 167,7 L a 38 °C -> 4 docce da 40 L
@@ -88,4 +88,28 @@ test("pellet: priorita tra vuoto, riserva e aperto", () => {
 test("pellet: segnali mancanti", () => {
   assert.equal(pelletStatus(null, null, null).key, "nd");
   assert.equal(pelletStatus(false, null, null).key, "ok");
+});
+
+test("pompa integrazione: in marcia con i watt", () => {
+  assert.deepEqual(integrationPumpPill(true, true, false, false, 47.2), { key: "running", label: "integrazione · 47 W" });
+  assert.equal(integrationPumpPill(true, true, true, false, 47).key, "running");
+});
+
+test("pompa integrazione: bloccata solo con blocco acceso, regola e chiamata dell'Elios", () => {
+  assert.deepEqual(integrationPumpPill(false, true, true, true, 0), { key: "blocked", label: "integrazione bloccata" });
+  assert.equal(integrationPumpPill(false, false, true, true, 0).key, "idle");
+  assert.equal(integrationPumpPill(false, true, false, true, 0).key, "idle");
+  assert.equal(integrationPumpPill(false, true, true, false, 0).key, "idle");
+});
+
+test("pompa integrazione: segnali mancanti e watt trascurabili", () => {
+  assert.equal(integrationPumpPill(null, null, null, null, null).key, "idle");
+  assert.equal(integrationPumpPill(true, null, null, null, 1.2).label, "integrazione");
+});
+
+test("pompa collettore: watt solo se in marcia e oltre la soglia", () => {
+  assert.deepEqual(collectorPumpPill(true, 32.2), { key: "running", label: "collettore · 32 W" });
+  assert.equal(collectorPumpPill(true, 1.1).label, "collettore");
+  assert.equal(collectorPumpPill(false, 32).key, "idle");
+  assert.equal(collectorPumpPill(null, null).key, "idle");
 });

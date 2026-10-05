@@ -694,6 +694,19 @@ function pelletStatus(reserve, empty, open) {
   if (reserve === null && empty === null && open === null) return { key: "nd", label: "\u2013" };
   return { key: "ok", label: "OK" };
 }
+var MIN_SHOWN_W = 5;
+function pumpWatts(w2) {
+  return w2 !== null && w2 >= MIN_SHOWN_W ? ` \xB7 ${Math.round(w2)} W` : "";
+}
+function integrationPumpPill(running, called, blockEnabled, blockWanted, watts) {
+  if (blockEnabled === true && blockWanted === true && called === true) return { key: "blocked", label: "integrazione bloccata" };
+  if (running === true) return { key: "running", label: `integrazione${pumpWatts(watts)}` };
+  return { key: "idle", label: "integrazione" };
+}
+function collectorPumpPill(running, watts) {
+  if (running === true) return { key: "running", label: `collettore${pumpWatts(watts)}` };
+  return { key: "idle", label: "collettore" };
+}
 
 // src/plant-card.ts
 var CARD_TAG = "impianto-overview-card";
@@ -732,7 +745,12 @@ var DEFAULT_ENTITIES = {
   pellet_empty: "binary_sensor.casale_pellet_empty",
   pellet_open: "binary_sensor.casale_pellet_hopper_open",
   integration_pump: "binary_sensor.caldaia_pompa_integrazione_attiva",
-  collector_pump: "binary_sensor.caldaia_pompa_collettore_attiva"
+  collector_pump: "binary_sensor.caldaia_pompa_collettore_attiva",
+  integration_power: "sensor.garage_bs_pompa_integrazione_potenza",
+  integration_call: "binary_sensor.garage_bs_pompa_integrazione_ingresso_0",
+  integration_block_enabled: "input_boolean.caldaia_integrazione_blocco_attivo",
+  integration_block_wanted: "binary_sensor.caldaia_integrazione_inutile",
+  collector_power: "sensor.garage_centralina_solare_pompe_potenza"
 };
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
@@ -868,8 +886,16 @@ var ImpiantoOverviewCard = class extends i4 {
     const cPuf = tempColor(puffer);
     const midAt = `${Math.round(m2.topShare * 100)}%`;
     const eta = this._n(e5.eta);
-    const pumpOn = this._yes(e5.integration_pump) === true;
-    const collectorOn = this._yes(e5.collector_pump) === true;
+    const integrationPill = integrationPumpPill(
+      this._yes(e5.integration_pump),
+      this._yes(e5.integration_call),
+      this._yes(e5.integration_block_enabled),
+      this._yes(e5.integration_block_wanted),
+      this._n(e5.integration_power)
+    );
+    const collectorPill = collectorPumpPill(this._yes(e5.collector_pump), this._n(e5.collector_power));
+    const pumpOn = integrationPill.key === "running";
+    const collectorOn = collectorPill.key === "running";
     const btn = boostButton(this._s(e5.boost_state), this._armed);
     return b2`
       <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : this._compact ? "0 66 700 762" : "0 0 700 840"} role="img" aria-label="Boiler solare">
@@ -917,8 +943,8 @@ var ImpiantoOverviewCard = class extends i4 {
         ${collectorOn ? w`<path d=${COIL_SOLAR} class="coilflow" />` : A}
         <rect x="246" y="150" width="160" height="26" rx="13" class="pill" />
         <text x="326" y="168" class="s14 b" text-anchor="middle" fill="#a78bfa">Integrazione (caldaia)</text>
-        ${pumpOn ? w`<rect x="244" y="284" width="164" height="22" rx="11" class="pill" /><circle cx="260" cy="295" r="4.5" fill="#22c55e" class="pulse" /><text x="336" y="299.5" class="s13 b" text-anchor="middle" fill="#22c55e">pompa integrazione</text>` : A}
-        ${collectorOn ? w`<rect x="250" y="676" width="152" height="22" rx="11" class="pill" /><circle cx="266" cy="687" r="4.5" fill="#22c55e" class="pulse" /><text x="334" y="691.5" class="s13 b" text-anchor="middle" fill="#22c55e">pompa collettore</text>` : A}
+        ${integrationPill.key === "idle" ? A : w`<rect x="244" y="284" width="164" height="22" rx="11" class="pill" /><circle cx="260" cy="295" r="4.5" fill=${integrationPill.key === "blocked" ? "#f59e0b" : "#22c55e"} class=${integrationPill.key === "blocked" ? "" : "pulse"} /><text x="336" y="299.5" class="s13 b" text-anchor="middle" fill=${integrationPill.key === "blocked" ? "#f59e0b" : "#22c55e"}>${integrationPill.label}</text>`}
+        ${collectorOn ? w`<rect x="250" y="676" width="152" height="22" rx="11" class="pill" /><circle cx="266" cy="687" r="4.5" fill="#22c55e" class="pulse" /><text x="334" y="691.5" class="s13 b" text-anchor="middle" fill="#22c55e">${collectorPill.label}</text>` : A}
         <rect x="266" y="522" width="120" height="26" rx="13" class="pill" />
         <text x="326" y="540" class="s14 b" text-anchor="middle" fill="#4ade80">Solare</text>
         <rect x="222" y="122" width="196" height="616" rx="38" fill="url(#lucido)" />
@@ -2569,7 +2595,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.3";
+var VERSION = "0.3.4";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

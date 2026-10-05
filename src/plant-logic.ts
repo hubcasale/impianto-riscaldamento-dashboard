@@ -164,3 +164,40 @@ export function pelletStatus(reserve: boolean | null, empty: boolean | null, ope
   if (reserve === null && empty === null && open === null) return { key: "nd", label: "–" };
   return { key: "ok", label: "OK" };
 }
+
+/** Stato delle pompe sullo schema: in marcia (con i watt), bloccata dalla regola di Home Assistant, ferma. */
+export type PumpKey = "running" | "blocked" | "idle";
+
+export interface PumpPill {
+  key: PumpKey;
+  label: string;
+}
+
+/** Sotto questa potenza il valore non si mostra (a riposo l'Elios assorbe circa 1 W). */
+const MIN_SHOWN_W = 5;
+
+function pumpWatts(w: number | null): string {
+  return w !== null && w >= MIN_SHOWN_W ? ` · ${Math.round(w)} W` : "";
+}
+
+/**
+ * Pompa di integrazione. "Bloccata" solo quando il blocco automatico è acceso, la regola lo chiede
+ * (puffer non abbastanza caldo) e l'Elios sta chiamando la pompa: in quel caso la pompa è ferma per scelta.
+ */
+export function integrationPumpPill(
+  running: boolean | null,
+  called: boolean | null,
+  blockEnabled: boolean | null,
+  blockWanted: boolean | null,
+  watts: number | null,
+): PumpPill {
+  if (blockEnabled === true && blockWanted === true && called === true) return { key: "blocked", label: "integrazione bloccata" };
+  if (running === true) return { key: "running", label: `integrazione${pumpWatts(watts)}` };
+  return { key: "idle", label: "integrazione" };
+}
+
+/** Pompa del collettore solare (i watt sono quelli letti sull'alimentazione dell'Elios). */
+export function collectorPumpPill(running: boolean | null, watts: number | null): PumpPill {
+  if (running === true) return { key: "running", label: `collettore${pumpWatts(watts)}` };
+  return { key: "idle", label: "collettore" };
+}
