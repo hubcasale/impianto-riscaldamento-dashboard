@@ -1,8 +1,13 @@
-# Pompe della centralina solare Elios, dalla potenza assorbita da tutta la centralina (presa con misura di potenza).
-# Il sensore misura l'insieme: a riposo sotto i 10 W, con la sola pompa del collettore circa 20-26 W, con la sola
-# pompa di integrazione circa 30-40 W (valore ancora da verificare), con entrambe sopra i 55 W.
-# All'accensione di una pompa la potenza oscilla per qualche secondo (picchi e cali), quindi gli stati "pompa attiva"
-# hanno un ritardo in accensione di 20 s e in spegnimento di 30 s.
+# Pompe della centralina solare Elios.
+# Sensore EM Mini sull'alimentazione dell'Elios (sensor.garage_centralina_solare_pompe_potenza): a riposo circa 1 W,
+# pompa del collettore (ricircolo) circa 32 W, pompa di integrazione circa 50 W (misure del 5/10/2026, con l'integrazione
+# ancora alimentata dall'Elios), entrambe oltre 65 W. Soglie con margine: ferme sotto 15 W, collettore fino a 42 W,
+# integrazione fino a 65 W, entrambe da 65 W.
+# Con lo Shelly 1PM sulla pompa di integrazione (sensor.garage_bs_pompa_integrazione_potenza, alimentato dal quadro e non
+# piu' dall'Elios) l'EM Mini vede solo il collettore; l'integrazione e' "attiva" quando il 1PM supera la soglia di
+# 20 W. Se il 1PM non e' disponibile vale la lettura dell'EM Mini (stati integrazione / entrambe).
+# All'accensione di una pompa la potenza oscilla per qualche secondo, quindi gli stati hanno un ritardo in accensione di
+# 20 s e in spegnimento di 30 s.
 #
 # Sensore sorgente: sensor.garage_centralina_solare_pompe_potenza
 #
@@ -15,11 +20,18 @@ input_boolean:
   centralina_pompe_misura_attiva:
     name: Centralina solare - misura potenza pompe attiva
     icon: mdi:flash
-  caldaia_pompe_defaults_impostati:
-    name: Caldaia - soglie pompe, valori iniziali impostati
+  caldaia_pompe_defaults_v2_impostati:
+    name: Caldaia - soglie pompe v2, valori iniziali impostati
     icon: mdi:check
 
 input_number:
+  centralina_pompa_integrazione_w_min:
+    name: Pompa integrazione - accesa sopra (Shelly 1PM)
+    min: 1
+    max: 100
+    step: 1
+    unit_of_measurement: W
+    mode: box
   centralina_pompe_w_ferme:
     name: Centralina solare - pompe ferme sotto
     min: 0
@@ -71,7 +83,9 @@ template:
         delay_off: "00:00:30"
         state: >
           {% set s = states('sensor.caldaia_centralina_solare_pompe_stato') %}
-          {% if s == 'non_disponibile' or s in ['unknown', 'unavailable'] %}{{ this.state == 'on' }}
+          {% set p1 = states('sensor.garage_bs_pompa_integrazione_potenza') %}
+          {% if is_number(p1) and p1 | float > states('input_number.centralina_pompa_integrazione_w_min') | float(20) %}true
+          {% elif s == 'non_disponibile' or s in ['unknown', 'unavailable'] %}{{ this.state == 'on' }}
           {% else %}{{ s in ['integrazione', 'entrambe'] }}{% endif %}
 
       - name: Caldaia pompa collettore attiva
@@ -105,24 +119,30 @@ sensor:
     end: "{{ now() }}"
 
 automation:
-  - id: caldaia_pompe_valori_iniziali
-    alias: Caldaia - soglie pompe, valori iniziali
+  - id: caldaia_pompe_valori_iniziali_v2
+    alias: Caldaia - soglie pompe, valori iniziali (v2)
+    description: Una sola volta imposta le soglie dalle misure del 5/10/2026 e riaccende la misura delle pompe.
     triggers:
       - trigger: homeassistant
         event: start
     conditions:
       - condition: state
-        entity_id: input_boolean.caldaia_pompe_defaults_impostati
+        entity_id: input_boolean.caldaia_pompe_defaults_v2_impostati
         state: "off"
     actions:
       - action: input_number.set_value
         target: {entity_id: input_number.centralina_pompe_w_ferme}
-        data: {value: 10}
+        data: {value: 15}
       - action: input_number.set_value
         target: {entity_id: input_number.centralina_pompe_w_collettore_max}
-        data: {value: 26}
+        data: {value: 42}
       - action: input_number.set_value
         target: {entity_id: input_number.centralina_pompe_w_entrambe_min}
-        data: {value: 55}
+        data: {value: 65}
+      - action: input_number.set_value
+        target: {entity_id: input_number.centralina_pompa_integrazione_w_min}
+        data: {value: 20}
       - action: input_boolean.turn_on
-        target: {entity_id: input_boolean.caldaia_pompe_defaults_impostati}
+        target: {entity_id: input_boolean.centralina_pompe_misura_attiva}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_pompe_defaults_v2_impostati}

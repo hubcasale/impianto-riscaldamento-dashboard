@@ -1,0 +1,103 @@
+# Blocco della pompa di integrazione con lo Shelly 1PM (relè disgiunto).
+# L'Elios chiama la pompa quando il boiler solare e' freddo, senza controllare se il puffer della caldaia e' piu' caldo.
+# Se la pompa non serve (per esempio caldaia spenta e puffer freddo) Home Assistant tiene acceso il booleano virtuale
+# "Blocca integrazione" dello Shelly (id 200): il relè resta aperto anche se l'Elios chiama.
+# Lo script dello Shelly (shelly/integrazione-blocco.js) fa scadere il blocco da solo dopo 600 s: Home Assistant lo
+# riafferma ogni 5 minuti; se Home Assistant o il Wi-Fi spariscono la pompa torna a seguire l'Elios.
+#
+# Regola: puffer (sensor.casale_temperatura_boiler) meno boiler alto stimato (sensor.boiler_solare_alto_stimato).
+#   Inutile quando la differenza e' sotto "delta blocco" (4 C); torna utile sopra "delta sblocco" (7 C).
+#   Senza una delle due letture non si blocca mai.
+# INTERRUTTORE GENERALE: input_boolean.caldaia_integrazione_blocco_attivo, spento di partenza. Si accende solo dopo la
+# prova del relè con l'Elios in manuale. Spento = nessun blocco (il booleano dello Shelly viene tenuto spento).
+
+input_boolean:
+  caldaia_integrazione_blocco_attivo:
+    name: Integrazione - blocco automatico attivo
+    icon: mdi:pump-off
+  caldaia_integrazione_defaults_impostati:
+    name: Integrazione - soglie blocco, valori iniziali impostati
+    icon: mdi:check
+
+input_number:
+  caldaia_integrazione_delta_blocco:
+    name: Integrazione - blocca se il puffer supera il boiler di meno di
+    min: 0
+    max: 15
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
+  caldaia_integrazione_delta_sblocco:
+    name: Integrazione - sblocca quando il puffer supera il boiler di
+    min: 1
+    max: 20
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
+
+rest_command:
+  shelly_integrazione_blocco:
+    url: "http://192.168.178.119/rpc/Boolean.Set?id=200&value={{ value }}"
+    method: get
+    timeout: 8
+
+template:
+  - binary_sensor:
+      - name: Caldaia integrazione inutile
+        unique_id: caldaia_integrazione_inutile
+        icon: mdi:pump-off
+        state: >
+          {% set p = states('sensor.casale_temperatura_boiler') | float(none) %}
+          {% set b = states('sensor.boiler_solare_alto_stimato') | float(none) %}
+          {% if p is none or b is none %}false
+          {% else %}
+            {% set d = p - b %}
+            {% if this.state == 'on' %}{{ d < states('input_number.caldaia_integrazione_delta_sblocco') | float(7) }}
+            {% else %}{{ d < states('input_number.caldaia_integrazione_delta_blocco') | float(4) }}{% endif %}
+          {% endif %}
+        attributes:
+          differenza: >
+            {% set p = states('sensor.casale_temperatura_boiler') | float(none) %}
+            {% set b = states('sensor.boiler_solare_alto_stimato') | float(none) %}
+            {{ none if p is none or b is none else (p - b) | round(1) }}
+
+automation:
+  - id: caldaia_integrazione_blocco
+    alias: Caldaia - blocco pompa di integrazione (Shelly 1PM)
+    description: Tiene allineato il booleano di blocco dello Shelly 1PM alla regola; lo riafferma ogni 5 minuti (scade da solo dopo 10).
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.caldaia_integrazione_inutile
+          - input_boolean.caldaia_integrazione_blocco_attivo
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: homeassistant
+        event: start
+    actions:
+      - action: rest_command.shelly_integrazione_blocco
+        continue_on_error: true
+        data:
+          value: >-
+            {{ 'true' if is_state('input_boolean.caldaia_integrazione_blocco_attivo', 'on')
+               and is_state('binary_sensor.caldaia_integrazione_inutile', 'on') else 'false' }}
+
+  - id: caldaia_integrazione_valori_iniziali
+    alias: Caldaia - soglie blocco integrazione, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_integrazione_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_integrazione_delta_blocco}
+        data: {value: 4}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_integrazione_delta_sblocco}
+        data: {value: 7}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_integrazione_defaults_impostati}
