@@ -6,18 +6,31 @@
 # Home Assistant lo rinnova ogni 5 minuti e lo toglie subito con /unblock; se Home Assistant o il Wi-Fi spariscono la
 # pompa torna a seguire l'Elios.
 #
-# Regola: puffer (sensor.casale_temperatura_boiler) meno boiler alto stimato (sensor.boiler_solare_alto_stimato).
-#   Inutile quando la differenza e' sotto "delta blocco" (4 C); torna utile sopra "delta sblocco" (7 C).
-#   Senza una delle due letture non si blocca mai.
-# INTERRUTTORE GENERALE: input_boolean.caldaia_integrazione_blocco_attivo, spento di partenza. Si accende solo dopo la
-# prova del relè con l'Elios in manuale. Spento = nessun blocco (il booleano dello Shelly viene tenuto spento).
+# Regola (differenza = puffer, sensor.casale_temperatura_boiler, meno boiler alto stimato, sensor.boiler_solare_alto_stimato):
+#   - la pompa e' "inutile" quando la differenza e' sotto "delta blocco" (4 C) e torna "utile" sopra "delta sblocco" (7 C);
+#   - se e' inutile e l'Elios la chiama: BLOCCO (relè aperto);
+#   - se e' utile, il boiler alto e' sotto la temperatura massima e la forzatura e' attiva: ACCENSIONE FORZATA anche se
+#     l'Elios non chiama (il 1PM alimenta la pompa dalla fase permanente del quadro). Si ferma quando il boiler alto
+#     raggiunge la massima (riparte sotto massima - isteresi) o quando la differenza scende sotto "delta blocco";
+#   - altrimenti la pompa segue solo l'Elios.
+#   Senza una delle due letture non si blocca e non si forza mai.
+# Con questa logica l'Elios puo' avere la soglia di integrazione bassa (40 C) e un'isteresi piccola (2-3 C), che
+# migliora il solare: il calore del puffer lo sfrutta Home Assistant.
+# INTERRUTTORI GENERALI (spenti di partenza): input_boolean.caldaia_integrazione_blocco_attivo e
+# input_boolean.caldaia_integrazione_forzatura_attiva. Spenti = nessun intervento (la pompa segue l'Elios).
 
 input_boolean:
   caldaia_integrazione_blocco_attivo:
     name: Integrazione - blocco automatico attivo
     icon: mdi:pump-off
+  caldaia_integrazione_forzatura_attiva:
+    name: Integrazione - accensione forzata attiva
+    icon: mdi:pump
   caldaia_integrazione_defaults_impostati:
     name: Integrazione - soglie blocco, valori iniziali impostati
+    icon: mdi:check
+  caldaia_integrazione_defaults_v2_impostati:
+    name: Integrazione - soglie accensione forzata, valori iniziali impostati
     icon: mdi:check
 
 input_number:
@@ -35,14 +48,32 @@ input_number:
     step: 0.5
     unit_of_measurement: °C
     mode: box
+  caldaia_integrazione_temp_max:
+    name: Integrazione - non scaldare il boiler alto oltre
+    min: 40
+    max: 70
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+  caldaia_integrazione_isteresi_max:
+    name: Integrazione - isteresi sulla temperatura massima
+    min: 0.5
+    max: 10
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
 
 rest_command:
   shelly_integrazione_blocco:
     url: "http://192.168.178.119/script/1/block"
     method: get
     timeout: 8
-  shelly_integrazione_sblocco:
-    url: "http://192.168.178.119/script/1/unblock"
+  shelly_integrazione_run:
+    url: "http://192.168.178.119/script/1/run"
+    method: get
+    timeout: 8
+  shelly_integrazione_auto:
+    url: "http://192.168.178.119/script/1/auto"
     method: get
     timeout: 8
 
@@ -66,16 +97,33 @@ template:
             {% set b = states('sensor.boiler_solare_alto_stimato') | float(none) %}
             {{ none if p is none or b is none else (p - b) | round(1) }}
 
+  - binary_sensor:
+      - name: Caldaia integrazione da forzare
+        unique_id: caldaia_integrazione_da_forzare
+        icon: mdi:pump
+        state: >
+          {% set p = states('sensor.casale_temperatura_boiler') | float(none) %}
+          {% set b = states('sensor.boiler_solare_alto_stimato') | float(none) %}
+          {% set inutile = states('binary_sensor.caldaia_integrazione_inutile') %}
+          {% if p is none or b is none or inutile != 'off' %}false
+          {% else %}
+            {% set tmax = states('input_number.caldaia_integrazione_temp_max') | float(55) %}
+            {% set h = states('input_number.caldaia_integrazione_isteresi_max') | float(2) %}
+            {% if this.state == 'on' %}{{ b < tmax }}{% else %}{{ b < tmax - h }}{% endif %}
+          {% endif %}
+
 automation:
   - id: caldaia_integrazione_blocco
     alias: Caldaia - blocco pompa di integrazione (Shelly 1PM)
-    description: Tiene il blocco dello Shelly 1PM allineato alla regola; lo rinnova ogni 5 minuti (scade da solo 10 minuti dopo l'ultimo segnale).
+    description: Tiene lo Shelly 1PM allineato alla regola (blocco, accensione forzata o solo Elios); rinnova il segnale ogni 5 minuti (scade da solo 10 minuti dopo l'ultimo).
     mode: restart
     triggers:
       - trigger: state
         entity_id:
           - binary_sensor.caldaia_integrazione_inutile
+          - binary_sensor.caldaia_integrazione_da_forzare
           - input_boolean.caldaia_integrazione_blocco_attivo
+          - input_boolean.caldaia_integrazione_forzatura_attiva
         to:
           - "on"
           - "off"
@@ -95,8 +143,18 @@ automation:
             sequence:
               - action: rest_command.shelly_integrazione_blocco
                 continue_on_error: true
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.caldaia_integrazione_forzatura_attiva
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.caldaia_integrazione_da_forzare
+                state: "on"
+            sequence:
+              - action: rest_command.shelly_integrazione_run
+                continue_on_error: true
         default:
-          - action: rest_command.shelly_integrazione_sblocco
+          - action: rest_command.shelly_integrazione_auto
             continue_on_error: true
 
   - id: caldaia_integrazione_valori_iniziali
@@ -117,3 +175,22 @@ automation:
         data: {value: 7}
       - action: input_boolean.turn_on
         target: {entity_id: input_boolean.caldaia_integrazione_defaults_impostati}
+
+  - id: caldaia_integrazione_valori_iniziali_v2
+    alias: Caldaia - soglie accensione forzata integrazione, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_integrazione_defaults_v2_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_integrazione_temp_max}
+        data: {value: 55}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_integrazione_isteresi_max}
+        data: {value: 2}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_integrazione_defaults_v2_impostati}

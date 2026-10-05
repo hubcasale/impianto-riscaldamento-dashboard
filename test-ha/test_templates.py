@@ -225,5 +225,34 @@ check("collettore non attivo con solo integrazione", bs(bin_col, "integrazione")
 check("integrazione: dato mancante mantiene lo stato (acceso)", bs(bin_int, "non_disponibile", "on"), "True")
 check("collettore: dato mancante mantiene lo stato (spento)", bs(bin_col, "non_disponibile", "off"), "False")
 
+
+# ---- blocco e accensione forzata della pompa di integrazione
+BLOCCO = yaml.safe_load(open("ha-packages/caldaia_integrazione_blocco.yaml"))
+inutile = find("binary_sensor", "Caldaia integrazione inutile", BLOCCO)["state"]
+forzare = find("binary_sensor", "Caldaia integrazione da forzare", BLOCCO)["state"]
+def inu(p, b, prima=None, **extra):
+    st = {"sensor.casale_temperatura_boiler": p, "sensor.boiler_solare_alto_stimato": b,
+          "input_number.caldaia_integrazione_delta_blocco": "4", "input_number.caldaia_integrazione_delta_sblocco": "7"}
+    st.update(extra)
+    return render(inutile, st, this_state=prima)
+def forz(p, b, inutile_state="off", prima=None, tmax="55", h="2"):
+    st = {"sensor.casale_temperatura_boiler": p, "sensor.boiler_solare_alto_stimato": b,
+          "binary_sensor.caldaia_integrazione_inutile": inutile_state,
+          "input_number.caldaia_integrazione_temp_max": tmax, "input_number.caldaia_integrazione_isteresi_max": h}
+    return render(forzare, st, this_state=prima)
+check("inutile: puffer appena sopra il boiler", inu("44", "43.2"), "True")
+check("inutile: puffer molto piu caldo", inu("60", "45"), "False")
+check("inutile: isteresi, resta inutile tra 4 e 7", inu("50", "45", "on"), "True")
+check("inutile: isteresi, resta utile tra 4 e 7", inu("50", "45", "off"), "False")
+check("inutile: sopra lo sblocco torna utile", inu("53", "45", "on"), "False")
+check("inutile: letture mancanti non blocca", inu("44", "unknown"), "False")
+check("forzare: puffer caldo e boiler sotto il massimo", forz("62", "45"), "True")
+check("forzare: boiler vicino al massimo non riparte", forz("70", "54", prima="off"), "False")
+check("forzare: boiler vicino al massimo continua se gia acceso", forz("70", "54", prima="on"), "True")
+check("forzare: boiler oltre il massimo si ferma", forz("70", "56", prima="on"), "False")
+check("forzare: pompa inutile non forza", forz("46", "45", inutile_state="on"), "False")
+check("forzare: regola non disponibile non forza", forz("62", "45", inutile_state="unavailable"), "False")
+check("forzare: puffer mancante non forza", forz("unknown", "45"), "False")
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

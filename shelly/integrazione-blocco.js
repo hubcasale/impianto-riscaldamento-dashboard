@@ -6,6 +6,10 @@
 //   - il relè segue l'ingresso SW, cioè la chiamata dell'Elios (come se la pompa fosse collegata direttamente);
 //   - se Home Assistant accende il booleano virtuale "Blocca integrazione", il relè resta aperto anche se l'Elios chiama;
 //   - il blocco scade DA SOLO: se Home Assistant o il Wi-Fi spariscono, la pompa torna a seguire l'Elios.
+//   - Home Assistant può anche ACCENDERE la pompa quando l'Elios non la chiama (il 1PM la alimenta dalla fase permanente
+//     del quadro): GET .../run la tiene accesa per HEARTBEAT_S secondi dall'ultima chiamata (si rinnova come il blocco);
+//     GET .../auto toglie blocco e accensione forzata: la pompa torna a seguire solo l'Elios.
+//     Il blocco ha sempre la precedenza sull'accensione forzata.
 //     Due modi di bloccare:
 //       a) segnale di presenza (usato da Home Assistant): GET http://<shelly>/script/<id>/block tiene il blocco per
 //          HEARTBEAT_S secondi; ogni chiamata rinnova la scadenza; GET .../unblock lo toglie subito.
@@ -25,6 +29,8 @@ let CFG = {
 };
 
 let heartbeatUntilMs = 0; // fino a quando vale il blocco dato dal segnale di presenza (uptime); 0 = nessuno
+
+let forceUntilMs = 0; // fino a quando vale l'accensione forzata da Home Assistant (uptime); 0 = nessuna
 
 let blockSinceMs = 0; // istante (uptime) in cui il blocco è stato visto acceso; 0 = non bloccato
 
@@ -49,11 +55,19 @@ function blockActive() {
   return true;
 }
 
+function forceActive() {
+  if (forceUntilMs > 0) {
+    if (Shelly.getUptimeMs() < forceUntilMs) return true;
+    forceUntilMs = 0;
+  }
+  return false;
+}
+
 function apply() {
   let inp = Shelly.getComponentStatus(CFG.INPUT);
   let sw = Shelly.getComponentStatus("switch:" + CFG.SWITCH_ID);
   if (!inp || !sw) return;
-  let want = inp.state === true && !blockActive();
+  let want = (inp.state === true || forceActive()) && !blockActive();
   if (sw.output !== want) {
     Shelly.call("Switch.Set", { id: CFG.SWITCH_ID, on: want });
   }
@@ -65,6 +79,7 @@ Shelly.addStatusHandler(function (e) {
 
 HTTPServer.registerEndpoint("block", function (req, res) {
   heartbeatUntilMs = Shelly.getUptimeMs() + CFG.HEARTBEAT_S * 1000;
+  forceUntilMs = 0;
   apply();
   res.code = 200;
   res.body = "blocked";
@@ -76,6 +91,24 @@ HTTPServer.registerEndpoint("unblock", function (req, res) {
   apply();
   res.code = 200;
   res.body = "unblocked";
+  res.send();
+});
+
+HTTPServer.registerEndpoint("run", function (req, res) {
+  forceUntilMs = Shelly.getUptimeMs() + CFG.HEARTBEAT_S * 1000;
+  heartbeatUntilMs = 0;
+  apply();
+  res.code = 200;
+  res.body = "run";
+  res.send();
+});
+
+HTTPServer.registerEndpoint("auto", function (req, res) {
+  forceUntilMs = 0;
+  heartbeatUntilMs = 0;
+  apply();
+  res.code = 200;
+  res.body = "auto";
   res.send();
 });
 
