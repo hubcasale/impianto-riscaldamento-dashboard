@@ -5,9 +5,16 @@
 # hanno un ritardo in accensione di 20 s e in spegnimento di 30 s.
 #
 # Sensore sorgente: sensor.garage_centralina_solare_pompe_potenza
+#
+# INTERRUTTORE GENERALE: input_boolean.centralina_pompe_misura_attiva. Spento (valore iniziale) la misura e' esclusa dalla logica:
+# stato e sensori "pompa attiva" risultano non disponibili e la scheda non mostra gli indicatori delle pompe.
+# Da riaccendere quando il misuratore di potenza e' di nuovo collegato.
 # Stato: sensor.caldaia_centralina_solare_pompe_stato = ferme | collettore | integrazione | entrambe | non_disponibile
 
 input_boolean:
+  centralina_pompe_misura_attiva:
+    name: Centralina solare - misura potenza pompe attiva
+    icon: mdi:flash
   caldaia_pompe_defaults_impostati:
     name: Caldaia - soglie pompe, valori iniziali impostati
     icon: mdi:check
@@ -40,6 +47,7 @@ template:
       - name: Caldaia centralina solare pompe stato
         unique_id: caldaia_centralina_solare_pompe_stato
         icon: mdi:pump
+        availability: "{{ is_state('input_boolean.centralina_pompe_misura_attiva', 'on') }}"
         state: >
           {% set w = states('sensor.garage_centralina_solare_pompe_potenza') %}
           {% if not is_number(w) %}non_disponibile
@@ -58,6 +66,7 @@ template:
         unique_id: caldaia_pompa_integrazione_attiva
         icon: mdi:pump
         device_class: running
+        availability: "{{ is_state('input_boolean.centralina_pompe_misura_attiva', 'on') }}"
         delay_on: "00:00:20"
         delay_off: "00:00:30"
         state: >
@@ -69,6 +78,7 @@ template:
         unique_id: caldaia_pompa_collettore_attiva
         icon: mdi:pump
         device_class: running
+        availability: "{{ is_state('input_boolean.centralina_pompe_misura_attiva', 'on') }}"
         delay_on: "00:00:20"
         delay_off: "00:00:30"
         state: >
