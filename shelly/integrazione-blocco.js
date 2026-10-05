@@ -1,4 +1,4 @@
-// Shelly 1PM Gen4 - pompa di integrazione dell'Elios (OUT2, pin 9 sull'ingresso SW, uscita O sulla pompa).
+// Shelly 1PM Gen4 - pompa di integrazione dell'Elios (OUT2, pin 8 (L, fase commutata) sull'ingresso SW, uscita O sulla pompa).
 //
 // BOZZA NON PROVATA SU UN DISPOSITIVO: provarla con calma, prima a vuoto (senza pompa collegata o con la pompa ferma).
 //

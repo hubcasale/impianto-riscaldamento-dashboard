@@ -4,7 +4,7 @@
 con scadenza di sicurezza. **Bozza non provata su un dispositivo.**
 
 ## Prova consigliata
-1. Installa lo script con la pompa scollegata (o con il solo carico di prova), ingresso collegato al pin 9 dell'Elios.
+1. Installa lo script con la pompa scollegata (o con il solo carico di prova), ingresso SW collegato al pin 8 dell'Elios (OUT2, L: fase commutata, in tensione solo quando l'Elios chiama la pompa).
 2. Forza OUT2 dall'Elios (modalità manuale): il relè deve chiudere; togli la richiesta: deve aprire.
 3. Con la richiesta attiva, accendi il booleano «Blocca integrazione»: il relè deve aprire; dopo `BLOCK_MAX_S` (600 s) deve
    richiudere da solo e il booleano tornare spento.
