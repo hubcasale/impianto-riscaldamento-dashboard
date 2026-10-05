@@ -5,8 +5,11 @@
 // Cosa fa:
 //   - il relè segue l'ingresso SW, cioè la chiamata dell'Elios (come se la pompa fosse collegata direttamente);
 //   - se Home Assistant accende il booleano virtuale "Blocca integrazione", il relè resta aperto anche se l'Elios chiama;
-//   - il blocco scade DA SOLO dopo BLOCK_MAX_S secondi: se Home Assistant o il Wi-Fi spariscono, la pompa torna a
-//     seguire l'Elios. Per tenerlo, Home Assistant lo riaccende quando vede che si è spento (vedi README).
+//   - il blocco scade DA SOLO: se Home Assistant o il Wi-Fi spariscono, la pompa torna a seguire l'Elios.
+//     Due modi di bloccare:
+//       a) segnale di presenza (usato da Home Assistant): GET http://<shelly>/script/<id>/block tiene il blocco per
+//          HEARTBEAT_S secondi; ogni chiamata rinnova la scadenza; GET .../unblock lo toglie subito.
+//       b) booleano virtuale a mano: scade dopo BLOCK_MAX_S secondi dal momento in cui lo script lo vede acceso.
 //
 // Impostazioni dello Shelly prima di avviare lo script:
 //   1. Ingresso (Input/Output): tipo "Interruttore", modalità "Detached" (l'ingresso non comanda direttamente il relè).
@@ -18,11 +21,18 @@ let CFG = {
   SWITCH_ID: 0,
   VIRTUAL_ID: 200,
   BLOCK_MAX_S: 600,
+  HEARTBEAT_S: 600,
 };
+
+let heartbeatUntilMs = 0; // fino a quando vale il blocco dato dal segnale di presenza (uptime); 0 = nessuno
 
 let blockSinceMs = 0; // istante (uptime) in cui il blocco è stato visto acceso; 0 = non bloccato
 
 function blockActive() {
+  if (heartbeatUntilMs > 0) {
+    if (Shelly.getUptimeMs() < heartbeatUntilMs) return true;
+    heartbeatUntilMs = 0;
+  }
   let v = Shelly.getComponentStatus("boolean:" + CFG.VIRTUAL_ID);
   if (!v || !v.value) {
     blockSinceMs = 0;
@@ -51,6 +61,22 @@ function apply() {
 
 Shelly.addStatusHandler(function (e) {
   if (e.component === CFG.INPUT || e.component === "boolean:" + CFG.VIRTUAL_ID) apply();
+});
+
+HTTPServer.registerEndpoint("block", function (req, res) {
+  heartbeatUntilMs = Shelly.getUptimeMs() + CFG.HEARTBEAT_S * 1000;
+  apply();
+  res.code = 200;
+  res.body = "blocked";
+  res.send();
+});
+
+HTTPServer.registerEndpoint("unblock", function (req, res) {
+  heartbeatUntilMs = 0;
+  apply();
+  res.code = 200;
+  res.body = "unblocked";
+  res.send();
 });
 
 // controllo periodico: fa scadere il blocco anche se non arriva nessun evento

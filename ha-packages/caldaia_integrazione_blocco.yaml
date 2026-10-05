@@ -1,9 +1,10 @@
 # Blocco della pompa di integrazione con lo Shelly 1PM (relè disgiunto).
 # L'Elios chiama la pompa quando il boiler solare e' freddo, senza controllare se il puffer della caldaia e' piu' caldo.
 # Se la pompa non serve (per esempio caldaia spenta e puffer freddo) Home Assistant tiene acceso il booleano virtuale
-# "Blocca integrazione" dello Shelly (id 200): il relè resta aperto anche se l'Elios chiama.
-# Lo script dello Shelly (shelly/integrazione-blocco.js) fa scadere il blocco da solo dopo 600 s: Home Assistant lo
-# riafferma ogni 5 minuti; se Home Assistant o il Wi-Fi spariscono la pompa torna a seguire l'Elios.
+# tiene il blocco sullo Shelly con un segnale di presenza (GET /script/1/block): il relè resta aperto anche se l'Elios chiama.
+# Lo script dello Shelly (shelly/integrazione-blocco.js) fa scadere il blocco da solo dopo 600 s dall'ultimo segnale:
+# Home Assistant lo rinnova ogni 5 minuti e lo toglie subito con /unblock; se Home Assistant o il Wi-Fi spariscono la
+# pompa torna a seguire l'Elios.
 #
 # Regola: puffer (sensor.casale_temperatura_boiler) meno boiler alto stimato (sensor.boiler_solare_alto_stimato).
 #   Inutile quando la differenza e' sotto "delta blocco" (4 C); torna utile sopra "delta sblocco" (7 C).
@@ -37,7 +38,11 @@ input_number:
 
 rest_command:
   shelly_integrazione_blocco:
-    url: "http://192.168.178.119/rpc/Boolean.Set?id=200&value={{ value }}"
+    url: "http://192.168.178.119/script/1/block"
+    method: get
+    timeout: 8
+  shelly_integrazione_sblocco:
+    url: "http://192.168.178.119/script/1/unblock"
     method: get
     timeout: 8
 
@@ -64,24 +69,35 @@ template:
 automation:
   - id: caldaia_integrazione_blocco
     alias: Caldaia - blocco pompa di integrazione (Shelly 1PM)
-    description: Tiene allineato il booleano di blocco dello Shelly 1PM alla regola; lo riafferma ogni 5 minuti (scade da solo dopo 10).
+    description: Tiene il blocco dello Shelly 1PM allineato alla regola; lo rinnova ogni 5 minuti (scade da solo 10 minuti dopo l'ultimo segnale).
     mode: restart
     triggers:
       - trigger: state
         entity_id:
           - binary_sensor.caldaia_integrazione_inutile
           - input_boolean.caldaia_integrazione_blocco_attivo
+        to:
+          - "on"
+          - "off"
       - trigger: time_pattern
         minutes: "/5"
       - trigger: homeassistant
         event: start
     actions:
-      - action: rest_command.shelly_integrazione_blocco
-        continue_on_error: true
-        data:
-          value: >-
-            {{ 'true' if is_state('input_boolean.caldaia_integrazione_blocco_attivo', 'on')
-               and is_state('binary_sensor.caldaia_integrazione_inutile', 'on') else 'false' }}
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.caldaia_integrazione_blocco_attivo
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.caldaia_integrazione_inutile
+                state: "on"
+            sequence:
+              - action: rest_command.shelly_integrazione_blocco
+                continue_on_error: true
+        default:
+          - action: rest_command.shelly_integrazione_sblocco
+            continue_on_error: true
 
   - id: caldaia_integrazione_valori_iniziali
     alias: Caldaia - soglie blocco integrazione, valori iniziali
