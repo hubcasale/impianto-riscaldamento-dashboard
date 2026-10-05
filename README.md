@@ -17,6 +17,10 @@ Funzionano sia su tema chiaro che scuro (usano i colori del tema di Home Assista
 > Gli screenshot vengono dal banco di prova (`dev/index.html`) con dati di esempio.
 > Il lunedì P1 e P3 si sovrappongono apposta, per mostrare l'avviso.
 
+## Preferenze dalla scheda dell'impianto
+
+Il pulsante a forma di ingranaggio in alto a destra sulla scheda dell'impianto apre una finestra con le impostazioni degli helper di Home Assistant: blocco automatico e accensione forzata della pompa di integrazione, le differenze di temperatura che decidono quando bloccare o sbloccare, la temperatura massima della testa del boiler con la sua isteresi, la salvaguardia delle accensioni e (ripiegata) la misura delle pompe con le sue soglie. Ogni modifica è attiva subito e resta anche dopo un riavvio. Le impostazioni i cui helper non esistono (pacchetto non installato) non compaiono. Per nascondere il pulsante: `settings: false` nella configurazione della scheda.
+
 ## Installazione
 
 ### HACS (repository personalizzato)

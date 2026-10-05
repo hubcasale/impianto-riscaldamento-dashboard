@@ -1,0 +1,181 @@
+// Logica pura della finestra delle preferenze: quali impostazioni mostrare e come cambiarle.
+// Nessuna dipendenza da Lit o da Home Assistant, così si prova con node:test.
+
+export type FieldKind = "toggle" | "number";
+
+export interface FieldDef {
+  kind: FieldKind;
+  entity: string;
+  label: string;
+  hint?: string;
+}
+
+export interface SectionDef {
+  title: string;
+  /** sezione ripiegata di partenza */
+  advanced?: boolean;
+  fields: FieldDef[];
+}
+
+export const SETTINGS_SECTIONS: SectionDef[] = [
+  {
+    title: "Pompa di integrazione",
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_integrazione_blocco_attivo",
+        label: "Blocco automatico",
+        hint: "Tiene ferma la pompa quando il puffer non è abbastanza più caldo del boiler.",
+      },
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_integrazione_forzatura_attiva",
+        label: "Accensione forzata",
+        hint: "Accende la pompa anche quando l'Elios non la chiama, finché il puffer ha calore da cedere.",
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_delta_blocco",
+        label: "Blocca se il puffer supera il boiler di meno di",
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_delta_sblocco",
+        label: "Sblocca quando il puffer supera il boiler di",
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_temp_max",
+        label: "Non scaldare la testa del boiler oltre",
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_isteresi_max",
+        label: "Isteresi su questa temperatura",
+      },
+    ],
+  },
+  {
+    title: "Salvaguardia accensioni",
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_salvaguardia_attiva",
+        label: "Evita partenze inutili",
+        hint: "Annulla l'avvio della caldaia quando il puffer è già caldo.",
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_salvaguardia_t_puffer",
+        label: "Partenza inutile se il puffer è già sopra",
+      },
+    ],
+  },
+  {
+    title: "Misura delle pompe",
+    advanced: true,
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.centralina_pompe_misura_attiva",
+        label: "Misura della potenza attiva",
+        hint: "Spenta se il misuratore è scollegato: gli indicatori delle pompe spariscono.",
+      },
+      { kind: "number", entity: "input_number.centralina_pompe_w_ferme", label: "Pompe ferme sotto" },
+      { kind: "number", entity: "input_number.centralina_pompe_w_collettore_max", label: "Solo collettore fino a" },
+      { kind: "number", entity: "input_number.centralina_pompe_w_entrambe_min", label: "Entrambe le pompe da" },
+      { kind: "number", entity: "input_number.centralina_pompa_integrazione_w_min", label: "Integrazione accesa sopra (Shelly 1PM)" },
+    ],
+  },
+];
+
+export interface StateLike {
+  state: string;
+  attributes: Record<string, unknown>;
+}
+
+export interface RowView {
+  kind: FieldKind;
+  entity: string;
+  label: string;
+  hint?: string;
+  /** toggle: acceso */
+  on: boolean;
+  /** number: valore corrente (null se non numerico) */
+  value: number | null;
+  unit: string;
+  min: number;
+  max: number;
+  step: number;
+  /** l'entità c'è ma non risponde */
+  unavailable: boolean;
+}
+
+export interface SectionView {
+  title: string;
+  advanced: boolean;
+  rows: RowView[];
+}
+
+function num(v: unknown, fallback: number): number {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * Costruisce la vista: le impostazioni la cui entità non esiste vengono nascoste (pacchetto non installato),
+ * le sezioni senza righe spariscono.
+ */
+export function buildSettingsView(states: Record<string, StateLike | undefined>, sections: SectionDef[] = SETTINGS_SECTIONS): SectionView[] {
+  const out: SectionView[] = [];
+  for (const sec of sections) {
+    const rows: RowView[] = [];
+    for (const f of sec.fields) {
+      const st = states[f.entity];
+      if (!st) continue;
+      const unavailable = st.state === "unavailable" || st.state === "unknown";
+      const value = f.kind === "number" && !unavailable && Number.isFinite(Number(st.state)) ? Number(st.state) : null;
+      rows.push({
+        kind: f.kind,
+        entity: f.entity,
+        label: f.label,
+        hint: f.hint,
+        on: st.state === "on",
+        value,
+        unit: String(st.attributes.unit_of_measurement ?? ""),
+        min: num(st.attributes.min, 0),
+        max: num(st.attributes.max, 100),
+        step: num(st.attributes.step, 1) || 1,
+        unavailable,
+      });
+    }
+    if (rows.length) out.push({ title: sec.title, advanced: !!sec.advanced, rows });
+  }
+  return out;
+}
+
+function decimals(step: number): number {
+  const s = String(step);
+  const i = s.indexOf(".");
+  return i < 0 ? 0 : s.length - i - 1;
+}
+
+/** Porta il valore sulla griglia del passo (a partire da min), dentro min..max, senza errori di arrotondamento. */
+export function clampValue(v: number, min: number, max: number, step: number): number {
+  const snapped = min + Math.round((v - min) / step) * step;
+  const c = Math.min(max, Math.max(min, snapped));
+  return Number(c.toFixed(decimals(step)));
+}
+
+/** Un passo avanti (+1) o indietro (-1), restando nei limiti. */
+export function stepValue(value: number | null, dir: 1 | -1, min: number, max: number, step: number): number {
+  const base = value ?? min;
+  return clampValue(base + dir * step, min, max, step);
+}
+
+/** Testo del valore con unità, per la riga. */
+export function valueText(row: Pick<RowView, "value" | "unit" | "step">): string {
+  if (row.value === null) return "–";
+  const d = decimals(row.step);
+  return `${row.value.toFixed(d)}${row.unit ? ` ${row.unit}` : ""}`;
+}

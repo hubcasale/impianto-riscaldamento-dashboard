@@ -1,6 +1,8 @@
 import { LitElement, html, css, svg, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
+import type { ImpiantoSettingsDialog } from "./settings-dialog";
+import "./settings-dialog";
 import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type StoveLook } from "./plant-logic";
 
 const CARD_TAG = "impianto-overview-card";
@@ -114,6 +116,8 @@ type NumOrEntity = number | string;
 export interface PlantCardConfig {
   type: string;
   title?: string;
+  /** false per nascondere il pulsante delle preferenze */
+  settings?: boolean;
   /** "auto" (predefinito): compatta sugli schermi bassi (tablet); true/false per forzare */
   compact?: boolean | "auto";
   entities?: Partial<PlantEntities>;
@@ -169,6 +173,7 @@ export class ImpiantoOverviewCard extends LitElement {
   private _onResize = () => this._updateCompact();
   private _armTimer?: number;
   private _ro?: ResizeObserver;
+  private _dialog?: ImpiantoSettingsDialog;
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -191,8 +196,27 @@ export class ImpiantoOverviewCard extends LitElement {
     if (compact !== this._compact) this._compact = compact;
   }
 
+  /** Apre la finestra delle preferenze (si aggiunge alla pagina, non sta dentro la scheda). */
+  private _openSettings(): void {
+    if (this._dialog) return;
+    const d = document.createElement("impianto-settings-dialog") as ImpiantoSettingsDialog;
+    d.hass = this.hass;
+    d.addEventListener("closed", () => {
+      this._dialog = undefined;
+    });
+    document.body.appendChild(d);
+    this._dialog = d;
+  }
+
+  protected updated(changed: Map<string, unknown>): void {
+    // la finestra aperta segue gli stati di Home Assistant (interruttori e numeri si aggiornano subito)
+    if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
+  }
+
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    this._dialog?.remove();
+    this._dialog = undefined;
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
@@ -553,6 +577,11 @@ export class ImpiantoOverviewCard extends LitElement {
     if (!this._config || !this.hass) return nothing;
     return html`
       <ha-card>
+        ${this._config.settings === false
+          ? nothing
+          : html`<button class="gear" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
+              <ha-icon icon="mdi:cog-outline"></ha-icon>
+            </button>`}
         ${this._config.title ? html`<div class="ctitle">${this._config.title}</div>` : nothing}
         <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()} ${this._renderStove()}</div>
       </ha-card>
@@ -566,6 +595,27 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     ha-card {
       padding: 12px;
+      color: var(--primary-text-color);
+      position: relative;
+    }
+    .gear {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 2;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: var(--secondary-text-color);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .gear:hover {
+      background: var(--secondary-background-color);
       color: var(--primary-text-color);
     }
     .ctitle {

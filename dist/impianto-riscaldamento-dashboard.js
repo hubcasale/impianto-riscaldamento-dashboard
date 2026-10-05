@@ -594,6 +594,444 @@ function r5(r6) {
   return n4({ ...r6, state: true, attribute: false });
 }
 
+// src/settings-logic.ts
+var SETTINGS_SECTIONS = [
+  {
+    title: "Pompa di integrazione",
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_integrazione_blocco_attivo",
+        label: "Blocco automatico",
+        hint: "Tiene ferma la pompa quando il puffer non \xE8 abbastanza pi\xF9 caldo del boiler."
+      },
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_integrazione_forzatura_attiva",
+        label: "Accensione forzata",
+        hint: "Accende la pompa anche quando l'Elios non la chiama, finch\xE9 il puffer ha calore da cedere."
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_delta_blocco",
+        label: "Blocca se il puffer supera il boiler di meno di"
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_delta_sblocco",
+        label: "Sblocca quando il puffer supera il boiler di"
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_temp_max",
+        label: "Non scaldare la testa del boiler oltre"
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_isteresi_max",
+        label: "Isteresi su questa temperatura"
+      }
+    ]
+  },
+  {
+    title: "Salvaguardia accensioni",
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_salvaguardia_attiva",
+        label: "Evita partenze inutili",
+        hint: "Annulla l'avvio della caldaia quando il puffer \xE8 gi\xE0 caldo."
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_salvaguardia_t_puffer",
+        label: "Partenza inutile se il puffer \xE8 gi\xE0 sopra"
+      }
+    ]
+  },
+  {
+    title: "Misura delle pompe",
+    advanced: true,
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.centralina_pompe_misura_attiva",
+        label: "Misura della potenza attiva",
+        hint: "Spenta se il misuratore \xE8 scollegato: gli indicatori delle pompe spariscono."
+      },
+      { kind: "number", entity: "input_number.centralina_pompe_w_ferme", label: "Pompe ferme sotto" },
+      { kind: "number", entity: "input_number.centralina_pompe_w_collettore_max", label: "Solo collettore fino a" },
+      { kind: "number", entity: "input_number.centralina_pompe_w_entrambe_min", label: "Entrambe le pompe da" },
+      { kind: "number", entity: "input_number.centralina_pompa_integrazione_w_min", label: "Integrazione accesa sopra (Shelly 1PM)" }
+    ]
+  }
+];
+function num(v2, fallback) {
+  const n5 = typeof v2 === "number" ? v2 : Number(v2);
+  return Number.isFinite(n5) ? n5 : fallback;
+}
+function buildSettingsView(states, sections = SETTINGS_SECTIONS) {
+  const out = [];
+  for (const sec of sections) {
+    const rows = [];
+    for (const f3 of sec.fields) {
+      const st = states[f3.entity];
+      if (!st) continue;
+      const unavailable = st.state === "unavailable" || st.state === "unknown";
+      const value = f3.kind === "number" && !unavailable && Number.isFinite(Number(st.state)) ? Number(st.state) : null;
+      rows.push({
+        kind: f3.kind,
+        entity: f3.entity,
+        label: f3.label,
+        hint: f3.hint,
+        on: st.state === "on",
+        value,
+        unit: String(st.attributes.unit_of_measurement ?? ""),
+        min: num(st.attributes.min, 0),
+        max: num(st.attributes.max, 100),
+        step: num(st.attributes.step, 1) || 1,
+        unavailable
+      });
+    }
+    if (rows.length) out.push({ title: sec.title, advanced: !!sec.advanced, rows });
+  }
+  return out;
+}
+function decimals(step) {
+  const s4 = String(step);
+  const i5 = s4.indexOf(".");
+  return i5 < 0 ? 0 : s4.length - i5 - 1;
+}
+function clampValue(v2, min, max, step) {
+  const snapped = min + Math.round((v2 - min) / step) * step;
+  const c4 = Math.min(max, Math.max(min, snapped));
+  return Number(c4.toFixed(decimals(step)));
+}
+function stepValue(value, dir, min, max, step) {
+  const base = value ?? min;
+  return clampValue(base + dir * step, min, max, step);
+}
+
+// src/settings-dialog.ts
+var TAG = "impianto-settings-dialog";
+var ImpiantoSettingsDialog = class extends i4 {
+  constructor() {
+    super(...arguments);
+    this._open = /* @__PURE__ */ new Set();
+    this._error = "";
+    this._onKey = (e5) => {
+      if (e5.key === "Escape") this._close();
+    };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("keydown", this._onKey);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener("keydown", this._onKey);
+  }
+  _close() {
+    this.dispatchEvent(new CustomEvent("closed"));
+    this.remove();
+  }
+  async _call(domain, service, data) {
+    try {
+      this._error = "";
+      await this.hass.callService(domain, service, data);
+    } catch (err) {
+      this._error = `Impossibile salvare: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+  _toggle(row) {
+    void this._call("input_boolean", row.on ? "turn_off" : "turn_on", { entity_id: row.entity });
+  }
+  _setNumber(row, value) {
+    void this._call("input_number", "set_value", { entity_id: row.entity, value });
+  }
+  _step(row, dir) {
+    this._setNumber(row, stepValue(row.value, dir, row.min, row.max, row.step));
+  }
+  _typed(row, ev) {
+    const raw = ev.target.value.replace(",", ".");
+    const n5 = Number(raw);
+    if (raw.trim() === "" || !Number.isFinite(n5)) {
+      ev.target.value = row.value === null ? "" : String(row.value);
+      return;
+    }
+    this._setNumber(row, clampValue(n5, row.min, row.max, row.step));
+  }
+  _toggleSection(title) {
+    const next = new Set(this._open);
+    if (next.has(title)) next.delete(title);
+    else next.add(title);
+    this._open = next;
+  }
+  _renderRow(row) {
+    if (row.kind === "toggle") {
+      return b2`
+        <div class="row tog">
+          <div class="txt">
+            <div class="lab">${row.label}</div>
+            ${row.hint ? b2`<div class="hint">${row.hint}</div>` : A}
+          </div>
+          <button
+            class=${row.on ? "sw on" : "sw"}
+            role="switch"
+            aria-checked=${row.on ? "true" : "false"}
+            aria-label=${row.label}
+            ?disabled=${row.unavailable}
+            @click=${() => this._toggle(row)}
+          ><span class="knob"></span></button>
+        </div>
+      `;
+    }
+    return b2`
+      <div class="row">
+        <div class="txt"><div class="lab">${row.label}</div></div>
+        <div class="num">
+          <button class="st" aria-label="Diminuisci" ?disabled=${row.unavailable || row.value !== null && row.value <= row.min} @click=${() => this._step(row, -1)}>−</button>
+          <input
+            type="text"
+            inputmode="decimal"
+            .value=${row.value === null ? "" : String(row.value)}
+            ?disabled=${row.unavailable}
+            aria-label=${row.label}
+            @change=${(e5) => this._typed(row, e5)}
+          />
+          <span class="unit">${row.unit}</span>
+          <button class="st" aria-label="Aumenta" ?disabled=${row.unavailable || row.value !== null && row.value >= row.max} @click=${() => this._step(row, 1)}>+</button>
+        </div>
+      </div>
+    `;
+  }
+  render() {
+    if (!this.hass) return A;
+    const sections = buildSettingsView(this.hass.states);
+    return b2`
+      <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
+        <div class="panel" role="dialog" aria-modal="true" aria-label="Preferenze impianto">
+          <div class="head">
+            <div class="title">Preferenze impianto</div>
+            <button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button>
+          </div>
+          <div class="body">
+            ${sections.length === 0 ? b2`<div class="empty">Nessuna impostazione trovata: installa i pacchetti Home Assistant del progetto (cartella ha-packages).</div>` : sections.map((sec) => {
+      const open = !sec.advanced || this._open.has(sec.title);
+      return b2`
+                    <section>
+                      ${sec.advanced ? b2`<button class="sec adv" aria-expanded=${open ? "true" : "false"} @click=${() => this._toggleSection(sec.title)}>
+                            <span>${sec.title}</span><span class="chev">${open ? "\u25BE" : "\u25B8"}</span>
+                          </button>` : b2`<div class="sec">${sec.title}</div>`}
+                      ${open ? sec.rows.map((r6) => this._renderRow(r6)) : A}
+                    </section>
+                  `;
+    })}
+            ${this._error ? b2`<div class="err">${this._error}</div>` : A}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  static {
+    this.styles = i`
+    :host {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      color: var(--primary-text-color, #212121);
+      font-family: var(--paper-font-body1_-_font-family, Roboto, Helvetica, Arial, sans-serif);
+    }
+    .backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .panel {
+      background: var(--card-background-color, #fff);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 560px;
+      max-height: min(86vh, 760px);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+    }
+    .title {
+      font-size: 19px;
+      font-weight: 700;
+    }
+    .x {
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+    .x:hover {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.15));
+    }
+    .body {
+      overflow-y: auto;
+      padding: 4px 18px 18px;
+    }
+    section {
+      margin-top: 14px;
+    }
+    .sec {
+      font-size: 12.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--primary-color, #03a9f4);
+      margin: 0 0 4px;
+    }
+    .sec.adv {
+      background: none;
+      border: none;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      cursor: pointer;
+      padding: 4px 0;
+      font-family: inherit;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.2));
+    }
+    .txt {
+      min-width: 0;
+      flex: 1;
+    }
+    .lab {
+      font-size: 15px;
+    }
+    .hint {
+      font-size: 12.5px;
+      color: var(--secondary-text-color, #727272);
+      margin-top: 2px;
+    }
+    .sw {
+      flex: none;
+      width: 46px;
+      height: 26px;
+      border-radius: 13px;
+      border: none;
+      padding: 0;
+      background: var(--disabled-text-color, #9e9e9e);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .sw.on {
+      background: var(--primary-color, #03a9f4);
+    }
+    .sw .knob {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.15s;
+    }
+    .sw.on .knob {
+      transform: translateX(20px);
+    }
+    .sw:disabled,
+    .st:disabled,
+    input:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .num {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .st {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      color: inherit;
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+    }
+    input {
+      width: 64px;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 6px 4px;
+      border-radius: 8px;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      background: var(--card-background-color, #fff);
+      color: inherit;
+      box-sizing: border-box;
+    }
+    .unit {
+      min-width: 22px;
+      font-size: 13px;
+      color: var(--secondary-text-color, #727272);
+    }
+    .empty,
+    .err {
+      margin-top: 16px;
+      font-size: 14px;
+    }
+    .err {
+      color: var(--error-color, #db4437);
+    }
+    @media (max-width: 480px) {
+      .row:not(.tog) {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .num {
+        justify-content: flex-end;
+      }
+    }
+  `;
+  }
+};
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoSettingsDialog.prototype, "hass", 2);
+__decorateClass([
+  r5()
+], ImpiantoSettingsDialog.prototype, "_open", 2);
+__decorateClass([
+  r5()
+], ImpiantoSettingsDialog.prototype, "_error", 2);
+if (!customElements.get(TAG)) customElements.define(TAG, ImpiantoSettingsDialog);
+
 // src/plant-logic.ts
 var DEFAULT_MODEL = {
   volume: 190,
@@ -655,9 +1093,9 @@ function tempColor(t3) {
   }
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
-function fmt(n5, decimals = 0) {
+function fmt(n5, decimals2 = 0) {
   if (n5 === null || n5 === void 0 || Number.isNaN(n5)) return "\u2013";
-  return n5.toLocaleString("it-IT", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return n5.toLocaleString("it-IT", { minimumFractionDigits: decimals2, maximumFractionDigits: decimals2 });
 }
 function toNumber(state) {
   if (state === void 0 || state === null || state === "" || state === "unknown" || state === "unavailable") return null;
@@ -802,8 +1240,24 @@ var ImpiantoOverviewCard = class extends i4 {
     const compact = opt === true || opt === "auto" && this._width >= 900 && window.innerHeight < 850;
     if (compact !== this._compact) this._compact = compact;
   }
+  /** Apre la finestra delle preferenze (si aggiunge alla pagina, non sta dentro la scheda). */
+  _openSettings() {
+    if (this._dialog) return;
+    const d3 = document.createElement("impianto-settings-dialog");
+    d3.hass = this.hass;
+    d3.addEventListener("closed", () => {
+      this._dialog = void 0;
+    });
+    document.body.appendChild(d3);
+    this._dialog = d3;
+  }
+  updated(changed) {
+    if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
+  }
   disconnectedCallback() {
     super.disconnectedCallback();
+    this._dialog?.remove();
+    this._dialog = void 0;
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
@@ -1128,6 +1582,9 @@ var ImpiantoOverviewCard = class extends i4 {
     if (!this._config || !this.hass) return A;
     return b2`
       <ha-card>
+        ${this._config.settings === false ? A : b2`<button class="gear" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
+              <ha-icon icon="mdi:cog-outline"></ha-icon>
+            </button>`}
         ${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}
         <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()} ${this._renderStove()}</div>
       </ha-card>
@@ -1141,6 +1598,27 @@ var ImpiantoOverviewCard = class extends i4 {
     }
     ha-card {
       padding: 12px;
+      color: var(--primary-text-color);
+      position: relative;
+    }
+    .gear {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 2;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: var(--secondary-text-color);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .gear:hover {
+      background: var(--secondary-background-color);
       color: var(--primary-text-color);
     }
     .ctitle {
@@ -2595,7 +3073,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.4";
+var VERSION = "0.3.5";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

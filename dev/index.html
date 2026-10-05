@@ -107,6 +107,20 @@ const pel = q.get("pellet") || "ok";
 set("binary_sensor.casale_riserva_legna", pel === "riserva" ? "on" : "off");
 set("binary_sensor.casale_pellet_empty", pel === "vuoto" ? "on" : "off");
 set("binary_sensor.casale_pellet_hopper_open", pel === "aperto" ? "on" : "off");
+// preferenze (finestra aperta con ?impostazioni=1)
+const nb = (id, v, extra = {}) => set(id, v, { min: 0, max: 100, step: 1, ...extra });
+set("input_boolean.caldaia_integrazione_blocco_attivo", "on");
+set("input_boolean.caldaia_integrazione_forzatura_attiva", "off");
+nb("input_number.caldaia_integrazione_delta_blocco", 4, { min: 0, max: 15, step: 0.5, unit_of_measurement: "°C" });
+nb("input_number.caldaia_integrazione_delta_sblocco", 7, { min: 1, max: 20, step: 0.5, unit_of_measurement: "°C" });
+nb("input_number.caldaia_integrazione_temp_max", 60, { min: 40, max: 70, step: 1, unit_of_measurement: "°C" });
+nb("input_number.caldaia_integrazione_isteresi_max", 2, { min: 0.5, max: 10, step: 0.5, unit_of_measurement: "°C" });
+set("input_boolean.centralina_pompe_misura_attiva", "on");
+nb("input_number.centralina_pompe_w_ferme", 15, { min: 0, max: 40, step: 0.5, unit_of_measurement: "W" });
+nb("input_number.centralina_pompe_w_collettore_max", 42, { min: 10, max: 60, step: 0.5, unit_of_measurement: "W" });
+nb("input_number.centralina_pompe_w_entrambe_min", 65, { min: 30, max: 120, step: 0.5, unit_of_measurement: "W" });
+nb("input_number.centralina_pompa_integrazione_w_min", 20, { min: 1, max: 100, step: 1, unit_of_measurement: "W" });
+nb("input_number.caldaia_salvaguardia_t_puffer", 40, { min: 30, max: 70, step: 1, unit_of_measurement: "°C" });
 // salvaguardia (?salvaguardia=off)
 set("input_boolean.caldaia_salvaguardia_attiva", q.get("salvaguardia") === "off" ? "off" : "on");
 set("input_boolean.caldaia_salvaguardia_ha_spento", "off");
@@ -137,6 +151,18 @@ const hass = {
     log.textContent += `${domain}.${service} ${JSON.stringify(data)}\n`;
     log.scrollTop = log.scrollHeight;
     await new Promise((r) => setTimeout(r, 250));
+    if (domain === "input_boolean" && (service === "turn_on" || service === "turn_off")) {
+      S[data.entity_id].state = service === "turn_on" ? "on" : "off";
+      hass.states = { ...S };
+      push();
+      return;
+    }
+    if (domain === "input_number" && service === "set_value") {
+      S[data.entity_id].state = String(data.value);
+      hass.states = { ...S };
+      push();
+      return;
+    }
     if (domain === "input_boolean" && service === "toggle") {
       const e = S[data.entity_id];
       e.state = e.state === "on" ? "off" : "on";
@@ -177,6 +203,7 @@ for (const [tag, cfg] of [
   cards.push(el);
 }
 push();
+if (q.get("impostazioni")) setTimeout(() => cards[0]._openSettings(), 200);
 
 document.getElementById("t").onclick = () => document.body.classList.toggle("chiaro") | document.body.classList.toggle("scuro");
 document.getElementById("stato").value = q.get("stato") || "WORK";
