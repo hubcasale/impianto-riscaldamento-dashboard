@@ -117,3 +117,15 @@ test("attesa di conferma: gli interruttori non sono toccati", () => {
   assert.equal(r.sections[0].rows[0].saving, undefined);
   assert.deepEqual(r.settled, []);
 });
+
+test("preferenze: sezione del consumo di pellet, ripiegata e con i decimali del passo", () => {
+  const v = buildSettingsView({
+    "input_number.caldaia_pellet_fattore": st("1.0", { min: 0.5, max: 2, step: 0.01 }),
+    "input_number.caldaia_pellet_kg_h_max": st("5.5", { min: 1, max: 10, step: 0.1, unit_of_measurement: "kg/h" }),
+  });
+  assert.equal(v[0].title, "Consumo di pellet (stima)");
+  assert.equal(v[0].advanced, true);
+  assert.deepEqual(v[0].rows.map((r) => r.entity), ["input_number.caldaia_pellet_kg_h_max", "input_number.caldaia_pellet_fattore"]);
+  assert.equal(stepValue(1, 1, 0.5, 2, 0.01), 1.01);
+  assert.equal(valueText(v[0].rows[0]), "5.5 kg/h");
+});

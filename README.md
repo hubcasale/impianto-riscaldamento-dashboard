@@ -17,6 +17,18 @@ Funzionano sia su tema chiaro che scuro (usano i colori del tema di Home Assista
 > Gli screenshot vengono dal banco di prova (`dev/index.html`) con dati di esempio.
 > Il lunedì P1 e P3 si sovrappongono apposta, per mostrare l'avviso.
 
+## Stima del consumo di pellet
+
+`ha-packages/caldaia_pellet.yaml` stima i chili di pellet bruciati e la scheda li mostra sotto i contatori di oggi (oggi, settimana, mese). È una **stima** da calibrare: la caldaia non comunica i chili. Il modello usa lo stato e la potenza reale:
+- **WORK:** consumo a potenza 100 % (5,5 kg/h di partenza) x potenza reale (30 % al minimo, 100 % al massimo);
+- **STAND BY e STOP:** consumo di mantenimento (0,2 kg/h di partenza);
+- **ogni accensione** (ingresso in START): 200 g di partenza;
+- ECO STOP, OFF e WAIT: nessun consumo.
+
+Per tarare: dividi i chili di pellet realmente consumati in un periodo (sacchi aperti e finiti) per la stima dello stesso periodo e inserisci il risultato come fattore di taratura nelle preferenze (sezione «Consumo di pellet», ripiegata). Entità: `sensor.caldaia_pellet_oggi`, `_settimana`, `_mese` (si azzerano da sole), `sensor.caldaia_pellet_stimato_totale`, `sensor.caldaia_pellet_consumo_istantaneo` (kg/h).
+
+Sui dati dal 2 al 6 ottobre 2026 il modello dà circa 2-6 kg al giorno, con poche ore in lavoro e molte accensioni.
+
 ## Preferenze dalla scheda dell'impianto
 
 Il pulsante a forma di ingranaggio in alto a destra sulla scheda dell'impianto apre una finestra con le impostazioni degli helper di Home Assistant: blocco automatico e accensione forzata della pompa di integrazione, le differenze di temperatura che decidono quando bloccare o sbloccare, la temperatura massima della testa del boiler con la sua isteresi, la temperatura dell'acqua della caldaia (`climate.casale_acqua`) e il setpoint del puffer da 50 litri (`number.casale_setpoint_boiler`), la salvaguardia delle accensioni e (ripiegata) la misura delle pompe con le sue soglie. Ogni modifica è attiva subito e resta anche dopo un riavvio. Le impostazioni i cui helper non esistono (pacchetto non installato) non compaiono. Per nascondere il pulsante: `settings: false` nella configurazione della scheda.

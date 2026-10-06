@@ -254,5 +254,33 @@ check("forzare: pompa inutile non forza", forz("46", "45", inutile_state="on"), 
 check("forzare: regola non disponibile non forza", forz("62", "45", inutile_state="unavailable"), "False")
 check("forzare: puffer mancante non forza", forz("unknown", "45"), "False")
 
+
+# ---- consumo di pellet (stima)
+PELLET = yaml.safe_load(open("ha-packages/caldaia_pellet.yaml"))
+rate_tpl = find("sensor", "Caldaia pellet consumo istantaneo", PELLET)["state"]
+acc_tpl = PELLET["template"][1]["sensor"][0]["state"]
+tot_tpl = find("sensor", "Caldaia pellet stimato totale", PELLET)["state"]
+def rate(stato, pot="100", fattore="1", kgh="5.5", mant="0.2"):
+    return render(rate_tpl, {"sensor.casale_stato": stato, "sensor.casale_potenza_reale": pot,
+                             "input_number.caldaia_pellet_fattore": fattore, "input_number.caldaia_pellet_kg_h_max": kgh,
+                             "input_number.caldaia_pellet_kg_h_mantenimento": mant})
+check("pellet: WORK al 100 %", float(rate("WORK")), 5.5)
+check("pellet: WORK al 30 %", float(rate("WORK", "30")), 1.65)
+check("pellet: WORK con fattore di taratura", float(rate("WORK", "100", "1.1")), 6.05)
+check("pellet: potenza non valida vale 100 %", float(rate("WORK", "32768")), 5.5)
+check("pellet: potenza non disponibile vale 100 %", float(rate("WORK", "unavailable")), 5.5)
+check("pellet: STAND BY mantenimento", float(rate("STAND BY")), 0.2)
+check("pellet: STOP mantenimento", float(rate("STOP")), 0.2)
+for st_ in ("ECO STOP", "OFF", "WAIT", "START", "unavailable"):
+    check(f"pellet: {st_} nessun consumo", float(rate(st_)), 0.0)
+def acc(prima, g="200", f="1"):
+    return render(acc_tpl, {"input_number.caldaia_pellet_g_accensione": g, "input_number.caldaia_pellet_fattore": f}, this_state=prima)
+check("pellet: prima accensione (stato sconosciuto)", float(acc("unknown")), 0.2)
+check("pellet: seconda accensione si somma", float(acc("0.2")), 0.4)
+check("pellet: accensione con fattore", float(acc("1.0", "150", "1.2")), 1.18)
+tot = lambda c, a: render(tot_tpl, {"sensor.caldaia_pellet_consumato_combustione": c, "sensor.caldaia_pellet_accensioni": a})
+check("pellet: totale = combustione + accensioni", float(tot("3.5", "0.4")), 3.9)
+check("pellet: totale senza accensioni ancora registrate", float(tot("3.5", "unknown")), 3.5)
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

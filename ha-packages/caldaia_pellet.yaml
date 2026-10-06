@@ -1,0 +1,141 @@
+# Stima del consumo di pellet (giornaliero, settimanale, mensile) dalla caldaia Polygon.
+# E' una STIMA da calibrare, non una misura: la caldaia non dice quanti chili brucia. Il modello:
+#   - WORK: consumo a potenza 100 % x potenza reale (30 % al minimo, 100 % al massimo) x fattore di taratura
+#   - STAND BY e STOP: consumo di mantenimento (brace accesa, estrattore) x fattore
+#   - ogni accensione (ingresso in START): grammi fissi x fattore
+#   - ECO STOP, OFF, WAIT: nessun consumo
+# Valori di partenza: 5,5 kg/h a 100 % (25 kW / 4,8 kWh/kg / 0,95), 0,2 kg/h di mantenimento, 200 g per accensione.
+# Taratura: peso dei sacchi consumati nel periodo diviso per la stima = nuovo fattore (input_number.caldaia_pellet_fattore).
+#
+# Entita': sensor.caldaia_pellet_consumo_istantaneo (kg/h), sensor.caldaia_pellet_stimato_totale (kg, cumulativo),
+# sensor.caldaia_pellet_oggi / _settimana / _mese (kg, si azzerano da soli).
+
+input_boolean:
+  caldaia_pellet_defaults_impostati:
+    name: Pellet - valori iniziali impostati
+    icon: mdi:check
+
+input_number:
+  caldaia_pellet_kg_h_max:
+    name: Pellet - consumo a potenza 100 %
+    min: 1
+    max: 10
+    step: 0.1
+    unit_of_measurement: kg/h
+    mode: box
+  caldaia_pellet_kg_h_mantenimento:
+    name: Pellet - consumo in stand-by e spegnimento
+    min: 0
+    max: 1
+    step: 0.05
+    unit_of_measurement: kg/h
+    mode: box
+  caldaia_pellet_g_accensione:
+    name: Pellet - consumo per accensione
+    min: 0
+    max: 500
+    step: 10
+    unit_of_measurement: g
+    mode: box
+  caldaia_pellet_fattore:
+    name: Pellet - fattore di taratura
+    min: 0.5
+    max: 2
+    step: 0.01
+    mode: box
+
+template:
+  - sensor:
+      - name: Caldaia pellet consumo istantaneo
+        unique_id: caldaia_pellet_consumo_istantaneo
+        unit_of_measurement: kg/h
+        state_class: measurement
+        icon: mdi:grain
+        state: >
+          {% set s = states('sensor.casale_stato') %}
+          {% set f = states('input_number.caldaia_pellet_fattore') | float(1) %}
+          {% if s == 'WORK' %}
+            {% set p = states('sensor.casale_potenza_reale') | float(100) %}
+            {% set p = p if 0 < p <= 100 else 100 %}
+            {{ (states('input_number.caldaia_pellet_kg_h_max') | float(5.5) * p / 100 * f) | round(3) }}
+          {% elif s in ['STAND BY', 'STOP'] %}
+            {{ (states('input_number.caldaia_pellet_kg_h_mantenimento') | float(0.2) * f) | round(3) }}
+          {% else %}0{% endif %}
+
+      - name: Caldaia pellet stimato totale
+        unique_id: caldaia_pellet_stimato_totale
+        unit_of_measurement: kg
+        device_class: weight
+        state_class: total_increasing
+        icon: mdi:grain
+        availability: "{{ is_number(states('sensor.caldaia_pellet_consumato_combustione')) }}"
+        state: >
+          {{ (states('sensor.caldaia_pellet_consumato_combustione') | float(0)
+              + states('sensor.caldaia_pellet_accensioni') | float(0)) | round(2) }}
+
+  # un contributo fisso a ogni accensione (la fase START carica il braciere)
+  - trigger:
+      - trigger: state
+        entity_id: sensor.casale_stato
+        to: "START"
+    sensor:
+      - name: Caldaia pellet accensioni
+        unique_id: caldaia_pellet_accensioni
+        unit_of_measurement: kg
+        device_class: weight
+        state_class: total_increasing
+        icon: mdi:fire
+        state: >
+          {% set cur = this.state | float(0) if this.state not in ['unknown', 'unavailable', 'none', none] else 0 %}
+          {{ (cur + states('input_number.caldaia_pellet_g_accensione') | float(200) / 1000
+                    * states('input_number.caldaia_pellet_fattore') | float(1)) | round(3) }}
+
+sensor:
+  - platform: integration
+    source: sensor.caldaia_pellet_consumo_istantaneo
+    name: Caldaia pellet consumato combustione
+    unique_id: caldaia_pellet_consumato_combustione
+    unit_time: h
+    method: left
+    round: 3
+    max_sub_interval: "00:05:00"
+
+utility_meter:
+  caldaia_pellet_giorno:
+    source: sensor.caldaia_pellet_stimato_totale
+    name: Caldaia pellet oggi
+    cycle: daily
+  caldaia_pellet_settimana:
+    source: sensor.caldaia_pellet_stimato_totale
+    name: Caldaia pellet settimana
+    cycle: weekly
+  caldaia_pellet_mese:
+    source: sensor.caldaia_pellet_stimato_totale
+    name: Caldaia pellet mese
+    cycle: monthly
+
+automation:
+  - id: caldaia_pellet_valori_iniziali
+    alias: Caldaia - consumo pellet, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_pellet_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_pellet_kg_h_max}
+        data: {value: 5.5}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_pellet_kg_h_mantenimento}
+        data: {value: 0.2}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_pellet_g_accensione}
+        data: {value: 200}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_pellet_fattore}
+        data: {value: 1}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_pellet_defaults_impostati}

@@ -667,6 +667,30 @@ var SETTINGS_SECTIONS = [
     ]
   },
   {
+    title: "Consumo di pellet (stima)",
+    advanced: true,
+    fields: [
+      {
+        kind: "number",
+        entity: "input_number.caldaia_pellet_kg_h_max",
+        label: "Consumo a potenza 100 %",
+        hint: "Chili all'ora quando la caldaia lavora al massimo."
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_pellet_kg_h_mantenimento",
+        label: "Consumo in stand-by e spegnimento"
+      },
+      { kind: "number", entity: "input_number.caldaia_pellet_g_accensione", label: "Consumo per accensione" },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_pellet_fattore",
+        label: "Fattore di taratura",
+        hint: "Pellet realmente consumato diviso la stima: 1,10 = la stima \xE8 bassa del 10 %."
+      }
+    ]
+  },
+  {
     title: "Misura delle pompe",
     advanced: true,
     fields: [
@@ -1267,7 +1291,10 @@ var DEFAULT_ENTITIES = {
   integration_call: "binary_sensor.garage_bs_pompa_integrazione_ingresso_0",
   integration_block_enabled: "input_boolean.caldaia_integrazione_blocco_attivo",
   integration_block_wanted: "binary_sensor.caldaia_integrazione_inutile",
-  collector_power: "sensor.garage_centralina_solare_pompe_potenza"
+  collector_power: "sensor.garage_centralina_solare_pompe_potenza",
+  pellet_today: "sensor.caldaia_pellet_oggi",
+  pellet_week: "sensor.caldaia_pellet_settimana",
+  pellet_month: "sensor.caldaia_pellet_mese"
 };
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
@@ -1593,6 +1620,22 @@ var ImpiantoOverviewCard = class extends i4 {
       </button>
     `;
   }
+  /** Stima del consumo di pellet: oggi, settimana, mese. Non compare se i sensori non esistono. */
+  _renderPelletUse() {
+    const e5 = this._e;
+    const known = [e5.pellet_today, e5.pellet_week, e5.pellet_month].some((id) => this.hass.states[id]);
+    if (!known) return A;
+    return b2`
+      <div class="counters" title="Stima dal modello di consumo: si tara con il fattore nelle preferenze">
+        <span class="tl">Pellet (stima)</span>
+        <div>
+          <b>${fmt(this._n(e5.pellet_today), 1)} kg oggi</b>
+          <b>${fmt(this._n(e5.pellet_week), 1)} kg settimana</b>
+          <b>${fmt(this._n(e5.pellet_month), 0)} kg mese</b>
+        </div>
+      </div>
+    `;
+  }
   _renderStove() {
     const e5 = this._e;
     const stateRaw = this._s(e5.stove_state);
@@ -1648,6 +1691,7 @@ var ImpiantoOverviewCard = class extends i4 {
             <b>${fmt(this._n(e5.standby_today), 0)} stand-by</b>
           </div>
         </div>
+        ${this._renderPelletUse()}
         <div class="chips">
           ${this._chip("Richiesta ACS", this._yes(e5.request_acs))} ${this._chip("Riscaldamento", this._yes(e5.request_heating))}
           ${this._chip("Consenso suggerito", this._yes(e5.consent))}
@@ -3152,7 +3196,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.7";
+var VERSION = "0.3.8";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

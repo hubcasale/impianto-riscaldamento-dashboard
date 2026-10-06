@@ -90,6 +90,30 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
     ],
   },
   {
+    title: "Consumo di pellet (stima)",
+    advanced: true,
+    fields: [
+      {
+        kind: "number",
+        entity: "input_number.caldaia_pellet_kg_h_max",
+        label: "Consumo a potenza 100 %",
+        hint: "Chili all'ora quando la caldaia lavora al massimo.",
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_pellet_kg_h_mantenimento",
+        label: "Consumo in stand-by e spegnimento",
+      },
+      { kind: "number", entity: "input_number.caldaia_pellet_g_accensione", label: "Consumo per accensione" },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_pellet_fattore",
+        label: "Fattore di taratura",
+        hint: "Pellet realmente consumato diviso la stima: 1,10 = la stima è bassa del 10 %.",
+      },
+    ],
+  },
+  {
     title: "Misura delle pompe",
     advanced: true,
     fields: [

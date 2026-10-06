@@ -107,6 +107,10 @@ const pel = q.get("pellet") || "ok";
 set("binary_sensor.casale_riserva_legna", pel === "riserva" ? "on" : "off");
 set("binary_sensor.casale_pellet_empty", pel === "vuoto" ? "on" : "off");
 set("binary_sensor.casale_pellet_hopper_open", pel === "aperto" ? "on" : "off");
+// consumo di pellet (stima)
+set("sensor.caldaia_pellet_oggi", 12.4, { unit_of_measurement: "kg" });
+set("sensor.caldaia_pellet_settimana", 63.8, { unit_of_measurement: "kg" });
+set("sensor.caldaia_pellet_mese", 211, { unit_of_measurement: "kg" });
 // preferenze (finestra aperta con ?impostazioni=1)
 const nb = (id, v, extra = {}) => set(id, v, { min: 0, max: 100, step: 1, ...extra });
 set("input_boolean.caldaia_integrazione_blocco_attivo", "on");
@@ -120,6 +124,10 @@ nb("input_number.centralina_pompe_w_ferme", 15, { min: 0, max: 40, step: 0.5, un
 nb("input_number.centralina_pompe_w_collettore_max", 42, { min: 10, max: 60, step: 0.5, unit_of_measurement: "W" });
 nb("input_number.centralina_pompe_w_entrambe_min", 65, { min: 30, max: 120, step: 0.5, unit_of_measurement: "W" });
 nb("input_number.centralina_pompa_integrazione_w_min", 20, { min: 1, max: 100, step: 1, unit_of_measurement: "W" });
+nb("input_number.caldaia_pellet_kg_h_max", 5.5, { min: 1, max: 10, step: 0.1, unit_of_measurement: "kg/h" });
+nb("input_number.caldaia_pellet_kg_h_mantenimento", 0.2, { min: 0, max: 1, step: 0.05, unit_of_measurement: "kg/h" });
+nb("input_number.caldaia_pellet_g_accensione", 200, { min: 0, max: 500, step: 10, unit_of_measurement: "g" });
+nb("input_number.caldaia_pellet_fattore", 1, { min: 0.5, max: 2, step: 0.01 });
 nb("input_number.caldaia_salvaguardia_t_puffer", 40, { min: 30, max: 70, step: 1, unit_of_measurement: "°C" });
 // salvaguardia (?salvaguardia=off)
 set("input_boolean.caldaia_salvaguardia_attiva", q.get("salvaguardia") === "off" ? "off" : "on");

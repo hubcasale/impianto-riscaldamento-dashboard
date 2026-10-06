@@ -65,6 +65,10 @@ export interface PlantEntities {
   integration_block_wanted: string;
   /** potenza (W) letta sull'alimentazione dell'Elios: con la pompa del collettore in marcia circa 32 W */
   collector_power: string;
+  /** stima del consumo di pellet (kg) di oggi, della settimana e del mese */
+  pellet_today: string;
+  pellet_week: string;
+  pellet_month: string;
 }
 
 export const DEFAULT_ENTITIES: PlantEntities = {
@@ -108,6 +112,9 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   integration_block_enabled: "input_boolean.caldaia_integrazione_blocco_attivo",
   integration_block_wanted: "binary_sensor.caldaia_integrazione_inutile",
   collector_power: "sensor.garage_centralina_solare_pompe_potenza",
+  pellet_today: "sensor.caldaia_pellet_oggi",
+  pellet_week: "sensor.caldaia_pellet_settimana",
+  pellet_month: "sensor.caldaia_pellet_mese",
 };
 
 /** Un numero oppure l'id di un'entità numerica. */
@@ -507,6 +514,23 @@ export class ImpiantoOverviewCard extends LitElement {
     `;
   }
 
+  /** Stima del consumo di pellet: oggi, settimana, mese. Non compare se i sensori non esistono. */
+  private _renderPelletUse() {
+    const e = this._e;
+    const known = [e.pellet_today, e.pellet_week, e.pellet_month].some((id) => this.hass.states[id]);
+    if (!known) return nothing;
+    return html`
+      <div class="counters" title="Stima dal modello di consumo: si tara con il fattore nelle preferenze">
+        <span class="tl">Pellet (stima)</span>
+        <div>
+          <b>${fmt(this._n(e.pellet_today), 1)} kg oggi</b>
+          <b>${fmt(this._n(e.pellet_week), 1)} kg settimana</b>
+          <b>${fmt(this._n(e.pellet_month), 0)} kg mese</b>
+        </div>
+      </div>
+    `;
+  }
+
   private _renderStove() {
     const e = this._e;
     const stateRaw = this._s(e.stove_state);
@@ -563,6 +587,7 @@ export class ImpiantoOverviewCard extends LitElement {
             <b>${fmt(this._n(e.standby_today), 0)} stand-by</b>
           </div>
         </div>
+        ${this._renderPelletUse()}
         <div class="chips">
           ${this._chip("Richiesta ACS", this._yes(e.request_acs))} ${this._chip("Riscaldamento", this._yes(e.request_heating))}
           ${this._chip("Consenso suggerito", this._yes(e.consent))}
