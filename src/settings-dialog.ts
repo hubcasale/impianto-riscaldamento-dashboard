@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
-import { buildSettingsView, clampValue, stepValue, writeService, type RowView } from "./settings-logic";
+import { PENDING_MS, applyPending, buildSettingsView, clampValue, stepValue, writeService, type PendingMap, type RowView } from "./settings-logic";
 
 const TAG = "impianto-settings-dialog";
 
@@ -14,6 +14,9 @@ export class ImpiantoSettingsDialog extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @state() private _open = new Set<string>();
   @state() private _error = "";
+  private _pending: PendingMap = {};
+  private _timers = new Map<string, number>();
+  private _expiry?: number;
   private _onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") this._close();
   };
@@ -26,6 +29,9 @@ export class ImpiantoSettingsDialog extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("keydown", this._onKey);
+    for (const t of this._timers.values()) window.clearTimeout(t);
+    this._timers.clear();
+    if (this._expiry) window.clearTimeout(this._expiry);
   }
 
   private _close(): void {
@@ -46,9 +52,27 @@ export class ImpiantoSettingsDialog extends LitElement {
     void this._call("input_boolean", row.on ? "turn_off" : "turn_on", { entity_id: row.entity });
   }
 
+  /**
+   * Il valore scelto si vede subito; la scrittura parte dopo una breve pausa, così più pressioni di + o − diventano
+   * una sola richiesta (la caldaia conferma via cloud dopo parecchi secondi).
+   */
   private _setNumber(row: RowView, value: number): void {
-    const w = writeService(row, value);
-    void this._call(w.domain, w.service, w.data);
+    this._pending[row.entity] = { value, until: Date.now() + PENDING_MS };
+    this.requestUpdate();
+    if (this._expiry) window.clearTimeout(this._expiry);
+    this._expiry = window.setTimeout(() => this.requestUpdate(), PENDING_MS + 100);
+    const old = this._timers.get(row.entity);
+    if (old) window.clearTimeout(old);
+    this._timers.set(
+      row.entity,
+      window.setTimeout(() => {
+        this._timers.delete(row.entity);
+        const w = writeService(row, this._pending[row.entity]?.value ?? value);
+        void this._call(w.domain, w.service, w.data).then(() => {
+          if (this._error) delete this._pending[row.entity];
+        });
+      }, 600),
+    );
   }
 
   private _step(row: RowView, dir: 1 | -1): void {
@@ -102,6 +126,7 @@ export class ImpiantoSettingsDialog extends LitElement {
           <input
             type="text"
             inputmode="decimal"
+            class=${row.saving ? "saving" : ""}
             .value=${row.value === null ? "" : String(row.value)}
             ?disabled=${row.unavailable}
             aria-label=${row.label}
@@ -116,7 +141,9 @@ export class ImpiantoSettingsDialog extends LitElement {
 
   render() {
     if (!this.hass) return nothing;
-    const sections = buildSettingsView(this.hass.states);
+    const built = applyPending(buildSettingsView(this.hass.states), this._pending, Date.now());
+    for (const e of built.settled) delete this._pending[e];
+    const sections = built.sections;
     return html`
       <div class="backdrop" @click=${(e: Event) => e.target === e.currentTarget && this._close()}>
         <div class="panel" role="dialog" aria-modal="true" aria-label="Preferenze impianto">
@@ -307,6 +334,10 @@ export class ImpiantoSettingsDialog extends LitElement {
       background: var(--card-background-color, #fff);
       color: inherit;
       box-sizing: border-box;
+    }
+    input.saving {
+      border-color: var(--primary-color, #03a9f4);
+      font-style: italic;
     }
     .unit {
       min-width: 22px;

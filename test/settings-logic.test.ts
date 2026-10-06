@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildSettingsView, clampValue, stepValue, valueText, writeService } from "../src/settings-logic";
+import { applyPending, buildSettingsView, clampValue, stepValue, valueText, writeService } from "../src/settings-logic";
 
 const st = (state: string, attributes: Record<string, unknown> = {}) => ({ state, attributes });
 
@@ -91,4 +91,29 @@ test("servizio di scrittura per dominio", () => {
   assert.deepEqual(writeService({ domain: "climate", entity: "climate.casale_acqua" }, 66), { domain: "climate", service: "set_temperature", data: { entity_id: "climate.casale_acqua", temperature: 66 } });
   assert.deepEqual(writeService({ domain: "number", entity: "number.casale_setpoint_boiler" }, 50), { domain: "number", service: "set_value", data: { entity_id: "number.casale_setpoint_boiler", value: 50 } });
   assert.deepEqual(writeService({ domain: "input_number", entity: "input_number.x" }, 3), { domain: "input_number", service: "set_value", data: { entity_id: "input_number.x", value: 3 } });
+});
+
+test("attesa di conferma: mostra il valore scelto finché la caldaia non risponde", () => {
+  const v = buildSettingsView({ "number.casale_setpoint_boiler": st("45", { min: 45, max: 70, step: 1 }) });
+  const r = applyPending(v, { "number.casale_setpoint_boiler": { value: 47, until: 1000 } }, 500);
+  assert.equal(r.sections[0].rows[0].value, 47);
+  assert.equal(r.sections[0].rows[0].saving, true);
+  assert.deepEqual(r.settled, []);
+});
+
+test("attesa di conferma: finita quando il valore reale coincide o scade", () => {
+  const v = buildSettingsView({ "number.casale_setpoint_boiler": st("47", { min: 45, max: 70, step: 1 }) });
+  const conferma = applyPending(v, { "number.casale_setpoint_boiler": { value: 47, until: 1000 } }, 500);
+  assert.deepEqual(conferma.settled, ["number.casale_setpoint_boiler"]);
+  assert.equal(conferma.sections[0].rows[0].saving, undefined);
+  const scaduta = applyPending(v, { "number.casale_setpoint_boiler": { value: 50, until: 1000 } }, 1500);
+  assert.deepEqual(scaduta.settled, ["number.casale_setpoint_boiler"]);
+  assert.equal(scaduta.sections[0].rows[0].value, 47);
+});
+
+test("attesa di conferma: gli interruttori non sono toccati", () => {
+  const v = buildSettingsView({ "input_boolean.caldaia_integrazione_blocco_attivo": st("on") });
+  const r = applyPending(v, { "input_boolean.caldaia_integrazione_blocco_attivo": { value: 1, until: 1000 } }, 500);
+  assert.equal(r.sections[0].rows[0].saving, undefined);
+  assert.deepEqual(r.settled, []);
 });

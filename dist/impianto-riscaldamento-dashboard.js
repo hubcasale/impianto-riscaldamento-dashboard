@@ -739,6 +739,23 @@ function writeService(row, value) {
   if (row.domain === "number") return { domain: "number", service: "set_value", data: { entity_id: row.entity, value } };
   return { domain: "input_number", service: "set_value", data: { entity_id: row.entity, value } };
 }
+var PENDING_MS = 3e4;
+function applyPending(sections, pending, now) {
+  const settled = [];
+  const out = sections.map((sec) => ({
+    ...sec,
+    rows: sec.rows.map((row) => {
+      const p3 = pending[row.entity];
+      if (!p3 || row.kind === "toggle") return row;
+      if (now >= p3.until || row.value === p3.value) {
+        settled.push(row.entity);
+        return row;
+      }
+      return { ...row, value: p3.value, saving: true };
+    })
+  }));
+  return { sections: out, settled };
+}
 
 // src/settings-dialog.ts
 var TAG = "impianto-settings-dialog";
@@ -747,6 +764,8 @@ var ImpiantoSettingsDialog = class extends i4 {
     super(...arguments);
     this._open = /* @__PURE__ */ new Set();
     this._error = "";
+    this._pending = {};
+    this._timers = /* @__PURE__ */ new Map();
     this._onKey = (e5) => {
       if (e5.key === "Escape") this._close();
     };
@@ -758,6 +777,9 @@ var ImpiantoSettingsDialog = class extends i4 {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("keydown", this._onKey);
+    for (const t3 of this._timers.values()) window.clearTimeout(t3);
+    this._timers.clear();
+    if (this._expiry) window.clearTimeout(this._expiry);
   }
   _close() {
     this.dispatchEvent(new CustomEvent("closed"));
@@ -774,9 +796,27 @@ var ImpiantoSettingsDialog = class extends i4 {
   _toggle(row) {
     void this._call("input_boolean", row.on ? "turn_off" : "turn_on", { entity_id: row.entity });
   }
+  /**
+   * Il valore scelto si vede subito; la scrittura parte dopo una breve pausa, così più pressioni di + o − diventano
+   * una sola richiesta (la caldaia conferma via cloud dopo parecchi secondi).
+   */
   _setNumber(row, value) {
-    const w2 = writeService(row, value);
-    void this._call(w2.domain, w2.service, w2.data);
+    this._pending[row.entity] = { value, until: Date.now() + PENDING_MS };
+    this.requestUpdate();
+    if (this._expiry) window.clearTimeout(this._expiry);
+    this._expiry = window.setTimeout(() => this.requestUpdate(), PENDING_MS + 100);
+    const old = this._timers.get(row.entity);
+    if (old) window.clearTimeout(old);
+    this._timers.set(
+      row.entity,
+      window.setTimeout(() => {
+        this._timers.delete(row.entity);
+        const w2 = writeService(row, this._pending[row.entity]?.value ?? value);
+        void this._call(w2.domain, w2.service, w2.data).then(() => {
+          if (this._error) delete this._pending[row.entity];
+        });
+      }, 600)
+    );
   }
   _step(row, dir) {
     this._setNumber(row, stepValue(row.value, dir, row.min, row.max, row.step));
@@ -826,6 +866,7 @@ var ImpiantoSettingsDialog = class extends i4 {
           <input
             type="text"
             inputmode="decimal"
+            class=${row.saving ? "saving" : ""}
             .value=${row.value === null ? "" : String(row.value)}
             ?disabled=${row.unavailable}
             aria-label=${row.label}
@@ -839,7 +880,9 @@ var ImpiantoSettingsDialog = class extends i4 {
   }
   render() {
     if (!this.hass) return A;
-    const sections = buildSettingsView(this.hass.states);
+    const built = applyPending(buildSettingsView(this.hass.states), this._pending, Date.now());
+    for (const e5 of built.settled) delete this._pending[e5];
+    const sections = built.sections;
     return b2`
       <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
         <div class="panel" role="dialog" aria-modal="true" aria-label="Preferenze impianto">
@@ -1026,6 +1069,10 @@ var ImpiantoSettingsDialog = class extends i4 {
       background: var(--card-background-color, #fff);
       color: inherit;
       box-sizing: border-box;
+    }
+    input.saving {
+      border-color: var(--primary-color, #03a9f4);
+      font-style: italic;
     }
     .unit {
       min-width: 22px;
@@ -3105,7 +3152,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.6";
+var VERSION = "0.3.7";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

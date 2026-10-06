@@ -129,6 +129,8 @@ export interface RowView {
   step: number;
   /** l'entità c'è ma non risponde */
   unavailable: boolean;
+  /** il valore mostrato è quello appena scelto, la caldaia non l'ha ancora confermato */
+  saving?: boolean;
 }
 
 export interface SectionView {
@@ -211,4 +213,32 @@ export function writeService(row: Pick<RowView, "domain" | "entity">, value: num
   if (row.domain === "climate") return { domain: "climate", service: "set_temperature", data: { entity_id: row.entity, temperature: value } };
   if (row.domain === "number") return { domain: "number", service: "set_value", data: { entity_id: row.entity, value } };
   return { domain: "input_number", service: "set_value", data: { entity_id: row.entity, value } };
+}
+
+/** Valori appena scelti e non ancora confermati dall'impianto (la caldaia risponde via cloud dopo parecchi secondi). */
+export type PendingMap = Record<string, { value: number; until: number }>;
+
+/** Dopo quanto un valore non confermato viene scartato e si torna a mostrare quello reale. */
+export const PENDING_MS = 30000;
+
+/**
+ * Sovrappone alle righe i valori in attesa di conferma, così l'interfaccia risponde subito e premendo
+ * più volte + si parte dal valore già scelto. `settled` elenca le entità da togliere dall'attesa
+ * (confermate o scadute).
+ */
+export function applyPending(sections: SectionView[], pending: PendingMap, now: number): { sections: SectionView[]; settled: string[] } {
+  const settled: string[] = [];
+  const out = sections.map((sec) => ({
+    ...sec,
+    rows: sec.rows.map((row) => {
+      const p = pending[row.entity];
+      if (!p || row.kind === "toggle") return row;
+      if (now >= p.until || row.value === p.value) {
+        settled.push(row.entity);
+        return row;
+      }
+      return { ...row, value: p.value, saving: true };
+    }),
+  }));
+  return { sections: out, settled };
 }
