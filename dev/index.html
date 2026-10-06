@@ -81,8 +81,8 @@ set("sensor.casale_pressione_braciere", 0.9);
 set("sensor.casale_estrattore_fumi", 0);
 set("sensor.casale_pompa_acqua", "OFF");
 set("sensor.casale_allarme", "____");
-set("number.casale_setpoint_boiler", 45);
-set("climate.casale_acqua", "heat", { temperature: 65 });
+set("number.casale_setpoint_boiler", 45, { min: 45, max: 70, step: 1, unit_of_measurement: "°C" });
+set("climate.casale_acqua", "heat", { temperature: 65, min_temp: 50, max_temp: 75, target_temp_step: 1 });
 set("sensor.caldaia_accensioni_oggi", 6);
 set("sensor.caldaia_accensioni_ieri", 7);
 set("sensor.caldaia_stand_by_oggi", 0);
@@ -153,6 +153,18 @@ const hass = {
     await new Promise((r) => setTimeout(r, 250));
     if (domain === "input_boolean" && (service === "turn_on" || service === "turn_off")) {
       S[data.entity_id].state = service === "turn_on" ? "on" : "off";
+      hass.states = { ...S };
+      push();
+      return;
+    }
+    if (domain === "climate" && service === "set_temperature") {
+      S[data.entity_id].attributes = { ...S[data.entity_id].attributes, temperature: data.temperature };
+      hass.states = { ...S };
+      push();
+      return;
+    }
+    if (domain === "number" && service === "set_value") {
+      S[data.entity_id].state = String(data.value);
       hass.states = { ...S };
       push();
       return;

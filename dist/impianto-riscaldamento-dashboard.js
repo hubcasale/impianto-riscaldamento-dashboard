@@ -634,6 +634,23 @@ var SETTINGS_SECTIONS = [
     ]
   },
   {
+    title: "Caldaia a pellet (Polygon)",
+    fields: [
+      {
+        kind: "climate",
+        entity: "climate.casale_acqua",
+        label: "Temperatura dell'acqua della caldaia",
+        hint: "Setpoint dell'acqua di riscaldamento. I programmi della scheda di programmazione hanno i loro valori."
+      },
+      {
+        kind: "number",
+        entity: "number.casale_setpoint_boiler",
+        label: "Setpoint del puffer da 50 litri",
+        hint: "Setpoint boiler della Polygon (consenso per l'acqua calda sanitaria)."
+      }
+    ]
+  },
+  {
     title: "Salvaguardia accensioni",
     fields: [
       {
@@ -678,18 +695,24 @@ function buildSettingsView(states, sections = SETTINGS_SECTIONS) {
       const st = states[f3.entity];
       if (!st) continue;
       const unavailable = st.state === "unavailable" || st.state === "unknown";
-      const value = f3.kind === "number" && !unavailable && Number.isFinite(Number(st.state)) ? Number(st.state) : null;
+      const isClimate = f3.kind === "climate";
+      let value = null;
+      if (f3.kind === "number" && !unavailable && Number.isFinite(Number(st.state))) value = Number(st.state);
+      if (isClimate && !unavailable && st.attributes.temperature !== null && st.attributes.temperature !== void 0 && Number.isFinite(Number(st.attributes.temperature))) {
+        value = Number(st.attributes.temperature);
+      }
       rows.push({
         kind: f3.kind,
         entity: f3.entity,
+        domain: f3.entity.split(".")[0],
         label: f3.label,
         hint: f3.hint,
         on: st.state === "on",
         value,
-        unit: String(st.attributes.unit_of_measurement ?? ""),
-        min: num(st.attributes.min, 0),
-        max: num(st.attributes.max, 100),
-        step: num(st.attributes.step, 1) || 1,
+        unit: isClimate ? "\xB0C" : String(st.attributes.unit_of_measurement ?? ""),
+        min: isClimate ? num(st.attributes.min_temp, 30) : num(st.attributes.min, 0),
+        max: isClimate ? num(st.attributes.max_temp, 90) : num(st.attributes.max, 100),
+        step: (isClimate ? num(st.attributes.target_temp_step, 1) : num(st.attributes.step, 1)) || 1,
         unavailable
       });
     }
@@ -710,6 +733,11 @@ function clampValue(v2, min, max, step) {
 function stepValue(value, dir, min, max, step) {
   const base = value ?? min;
   return clampValue(base + dir * step, min, max, step);
+}
+function writeService(row, value) {
+  if (row.domain === "climate") return { domain: "climate", service: "set_temperature", data: { entity_id: row.entity, temperature: value } };
+  if (row.domain === "number") return { domain: "number", service: "set_value", data: { entity_id: row.entity, value } };
+  return { domain: "input_number", service: "set_value", data: { entity_id: row.entity, value } };
 }
 
 // src/settings-dialog.ts
@@ -747,7 +775,8 @@ var ImpiantoSettingsDialog = class extends i4 {
     void this._call("input_boolean", row.on ? "turn_off" : "turn_on", { entity_id: row.entity });
   }
   _setNumber(row, value) {
-    void this._call("input_number", "set_value", { entity_id: row.entity, value });
+    const w2 = writeService(row, value);
+    void this._call(w2.domain, w2.service, w2.data);
   }
   _step(row, dir) {
     this._setNumber(row, stepValue(row.value, dir, row.min, row.max, row.step));
@@ -788,7 +817,10 @@ var ImpiantoSettingsDialog = class extends i4 {
     }
     return b2`
       <div class="row">
-        <div class="txt"><div class="lab">${row.label}</div></div>
+        <div class="txt">
+          <div class="lab">${row.label}</div>
+          ${row.hint ? b2`<div class="hint">${row.hint}</div>` : A}
+        </div>
         <div class="num">
           <button class="st" aria-label="Diminuisci" ?disabled=${row.unavailable || row.value !== null && row.value <= row.min} @click=${() => this._step(row, -1)}>−</button>
           <input
@@ -3073,7 +3105,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.5";
+var VERSION = "0.3.6";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

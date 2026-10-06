@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
-import { buildSettingsView, clampValue, stepValue, type RowView } from "./settings-logic";
+import { buildSettingsView, clampValue, stepValue, writeService, type RowView } from "./settings-logic";
 
 const TAG = "impianto-settings-dialog";
 
@@ -47,7 +47,8 @@ export class ImpiantoSettingsDialog extends LitElement {
   }
 
   private _setNumber(row: RowView, value: number): void {
-    void this._call("input_number", "set_value", { entity_id: row.entity, value });
+    const w = writeService(row, value);
+    void this._call(w.domain, w.service, w.data);
   }
 
   private _step(row: RowView, dir: 1 | -1): void {
@@ -92,7 +93,10 @@ export class ImpiantoSettingsDialog extends LitElement {
     }
     return html`
       <div class="row">
-        <div class="txt"><div class="lab">${row.label}</div></div>
+        <div class="txt">
+          <div class="lab">${row.label}</div>
+          ${row.hint ? html`<div class="hint">${row.hint}</div>` : nothing}
+        </div>
         <div class="num">
           <button class="st" aria-label="Diminuisci" ?disabled=${row.unavailable || (row.value !== null && row.value <= row.min)} @click=${() => this._step(row, -1)}>−</button>
           <input

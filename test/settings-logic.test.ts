@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildSettingsView, clampValue, stepValue, valueText } from "../src/settings-logic";
+import { buildSettingsView, clampValue, stepValue, valueText, writeService } from "../src/settings-logic";
 
 const st = (state: string, attributes: Record<string, unknown> = {}) => ({ state, attributes });
 
@@ -61,4 +61,34 @@ test("testo del valore", () => {
   assert.equal(valueText({ value: 4, unit: "°C", step: 0.5 }), "4.0 °C");
   assert.equal(valueText({ value: 55, unit: "°C", step: 1 }), "55 °C");
   assert.equal(valueText({ value: null, unit: "W", step: 1 }), "–");
+});
+
+test("caldaia: temperatura dell'acqua dal termostato e setpoint del puffer", () => {
+  const v = buildSettingsView({
+    "climate.casale_acqua": st("heat", { temperature: 65, min_temp: 50, max_temp: 75, target_temp_step: 1 }),
+    "number.casale_setpoint_boiler": st("45", { min: 45, max: 70, step: 1, unit_of_measurement: "°C" }),
+  });
+  assert.equal(v.length, 1);
+  assert.equal(v[0].title, "Caldaia a pellet (Polygon)");
+  const [acqua, puffer] = v[0].rows;
+  assert.equal(acqua.domain, "climate");
+  assert.equal(acqua.value, 65);
+  assert.equal(acqua.min, 50);
+  assert.equal(acqua.max, 75);
+  assert.equal(acqua.unit, "°C");
+  assert.equal(puffer.domain, "number");
+  assert.equal(puffer.value, 45);
+  assert.equal(puffer.min, 45);
+});
+
+test("caldaia: termostato senza temperatura obiettivo", () => {
+  const v = buildSettingsView({ "climate.casale_acqua": st("off", { temperature: null }) });
+  assert.equal(v[0].rows[0].value, null);
+  assert.equal(v[0].rows[0].unavailable, false);
+});
+
+test("servizio di scrittura per dominio", () => {
+  assert.deepEqual(writeService({ domain: "climate", entity: "climate.casale_acqua" }, 66), { domain: "climate", service: "set_temperature", data: { entity_id: "climate.casale_acqua", temperature: 66 } });
+  assert.deepEqual(writeService({ domain: "number", entity: "number.casale_setpoint_boiler" }, 50), { domain: "number", service: "set_value", data: { entity_id: "number.casale_setpoint_boiler", value: 50 } });
+  assert.deepEqual(writeService({ domain: "input_number", entity: "input_number.x" }, 3), { domain: "input_number", service: "set_value", data: { entity_id: "input_number.x", value: 3 } });
 });

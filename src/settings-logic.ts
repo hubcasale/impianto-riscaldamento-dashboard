@@ -1,7 +1,8 @@
 // Logica pura della finestra delle preferenze: quali impostazioni mostrare e come cambiarle.
 // Nessuna dipendenza da Lit o da Home Assistant, così si prova con node:test.
 
-export type FieldKind = "toggle" | "number";
+/** number: input_number o number; climate: temperatura obiettivo di un termostato (climate.set_temperature) */
+export type FieldKind = "toggle" | "number" | "climate";
 
 export interface FieldDef {
   kind: FieldKind;
@@ -56,6 +57,23 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
     ],
   },
   {
+    title: "Caldaia a pellet (Polygon)",
+    fields: [
+      {
+        kind: "climate",
+        entity: "climate.casale_acqua",
+        label: "Temperatura dell'acqua della caldaia",
+        hint: "Setpoint dell'acqua di riscaldamento. I programmi della scheda di programmazione hanno i loro valori.",
+      },
+      {
+        kind: "number",
+        entity: "number.casale_setpoint_boiler",
+        label: "Setpoint del puffer da 50 litri",
+        hint: "Setpoint boiler della Polygon (consenso per l'acqua calda sanitaria).",
+      },
+    ],
+  },
+  {
     title: "Salvaguardia accensioni",
     fields: [
       {
@@ -97,6 +115,8 @@ export interface StateLike {
 export interface RowView {
   kind: FieldKind;
   entity: string;
+  /** dominio dell'entità (input_number, number, climate, input_boolean) */
+  domain: string;
   label: string;
   hint?: string;
   /** toggle: acceso */
@@ -134,18 +154,24 @@ export function buildSettingsView(states: Record<string, StateLike | undefined>,
       const st = states[f.entity];
       if (!st) continue;
       const unavailable = st.state === "unavailable" || st.state === "unknown";
-      const value = f.kind === "number" && !unavailable && Number.isFinite(Number(st.state)) ? Number(st.state) : null;
+      const isClimate = f.kind === "climate";
+      let value: number | null = null;
+      if (f.kind === "number" && !unavailable && Number.isFinite(Number(st.state))) value = Number(st.state);
+      if (isClimate && !unavailable && st.attributes.temperature !== null && st.attributes.temperature !== undefined && Number.isFinite(Number(st.attributes.temperature))) {
+        value = Number(st.attributes.temperature);
+      }
       rows.push({
         kind: f.kind,
         entity: f.entity,
+        domain: f.entity.split(".")[0],
         label: f.label,
         hint: f.hint,
         on: st.state === "on",
         value,
-        unit: String(st.attributes.unit_of_measurement ?? ""),
-        min: num(st.attributes.min, 0),
-        max: num(st.attributes.max, 100),
-        step: num(st.attributes.step, 1) || 1,
+        unit: isClimate ? "°C" : String(st.attributes.unit_of_measurement ?? ""),
+        min: isClimate ? num(st.attributes.min_temp, 30) : num(st.attributes.min, 0),
+        max: isClimate ? num(st.attributes.max_temp, 90) : num(st.attributes.max, 100),
+        step: (isClimate ? num(st.attributes.target_temp_step, 1) : num(st.attributes.step, 1)) || 1,
         unavailable,
       });
     }
@@ -178,4 +204,11 @@ export function valueText(row: Pick<RowView, "value" | "unit" | "step">): string
   if (row.value === null) return "–";
   const d = decimals(row.step);
   return `${row.value.toFixed(d)}${row.unit ? ` ${row.unit}` : ""}`;
+}
+
+/** Servizio di Home Assistant che scrive un valore nell'entità della riga. */
+export function writeService(row: Pick<RowView, "domain" | "entity">, value: number): { domain: string; service: string; data: Record<string, unknown> } {
+  if (row.domain === "climate") return { domain: "climate", service: "set_temperature", data: { entity_id: row.entity, temperature: value } };
+  if (row.domain === "number") return { domain: "number", service: "set_value", data: { entity_id: row.entity, value } };
+  return { domain: "input_number", service: "set_value", data: { entity_id: row.entity, value } };
 }
