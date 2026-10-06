@@ -1,0 +1,46 @@
+# UNA TANTUM: carica nei contatori del pellet il consumo stimato prima che i sensori partissero.
+# Valori calcolati dalla cronologia di stato e potenza della caldaia fino al 6/10/2026 alle 18:13:49 (dal 1/10 alle 11:54,
+# primo dato disponibile), con lo stesso modello di ha-packages/caldaia_pellet.yaml e i valori di partenza (5,5 kg/h,
+# 0,2 kg/h, 200 g per accensione):
+#   giorno 01/10 3,73 kg - 02/10 4,57 - 03/10 5,57 - 04/10 2,68 - 05/10 2,53 - 06/10 2,02 (fino alle 18:13)
+#   oggi 2,02 kg, settimana (da lunedi' 5/10) 4,55 kg, mese 21,10 kg
+# All'avvio di Home Assistant, una sola volta (interruttore a parte), somma questi valori ai contatori. Se i contatori sono
+# gia' stati tarati da te con un valore diverso, non usare questo file.
+
+input_boolean:
+  caldaia_pellet_storico_importato:
+    name: Pellet - storico importato
+    icon: mdi:history
+
+automation:
+  - id: caldaia_pellet_importa_storico
+    alias: Caldaia - consumo pellet, importa lo storico (una tantum)
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_pellet_storico_importato
+        state: "off"
+    actions:
+      - delay: "00:00:45"
+      - condition: template
+        value_template: >-
+          {{ is_number(states('sensor.caldaia_pellet_oggi')) and is_number(states('sensor.caldaia_pellet_settimana'))
+             and is_number(states('sensor.caldaia_pellet_mese')) }}
+      - action: utility_meter.calibrate
+        target: {entity_id: sensor.caldaia_pellet_oggi}
+        data: {value: "{{ (states('sensor.caldaia_pellet_oggi') | float(0) + 2.02) | round(3) }}"}
+      - action: utility_meter.calibrate
+        target: {entity_id: sensor.caldaia_pellet_settimana}
+        data: {value: "{{ (states('sensor.caldaia_pellet_settimana') | float(0) + 4.55) | round(3) }}"}
+      - action: utility_meter.calibrate
+        target: {entity_id: sensor.caldaia_pellet_mese}
+        data: {value: "{{ (states('sensor.caldaia_pellet_mese') | float(0) + 21.1) | round(3) }}"}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_pellet_storico_importato}
+      - action: logbook.log
+        data:
+          name: Consumo pellet
+          message: "Storico importato: +2,02 kg oggi, +4,55 kg settimana, +21,1 kg mese"
+          entity_id: sensor.caldaia_pellet_oggi
