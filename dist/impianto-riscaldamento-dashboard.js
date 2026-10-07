@@ -1527,8 +1527,8 @@ var ImpiantoOverviewCard = class extends i4 {
           <path d="M440 268 H520 V315 H575" class="pipe warm thin" />
           <path d="M685 215 H700" class="pipe hot thin" />
           <path d="M685 300 H700" class="pipe warm thin" />
-          <text x="452" y="196" class="t2 s13">mandata${integIn !== null ? ` \xB7 ${fmt(integIn, 1)} \xB0C` : ""}</text>
-          <text x="452" y="258" class="t2 s13">ritorno${integOut !== null ? ` \xB7 ${fmt(integOut, 1)} \xB0C` : ""}</text>
+          <text x="452" y="198" class="tv">${integIn !== null ? `${fmt(integIn, 1)} \xB0C` : ""}</text>
+          <text x="452" y="260" class="tv">${integOut !== null ? `${fmt(integOut, 1)} \xB0C` : ""}</text>
         </g>
 
         <!-- boiler -->
@@ -1582,44 +1582,58 @@ var ImpiantoOverviewCard = class extends i4 {
 
         <!-- solare -->
         <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
-        <text x="82" y="752" class="t2 s14" text-anchor="middle">Solare ${fmt(solarKw, 1)} kW</text>
-        <text x="82" y="786" class="b" font-size="24" text-anchor="middle" fill="#22c55e">${fmt(collector, 0)} °C</text>
+        <text x="82" y="752" class="t2 s14" text-anchor="middle">Solare</text>
+        <text x="82" y="786" class="b" font-size="24" text-anchor="middle" fill="#22c55e">${fmt(solarKw, 1)} kW</text>
 
         <text x="532" y="80" class="b s14" fill="#ef4444">Acqua calda</text>
         <text x="532" y="98" class="t2 s13">verso utenze</text>
         <text x="532" y="796" class="b s14" fill="#3b82f6">Acqua fredda</text>
         <text x="532" y="814" class="t2 s13">dalla rete</text>
 
-        <g class="pufgroup">
-        <text x="630" y="158" class="t1 b s14" text-anchor="middle">Puffer 50 L</text>
-        <rect x="575" y="170" width="110" height="170" rx="26" fill="url(#puffer)" class="outline" />
-        <rect x="587" y="224" width="86" height="64" rx="14" class="pill big" />
-        <text x="630" y="247" class="t2 s13" text-anchor="middle">temperatura</text>
-        <text x="630" y="276" class="t1 b" font-size="23" text-anchor="middle">${fmt(puffer, 0)} °C</text>
-        </g>
+        <g class="pufgroup">${this._pufferShape(puffer)}</g>
 
         <!-- pannello solare e circuito del collettore -->
         <g class="pufgroup pannello">
-          <path d="M598 500 H540 V560 H440" class="pipe hot thin" />
-          <path d="M440 656 H570 V552 H598" class="pipe cold thin" />
-          ${collectorOn ? w`<path d="M598 500 H540 V560 H440" class="coilflow" /><path d="M440 656 H570 V552 H598" class="coilflow" />` : A}
-          <text x="448" y="550" class="t2 s13">${solarIn !== null ? `${fmt(solarIn, 1)} \xB0C` : ""}</text>
-          <text x="448" y="646" class="t2 s13">${solarOut !== null ? `${fmt(solarOut, 1)} \xB0C` : ""}</text>
-          <text x="630" y="442" class="t1 b s14" text-anchor="middle">Pannello solare</text>
-          <polygon points="616,462 692,462 676,568 592,568" fill=${panelFill} class="outline panelbody" />
-          <g class="panelgrid">
-            <line x1="641" y1="462" x2="634" y2="568" /><line x1="667" y1="462" x2="655" y2="568" />
-            <line x1="604" y1="515" x2="684" y2="515" /><line x1="610" y1="541" x2="680" y2="541" /><line x1="610" y1="489" x2="688" y2="489" />
-          </g>
-          <polygon points="616,462 640,462 612,568 592,568" fill="#fff" opacity="0.16" />
-          <line x1="618" y1="568" x2="612" y2="586" class="panelleg" /><line x1="666" y1="568" x2="672" y2="586" class="panelleg" />
-          <text x="630" y="612" class="t1 b" font-size="23" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt(panel.value, 0)} \xB0C`}</text>
-          <text x="630" y="630" class="t2 s13" text-anchor="middle">${panel.caption}</text>
-          ${panel.maxPredicted !== null ? w`<text x="630" y="680" class="b s13" text-anchor="middle" fill="#f59e0b">max prevista ${fmt(panel.maxPredicted, 0)} °C</text>` : A}
-          ${panel.maxToday !== null ? w`<text x="630" y="698" class="t2 s13" text-anchor="middle">raggiunta oggi ${fmt(panel.maxToday, 0)} °C</text>` : A}
+          <path d="M598 500 H520 V560 H440" class="pipe hot thin" />
+          <path d="M440 656 H548 V552 H598" class="pipe cold thin" />
+          ${collectorOn ? w`<path d="M598 500 H520 V560 H440" class="coilflow" /><path d="M440 656 H548 V552 H598" class="coilflow" />` : A}
+          <text x="448" y="548" class="tv">${solarIn !== null ? `${fmt(solarIn, 1)} \xB0C` : ""}</text>
+          <text x="448" y="644" class="tv">${solarOut !== null ? `${fmt(solarOut, 1)} \xB0C` : ""}</text>
+          ${this._panelShape(panel, panelFill)}
         </g>
       </svg>
+      ${this._narrow ? w`<svg class="boiler mini" viewBox="0 0 640 330" role="img" aria-label="Puffer e pannello solare">
+            <g transform="translate(-480 -140)">${this._pufferShape(puffer)}</g>
+            <text x="150" y="236" class="tv">${integIn !== null ? `\u2192 ${fmt(integIn, 1)} \xB0C` : ""}</text>
+            <text x="150" y="266" class="tv">${integOut !== null ? `\u2190 ${fmt(integOut, 1)} \xB0C` : ""}</text>
+            <g transform="translate(-160 -420)">${this._panelShape(panel, panelFill)}</g>
+            <text x="470" y="318" class="tv" text-anchor="middle">${solarIn !== null ? `\u2192 ${fmt(solarIn, 1)} \xB0C` : ""}   ${solarOut !== null ? `\u2190 ${fmt(solarOut, 1)} \xB0C` : ""}</text>
+          </svg>` : A}
     `;
+  }
+  /** Il puffer da 50 litri, con le coordinate del disegno largo (al centro x = 630). */
+  _pufferShape(puffer) {
+    return w`
+      <text x="630" y="158" class="t1 b s15" text-anchor="middle">Puffer 50 L</text>
+      <rect x="575" y="170" width="110" height="170" rx="26" fill="url(#puffer)" class="outline" />
+      <rect x="587" y="224" width="86" height="64" rx="14" class="pill big" />
+      <text x="630" y="264" class="t1 b val" text-anchor="middle">${fmt(puffer, 0)} °C</text>`;
+  }
+  /** La sagoma del pannello con i suoi testi, con le coordinate del disegno largo (al centro x = 630). */
+  _panelShape(panel, fill) {
+    return w`
+      <text x="630" y="440" class="t1 b s16" text-anchor="middle">Pannello solare</text>
+      <polygon points="616,462 692,462 676,568 592,568" fill=${fill} class="outline panelbody" />
+      <g class="panelgrid">
+        <line x1="641" y1="462" x2="634" y2="568" /><line x1="667" y1="462" x2="655" y2="568" />
+        <line x1="604" y1="515" x2="684" y2="515" /><line x1="610" y1="541" x2="680" y2="541" /><line x1="610" y1="489" x2="688" y2="489" />
+      </g>
+      <polygon points="616,462 640,462 612,568 592,568" fill="#fff" opacity="0.16" />
+      <line x1="618" y1="568" x2="612" y2="586" class="panelleg" /><line x1="666" y1="568" x2="672" y2="586" class="panelleg" />
+      <text x="630" y="618" class="t1 b val" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt(panel.value, 0)} \xB0C`}</text>
+      <text x="630" y="640" class="t2 s15" text-anchor="middle">${panel.caption}</text>
+      ${panel.maxPredicted !== null ? w`<text x="630" y="668" class="b s15" text-anchor="middle" fill="#f59e0b">max prevista ${fmt(panel.maxPredicted, 0)} °C</text>` : A}
+      ${panel.maxToday !== null ? w`<text x="630" y="690" class="t2 s15" text-anchor="middle">raggiunta oggi ${fmt(panel.maxToday, 0)} °C</text>` : A}`;
   }
   // ---- caldaia -----------------------------------------------------------
   _flame(cx, cy, k2, opacity = 1) {
@@ -1851,6 +1865,36 @@ var ImpiantoOverviewCard = class extends i4 {
     }
     .s14 {
       font-size: 14px;
+    }
+    .s15 {
+      font-size: 15px;
+    }
+    .s16 {
+      font-size: 17px;
+    }
+    .val {
+      font-size: 26px;
+    }
+    .tv {
+      font-size: 17px;
+      font-weight: 600;
+      fill: var(--secondary-text-color);
+    }
+    /* fascia sotto il boiler su telefono: puffer e pannello con scritte piu' grandi */
+    svg.mini {
+      margin-top: 4px;
+    }
+    svg.mini .s15 {
+      font-size: 21px;
+    }
+    svg.mini .s16 {
+      font-size: 23px;
+    }
+    svg.mini .val {
+      font-size: 36px;
+    }
+    svg.mini .tv {
+      font-size: 22px;
     }
     .sep {
       stroke: var(--divider-color);
@@ -3269,7 +3313,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.9";
+var VERSION = "0.3.10";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

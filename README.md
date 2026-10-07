@@ -24,7 +24,7 @@ Sotto il puffer da 50 litri la scheda disegna la sagoma del pannello solare, col
 - **Sui tubi** compaiono le temperature in ingresso e in uscita della serpentina solare; sulle linee «mandata» e «ritorno» del puffer quelle della serpentina di integrazione (sonde ESP32 `..._integrazione_serpentina_ingresso/uscita`).
 - **Massima prevista del giorno** e **massima già raggiunta oggi**: `ha-packages/solare_pannello.yaml`. Il modello usa la previsione oraria di `weather.casale` (nuvolosità, temperatura, umidità), la posizione del sole, l'inclinazione e l'orientamento dei collettori, il modello di accoppiamento già in uso e, nelle prime ore, l'**irraggiamento misurato adesso** (rapporto fra irraggiamento sul piano e cielo sereno, con peso che scende in circa 2 ore). La massima prevista non scende mai sotto quella già raggiunta. È una stima del collettore a pompa ferma: con la pompa in marcia il fluido misurato resta più freddo.
 - Entità nuove: `sensor.solare_pannello_temperatura`, `sensor.solare_pannello_massima_prevista`, `sensor.solare_pannello_massima_oggi`, `sensor.solare_previsione_oraria`. Il fattore `input_number.solare_pannello_fattore_sereno` (1,00) calibra l'irraggiamento a cielo sereno.
-- Sui telefoni (scheda stretta) la sagoma non compare, come il puffer; resta la tessera «Solare».
+- **Telefono:** sotto il boiler compare una fascia con il puffer e il pannello, con le scritte più grandi (le temperature in ingresso e in uscita delle serpentine sono indicate con le frecce → e ←). Sulla scheda larga i tubi riportano solo le temperature; la tessera «Solare» a sinistra mostra i kW.
 
 ## Stima del consumo di pellet
 
