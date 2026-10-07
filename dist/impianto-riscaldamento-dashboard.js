@@ -1248,6 +1248,27 @@ function collectorPumpPill(running, watts) {
   if (running === true) return { key: "running", label: `collettore${pumpWatts(watts)}` };
   return { key: "idle", label: "collettore" };
 }
+function panelModel(pumpOn, measured, estimated, maxPredicted, maxToday) {
+  let value = null;
+  let source = "nd";
+  if (pumpOn === true && measured !== null) {
+    value = measured;
+    source = "misurata";
+  } else if (estimated !== null) {
+    value = estimated;
+    source = "stimata";
+  }
+  const caption = source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? pumpOn === true ? "stimata" : "stimata \xB7 pompa ferma" : "non disponibile";
+  const pred = maxPredicted !== null && maxToday !== null ? Math.max(maxPredicted, maxToday) : maxPredicted;
+  return { value, source, caption, maxPredicted: pred, maxToday };
+}
+function panelColor(t3) {
+  if (t3 === null || Number.isNaN(t3)) return "#94a3b8";
+  if (t3 <= 65) return tempColor(t3);
+  const k2 = Math.min(1, (t3 - 65) / 35);
+  const rgb = [239, 68, 68].map((c4, i5) => Math.round(c4 + ([127, 29, 29][i5] - c4) * k2));
+  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
 
 // src/plant-card.ts
 var CARD_TAG = "impianto-overview-card";
@@ -1294,7 +1315,13 @@ var DEFAULT_ENTITIES = {
   collector_power: "sensor.garage_centralina_solare_pompe_potenza",
   pellet_today: "sensor.caldaia_pellet_oggi",
   pellet_week: "sensor.caldaia_pellet_settimana",
-  pellet_month: "sensor.caldaia_pellet_mese"
+  pellet_month: "sensor.caldaia_pellet_mese",
+  coil_solar_in: "sensor.solare_termico_solare_serpentina_ingresso",
+  coil_solar_out: "sensor.solare_termico_solare_serpentina_uscita",
+  coil_integ_in: "sensor.solare_termico_integrazione_serpentina_ingresso",
+  coil_integ_out: "sensor.solare_termico_integrazione_serpentina_uscita",
+  panel_max: "sensor.solare_pannello_massima_prevista",
+  panel_max_today: "sensor.solare_pannello_massima_oggi"
 };
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
@@ -1456,6 +1483,18 @@ var ImpiantoOverviewCard = class extends i4 {
     const collectorPill = collectorPumpPill(this._yes(e5.collector_pump), this._n(e5.collector_power));
     const pumpOn = integrationPill.key === "running";
     const collectorOn = collectorPill.key === "running";
+    const panel = panelModel(
+      this._yes(e5.collector_pump),
+      this._n(e5.coil_solar_in),
+      collector,
+      this._n(e5.panel_max),
+      this._n(e5.panel_max_today)
+    );
+    const panelFill = panelColor(panel.value);
+    const solarIn = this._n(e5.coil_solar_in);
+    const solarOut = this._n(e5.coil_solar_out);
+    const integIn = this._n(e5.coil_integ_in);
+    const integOut = this._n(e5.coil_integ_out);
     const btn = boostButton(this._s(e5.boost_state), this._armed);
     return b2`
       <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : this._compact ? "0 66 700 762" : "0 0 700 840"} role="img" aria-label="Boiler solare">
@@ -1488,8 +1527,8 @@ var ImpiantoOverviewCard = class extends i4 {
           <path d="M440 268 H520 V315 H575" class="pipe warm thin" />
           <path d="M685 215 H700" class="pipe hot thin" />
           <path d="M685 300 H700" class="pipe warm thin" />
-          <text x="452" y="196" class="t2 s13">mandata</text>
-          <text x="528" y="338" class="t2 s13">ritorno</text>
+          <text x="452" y="196" class="t2 s13">mandata${integIn !== null ? ` \xB7 ${fmt(integIn, 1)} \xB0C` : ""}</text>
+          <text x="452" y="258" class="t2 s13">ritorno${integOut !== null ? ` \xB7 ${fmt(integOut, 1)} \xB0C` : ""}</text>
         </g>
 
         <!-- boiler -->
@@ -1557,6 +1596,27 @@ var ImpiantoOverviewCard = class extends i4 {
         <rect x="587" y="224" width="86" height="64" rx="14" class="pill big" />
         <text x="630" y="247" class="t2 s13" text-anchor="middle">temperatura</text>
         <text x="630" y="276" class="t1 b" font-size="23" text-anchor="middle">${fmt(puffer, 0)} °C</text>
+        </g>
+
+        <!-- pannello solare e circuito del collettore -->
+        <g class="pufgroup pannello">
+          <path d="M598 500 H540 V560 H440" class="pipe hot thin" />
+          <path d="M440 656 H570 V552 H598" class="pipe cold thin" />
+          ${collectorOn ? w`<path d="M598 500 H540 V560 H440" class="coilflow" /><path d="M440 656 H570 V552 H598" class="coilflow" />` : A}
+          <text x="448" y="550" class="t2 s13">${solarIn !== null ? `${fmt(solarIn, 1)} \xB0C` : ""}</text>
+          <text x="448" y="646" class="t2 s13">${solarOut !== null ? `${fmt(solarOut, 1)} \xB0C` : ""}</text>
+          <text x="630" y="442" class="t1 b s14" text-anchor="middle">Pannello solare</text>
+          <polygon points="616,462 692,462 676,568 592,568" fill=${panelFill} class="outline panelbody" />
+          <g class="panelgrid">
+            <line x1="641" y1="462" x2="634" y2="568" /><line x1="667" y1="462" x2="655" y2="568" />
+            <line x1="604" y1="515" x2="684" y2="515" /><line x1="610" y1="541" x2="680" y2="541" /><line x1="610" y1="489" x2="688" y2="489" />
+          </g>
+          <polygon points="616,462 640,462 612,568 592,568" fill="#fff" opacity="0.16" />
+          <line x1="618" y1="568" x2="612" y2="586" class="panelleg" /><line x1="666" y1="568" x2="672" y2="586" class="panelleg" />
+          <text x="630" y="612" class="t1 b" font-size="23" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt(panel.value, 0)} \xB0C`}</text>
+          <text x="630" y="630" class="t2 s13" text-anchor="middle">${panel.caption}</text>
+          ${panel.maxPredicted !== null ? w`<text x="630" y="680" class="b s13" text-anchor="middle" fill="#f59e0b">max prevista ${fmt(panel.maxPredicted, 0)} °C</text>` : A}
+          ${panel.maxToday !== null ? w`<text x="630" y="698" class="t2 s13" text-anchor="middle">raggiunta oggi ${fmt(panel.maxToday, 0)} °C</text>` : A}
         </g>
       </svg>
     `;
@@ -1871,6 +1931,19 @@ var ImpiantoOverviewCard = class extends i4 {
       stroke-width: 8;
     }
     /* acqua che scorre dentro la serpentina: tratteggio chiaro che si muove */
+    .panelbody {
+      stroke-width: 3;
+    }
+    .panelgrid line {
+      stroke: #ffffff;
+      stroke-opacity: 0.5;
+      stroke-width: 1.5;
+    }
+    .panelleg {
+      stroke: #64748b;
+      stroke-width: 4;
+      stroke-linecap: round;
+    }
     .coilflow {
       fill: none;
       stroke: #ffffff;
@@ -3196,7 +3269,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.8";
+var VERSION = "0.3.9";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

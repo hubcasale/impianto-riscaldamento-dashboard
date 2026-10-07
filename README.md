@@ -17,6 +17,15 @@ Funzionano sia su tema chiaro che scuro (usano i colori del tema di Home Assista
 > Gli screenshot vengono dal banco di prova (`dev/index.html`) con dati di esempio.
 > Il lunedì P1 e P3 si sovrappongono apposta, per mostrare l'avviso.
 
+## Pannello solare sulla scheda
+
+Sotto il puffer da 50 litri la scheda disegna la sagoma del pannello solare, collegata alla serpentina solare del boiler. Il colore segue la temperatura (come il boiler, poi più scuro oltre i 65 °C).
+- **Temperatura mostrata:** a pompa del collettore ferma è la stima del collettore (`sensor.solare_termico_t_collettore_stimata`), con la pompa in marcia è la temperatura **misurata** in ingresso alla serpentina solare (`sensor.solare_termico_solare_serpentina_ingresso`, sonda ESP32).
+- **Sui tubi** compaiono le temperature in ingresso e in uscita della serpentina solare; sulle linee «mandata» e «ritorno» del puffer quelle della serpentina di integrazione (sonde ESP32 `..._integrazione_serpentina_ingresso/uscita`).
+- **Massima prevista del giorno** e **massima già raggiunta oggi**: `ha-packages/solare_pannello.yaml`. Il modello usa la previsione oraria di `weather.casale` (nuvolosità, temperatura, umidità), la posizione del sole, l'inclinazione e l'orientamento dei collettori, il modello di accoppiamento già in uso e, nelle prime ore, l'**irraggiamento misurato adesso** (rapporto fra irraggiamento sul piano e cielo sereno, con peso che scende in circa 2 ore). La massima prevista non scende mai sotto quella già raggiunta. È una stima del collettore a pompa ferma: con la pompa in marcia il fluido misurato resta più freddo.
+- Entità nuove: `sensor.solare_pannello_temperatura`, `sensor.solare_pannello_massima_prevista`, `sensor.solare_pannello_massima_oggi`, `sensor.solare_previsione_oraria`. Il fattore `input_number.solare_pannello_fattore_sereno` (1,00) calibra l'irraggiamento a cielo sereno.
+- Sui telefoni (scheda stretta) la sagoma non compare, come il puffer; resta la tessera «Solare».
+
 ## Stima del consumo di pellet
 
 `ha-packages/caldaia_pellet.yaml` stima i chili di pellet bruciati e la scheda li mostra sotto i contatori di oggi (oggi, settimana, mese). È una **stima** da calibrare: la caldaia non comunica i chili. Il modello usa lo stato e la potenza reale:

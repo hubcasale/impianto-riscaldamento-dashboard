@@ -201,3 +201,50 @@ export function collectorPumpPill(running: boolean | null, watts: number | null)
   if (running === true) return { key: "running", label: `collettore${pumpWatts(watts)}` };
   return { key: "idle", label: "collettore" };
 }
+
+/** Cosa mostra la sagoma del pannello solare. */
+export interface PanelModel {
+  /** temperatura da mostrare (misurata a pompa in marcia, altrimenti stimata) */
+  value: number | null;
+  source: "misurata" | "stimata" | "nd";
+  /** descrizione breve sotto il valore */
+  caption: string;
+  /** massima prevista di oggi, solo se ha senso mostrarla */
+  maxPredicted: number | null;
+  /** massima gia' raggiunta oggi */
+  maxToday: number | null;
+}
+
+/**
+ * Pannello: con la pompa del collettore in marcia e la temperatura in ingresso al boiler disponibile si mostra quella
+ * misurata, altrimenti la stima. La massima prevista non scende mai sotto quella gia' raggiunta oggi.
+ */
+export function panelModel(
+  pumpOn: boolean | null,
+  measured: number | null,
+  estimated: number | null,
+  maxPredicted: number | null,
+  maxToday: number | null,
+): PanelModel {
+  let value: number | null = null;
+  let source: PanelModel["source"] = "nd";
+  if (pumpOn === true && measured !== null) {
+    value = measured;
+    source = "misurata";
+  } else if (estimated !== null) {
+    value = estimated;
+    source = "stimata";
+  }
+  const caption = source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? (pumpOn === true ? "stimata" : "stimata · pompa ferma") : "non disponibile";
+  const pred = maxPredicted !== null && maxToday !== null ? Math.max(maxPredicted, maxToday) : maxPredicted;
+  return { value, source, caption, maxPredicted: pred, maxToday };
+}
+
+/** Colore del pannello: scala dell'acqua fino a 65 °C, poi scurisce verso il rosso profondo fino a 100 °C. */
+export function panelColor(t: number | null): string {
+  if (t === null || Number.isNaN(t)) return "#94a3b8";
+  if (t <= 65) return tempColor(t);
+  const k = Math.min(1, (t - 65) / 35);
+  const rgb = [239, 68, 68].map((c, i) => Math.round(c + ([127, 29, 29][i] - c) * k));
+  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}

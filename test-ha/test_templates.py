@@ -37,15 +37,19 @@ def make_env(states, attrs, now):
     def state_attr(eid, a):
         return attrs.get((eid, a))
 
+    import math
+    env.filters['as_datetime'] = lambda v, d=None: dt.datetime.fromisoformat(v) if isinstance(v, str) else d
+    env.filters['as_local'] = lambda v: v
+    env.globals.update(sin=math.sin, cos=math.cos, tan=math.tan, sqrt=math.sqrt, pi=math.pi, e=math.e)
     env.globals.update(timedelta=dt.timedelta, states=st, is_state=is_state, is_number=is_number, state_attr=state_attr, now=lambda: now)
     return env
 
 
-def render(tpl, states, attrs=None, now=None, this_state=None):
+def render(tpl, states, attrs=None, now=None, this_state=None, extra=None, this_attrs=None):
     now = now or dt.datetime(2026, 10, 5, 6, 0)  # lunedi
     env = make_env(states, attrs or {}, now)
-    this = types.SimpleNamespace(state=this_state)
-    return env.from_string(tpl).render(this=this).strip()
+    this = types.SimpleNamespace(state=this_state, attributes=this_attrs or {})
+    return env.from_string(tpl).render(this=this, **(extra or {})).strip()
 
 
 fails = 0
@@ -281,6 +285,77 @@ check("pellet: accensione con fattore", float(acc("1.0", "150", "1.2")), 1.18)
 tot = lambda c, a: render(tot_tpl, {"sensor.caldaia_pellet_consumato_combustione": c, "sensor.caldaia_pellet_accensioni": a})
 check("pellet: totale = combustione + accensioni", float(tot("3.5", "0.4")), 3.9)
 check("pellet: totale senza accensioni ancora registrate", float(tot("3.5", "unknown")), 3.5)
+
+
+# ---- pannello solare: temperatura mostrata e massima prevista
+import math as _m
+sys.path.insert(0, "test-ha")
+from panel_model import simulate as _sim
+PAN = yaml.safe_load(open("ha-packages/solare_pannello.yaml"))
+def _sens(name):
+    for item in PAN["template"]:
+        for e_ in item.get("sensor", []):
+            if e_["name"] == name: return e_
+    raise KeyError(name)
+temp_tpl = _sens("Solare pannello temperatura")["state"]
+fonte_tpl = _sens("Solare pannello temperatura")["attributes"]["fonte"]
+max_tpl = _sens("Solare pannello massima prevista")["state"]
+def pann(pompa, ing, stima):
+    st_ = {"binary_sensor.caldaia_pompa_collettore_attiva": pompa, "sensor.solare_termico_solare_serpentina_ingresso": ing,
+           "sensor.solare_termico_t_collettore_stimata": stima}
+    return render(temp_tpl, st_), render(fonte_tpl, st_)
+check("pannello: pompa ferma usa la stima", pann("off", "33.5", "41.6")[0], "41.6")
+check("pannello: pompa in marcia usa la misura", pann("on", "33.5", "41.6")[0], "33.5")
+check("pannello: fonte misurata", pann("on", "33.5", "41.6")[1], "misurata")
+check("pannello: fonte stimata", pann("off", "33.5", "41.6")[1], "stimata")
+check("pannello: pompa in marcia ma sensore non disponibile usa la stima", pann("on", "unavailable", "41.6")[0], "41.6")
+def massima(n, now_h=7.5, t0=17.0, oss=None, gobs=0.0, text=17.0, tmax=None):
+    ore = [{"h": h, "oggi": True, "t": (16 + 10 * _m.sin(_m.pi * (h - 7) / 12)) if 7 < h < 19 else 16, "u": 60.0, "n": n} for h in range(7, 20)]
+    stati = {"sensor.solare_termico_t_collettore_stimata": str(t0), "sensor.solare_pannello_massima_oggi": str(oss if oss is not None else t0),
+             "sensor.solare_termico_irraggiamento_sul_piano": str(gobs), "sensor.temperatura_esterna_2_decimali": str(text),
+             "input_number.solare_termico_inclinazione": "35", "input_number.solare_termico_orientamento": "180",
+             "input_number.solare_termico_k": "0.07", "input_number.solare_termico_tau": "150", "input_number.solare_pannello_fattore_sereno": "1"}
+    attrs = {("sensor.solare_previsione_oraria", "ore"): ore, ("sensor.solare_previsione_oraria", "mezzogiorno"): 13.1, ("zone.home", "latitude"): 43.11}
+    now_ = dt.datetime(2026, 10, 7, int(now_h), int(round((now_h % 1) * 60)))
+    got = float(render(max_tpl, stati, attrs, now_))
+    exp, _, _, _ = _sim(ore, now_h, t0, 13.1, 43.11, 280, t_ext_now=text)
+    return got, max(exp, oss if oss is not None else t0)
+for nome, n in (("sereno", 5), ("variabile", 50), ("coperto", 95)):
+    got, exp = massima(n)
+    check(f"pannello: massima prevista {nome} come il modello Python (+-0,6)", abs(got - exp) <= 0.6, True)
+g1, _ = massima(5); g2, _ = massima(50); g3, _ = massima(95)
+check("pannello: piu nuvole, massima piu bassa", g1 > g2 > g3, True)
+check("pannello: giornata serena oltre i 60 C", g1 > 60, True)
+check("pannello: giornata coperta sotto i 50 C", g3 < 50, True)
+got, _ = massima(95, oss=58.0)
+check("pannello: non scende sotto la massima gia' raggiunta oggi", got >= 58, True)
+got, _ = massima(5, now_h=19.5, t0=40.0, oss=58.0)
+check("pannello: dopo il tramonto resta la massima osservata", got, 58.0)
+
+
+# persistenza dell'irraggiamento misurato: nuvolo adesso -> massima piu' bassa che con cielo sereno misurato
+low, _ = massima(5, now_h=12.0, t0=40.0, gobs=100.0)
+high, _ = massima(5, now_h=12.0, t0=40.0, gobs=850.0)
+check("pannello: irraggiamento misurato basso abbassa la previsione", low < high, True)
+
+# previsione oraria: costruzione dell'attributo "ore" dal servizio meteo
+ore_tpl = _sens("Solare previsione oraria")["attributes"]["ore"] if False else None
+for item in PAN["template"]:
+    if "actions" in item:
+        ore_tpl = item["sensor"][0]["attributes"]["ore"]
+fc = {"weather.casale": {"forecast": [
+    {"datetime": "2026-10-07T10:00:00", "temperature": 20, "humidity": 55, "cloud_coverage": 30, "condition": "sunny"},
+    {"datetime": "2026-10-07T11:30:00", "temperature": 22, "condition": "cloudy"},
+    {"datetime": "2026-10-08T00:00:00", "temperature": 12, "humidity": 80, "cloud_coverage": 0, "condition": "sunny"}]}}
+out = eval(render(ore_tpl, {}, now=dt.datetime(2026, 10, 7, 9, 0), extra={"fc": fc}).replace("True", "True"))
+check("previsione: tre ore", len(out), 3)
+check("previsione: oggi e domani", [o["oggi"] for o in out], [True, True, False])
+check("previsione: nuvolosita dichiarata", out[0]["n"], 30.0)
+check("previsione: nuvolosita dalla condizione se manca", out[1]["n"], 85.0)
+check("previsione: umidita di riserva", out[1]["u"], 60.0)
+check("previsione: ora decimale", out[1]["h"], 11.5)
+out2 = eval(render(ore_tpl, {}, now=dt.datetime(2026, 10, 7, 9, 0), extra={}, this_state=None).replace("[]", "[]") or "[]")
+check("previsione: senza servizio resta l'elenco precedente (vuoto)", out2, [])
 
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

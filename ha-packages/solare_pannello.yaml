@@ -1,0 +1,203 @@
+# Pannello solare: temperatura mostrata sulla scheda e stima della massima del giorno.
+#
+# TEMPERATURA MOSTRATA (sensor.solare_pannello_temperatura): con la pompa del collettore in marcia e' la temperatura
+# misurata in ingresso alla serpentina solare del boiler (ESP32: sensor.solare_termico_solare_serpentina_ingresso);
+# a pompa ferma e' la stima del collettore (sensor.solare_termico_t_collettore_stimata, packages/solare_termico.yaml).
+#
+# MASSIMA DEL GIORNO (sensor.solare_pannello_massima_prevista): la piu' alta fra la massima stimata gia' raggiunta oggi e
+# quella che il modello del collettore raggiungerebbe nelle ore che restano, con la previsione oraria di weather.casale:
+#   1) irraggiamento sul piano dei collettori a cielo sereno (posizione del sole, inclinazione e orientamento di
+#      packages/solare_termico.yaml, modello di Meinel), per ogni ora della previsione;
+#   2) trasmissione delle nuvole (Kasten-Czeplak): 1 - 0,75 x (nuvolosita'/100)^3,4; nelle prime ore il valore e'
+#      avvicinato a quello MISURATO adesso (irraggiamento sul piano / cielo sereno), con peso che scende in circa 2 ore;
+#   3) T_regime = T_ext + k x G x (1 - UR/600) come nel modello esistente, con la temperatura esterna della previsione
+#      corretta dello scarto rispetto alla stazione meteo (al massimo 8 C);
+#   4) la temperatura del collettore segue T_regime con la stessa inerzia (tau) del modello esistente, ora per ora.
+# E' una STIMA del collettore a pompa ferma: con la pompa in marcia il fluido misurato resta piu' freddo.
+
+input_boolean:
+  solare_pannello_defaults_impostati:
+    name: Pannello solare - valori iniziali impostati
+    icon: mdi:check
+
+input_number:
+  solare_pannello_fattore_sereno:
+    name: Pannello solare - fattore irraggiamento a cielo sereno
+    min: 0.5
+    max: 1.5
+    step: 0.01
+    mode: box
+
+template:
+  # previsione oraria di weather.casale, ogni 30 minuti e all'avvio
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/30"
+      - trigger: homeassistant
+        event: start
+    actions:
+      - action: weather.get_forecasts
+        target:
+          entity_id: weather.casale
+        data:
+          type: hourly
+        response_variable: fc
+        continue_on_error: true
+    sensor:
+      - name: Solare previsione oraria
+        unique_id: solare_previsione_oraria
+        icon: mdi:weather-partly-cloudy
+        state: >
+          {% if fc is defined and fc and 'weather.casale' in fc %}{{ fc['weather.casale'].forecast | length }}
+          {% else %}{{ this.state if this.state not in ['unknown', 'unavailable'] else 0 }}{% endif %}
+        attributes:
+          mezzogiorno: >
+            {% set sn = states('sensor.sensore_sole_sun_solar_noon') | as_datetime(none) %}
+            {% if sn %}{% set d = sn | as_local %}{{ (d.hour + d.minute / 60) | round(2) }}{% else %}13.1{% endif %}
+          aggiornata: "{{ now().isoformat() }}"
+          ore: >
+            {% if fc is defined and fc and 'weather.casale' in fc %}
+              {% set cond = {'sunny': 10, 'clear-night': 10, 'partlycloudy': 45, 'cloudy': 85, 'fog': 90, 'rainy': 95,
+                             'pouring': 100, 'lightning-rainy': 100, 'snowy': 100, 'snowy-rainy': 100, 'hail': 100,
+                             'lightning': 90, 'windy': 30, 'windy-variant': 60, 'exceptional': 50} %}
+              {% set oggi = now().date() %}
+              {% set ns = namespace(l=[]) %}
+              {% for f in fc['weather.casale'].forecast[:36] %}
+                {% set d = f.datetime | as_datetime | as_local %}
+                {% set n = f.cloud_coverage if f.cloud_coverage is defined and f.cloud_coverage is not none else cond.get(f.condition, 60) %}
+                {% set u = f.humidity if f.humidity is defined and f.humidity is not none else 60 %}
+                {% set ns.l = ns.l + [{'h': (d.hour + d.minute / 60) | round(2), 'oggi': d.date() == oggi,
+                                       't': f.temperature | float(0), 'u': u | float(60), 'n': n | float(60) | round(0)}] %}
+              {% endfor %}
+              {{ ns.l }}
+            {% else %}{{ this.attributes.get('ore', []) }}{% endif %}
+
+  # massima stimata del collettore raggiunta oggi (si azzera a mezzanotte)
+  - triggers:
+      - trigger: state
+        entity_id: sensor.solare_termico_t_collettore_stimata
+        id: aggiorna
+      - trigger: time
+        at: "00:00:05"
+        id: mezzanotte
+      - trigger: homeassistant
+        event: start
+        id: avvio
+    sensor:
+      - name: Solare pannello massima oggi
+        unique_id: solare_pannello_massima_oggi
+        unit_of_measurement: °C
+        device_class: temperature
+        icon: mdi:thermometer-high
+        state: >
+          {% set cur = states('sensor.solare_termico_t_collettore_stimata') | float(none) %}
+          {% set oggi = now().date().isoformat() %}
+          {% set prev = this.state | float(none) if this.state not in ['unknown', 'unavailable', 'none', none] else none %}
+          {% set stesso = this.attributes.get('giorno') == oggi %}
+          {% if cur is none %}{{ prev if (prev is not none and stesso) else 'unavailable' }}
+          {% elif prev is not none and stesso %}{{ [prev, cur] | max | round(1) }}
+          {% else %}{{ cur | round(1) }}{% endif %}
+        attributes:
+          giorno: "{{ now().date().isoformat() }}"
+          irraggiamento_max: >
+            {% set g = states('sensor.solare_termico_irraggiamento_sul_piano') | float(0) %}
+            {% set stesso = this.attributes.get('giorno') == now().date().isoformat() %}
+            {{ ([this.attributes.get('irraggiamento_max', 0) | float(0), g] | max | round(0)) if stesso else (g | round(0)) }}
+
+  - sensor:
+      - name: Solare pannello temperatura
+        unique_id: solare_pannello_temperatura
+        unit_of_measurement: °C
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:solar-panel-large
+        availability: >
+          {{ is_number(states('sensor.solare_termico_t_collettore_stimata'))
+             or (is_state('binary_sensor.caldaia_pompa_collettore_attiva', 'on')
+                 and is_number(states('sensor.solare_termico_solare_serpentina_ingresso'))) }}
+        state: >
+          {% set misura = states('sensor.solare_termico_solare_serpentina_ingresso') %}
+          {% if is_state('binary_sensor.caldaia_pompa_collettore_attiva', 'on') and is_number(misura) %}{{ misura | float | round(1) }}
+          {% else %}{{ states('sensor.solare_termico_t_collettore_stimata') | float(0) | round(1) }}{% endif %}
+        attributes:
+          fonte: >
+            {{ 'misurata' if is_state('binary_sensor.caldaia_pompa_collettore_attiva', 'on')
+                             and is_number(states('sensor.solare_termico_solare_serpentina_ingresso')) else 'stimata' }}
+
+      - name: Solare pannello massima prevista
+        unique_id: solare_pannello_massima_prevista
+        unit_of_measurement: °C
+        device_class: temperature
+        icon: mdi:thermometer-chevron-up
+        availability: "{{ is_number(states('sensor.solare_termico_t_collettore_stimata')) }}"
+        state: >
+          {% set ore = (state_attr('sensor.solare_previsione_oraria', 'ore') or []) | selectattr('oggi') | list %}
+          {% set noon = state_attr('sensor.solare_previsione_oraria', 'mezzogiorno') | float(13.1) %}
+          {% set lat = state_attr('zone.home', 'latitude') | float(43.1) %}
+          {% set N = now().timetuple().tm_yday %}
+          {% set tilt = states('input_number.solare_termico_inclinazione') | float(35) %}
+          {% set orient = states('input_number.solare_termico_orientamento') | float(180) %}
+          {% set k = states('input_number.solare_termico_k') | float(0.07) %}
+          {% set tau = states('input_number.solare_termico_tau') | float(150) %}
+          {% set fs = states('input_number.solare_pannello_fattore_sereno') | float(1) %}
+          {% set rad = pi / 180 %}
+          {% set dec = 23.45 * sin(2 * pi * (284 + N) / 365) * rad %}
+          {% set phi = lat * rad %}{% set beta = tilt * rad %}{% set gam = (orient - 180) * rad %}
+          {% macro gcl(h) -%}
+            {%- set w = (h - noon) * 15 * rad -%}
+            {%- set se = sin(phi) * sin(dec) + cos(phi) * cos(dec) * cos(w) -%}
+            {%- if se > 0.05 -%}
+              {%- set dni = 1353 * 0.7 ** ((1 / se) ** 0.678) -%}
+              {%- set ct = sin(dec) * sin(phi) * cos(beta) - sin(dec) * cos(phi) * sin(beta) * cos(gam)
+                           + cos(dec) * cos(phi) * cos(beta) * cos(w) + cos(dec) * sin(phi) * sin(beta) * cos(gam) * cos(w)
+                           + cos(dec) * sin(beta) * sin(gam) * sin(w) -%}
+              {{- ((dni * ([ct, 0] | max) + 0.1 * dni * (1 + cos(beta)) / 2) * fs) | round(2) -}}
+            {%- else -%}0{%- endif -%}
+          {%- endmacro %}
+          {% set t0 = states('sensor.solare_termico_t_collettore_stimata') | float(0) %}
+          {% set oss = states('sensor.solare_pannello_massima_oggi') | float(t0) %}
+          {% set now_h = now().hour + now().minute / 60 %}
+          {% set gobs = states('sensor.solare_termico_irraggiamento_sul_piano') | float(none) %}
+          {% set gcn = gcl(now_h) | trim | float(0) %}
+          {% set ktobs = ([[gobs / gcn, 0] | max, 1.1] | min) if (gobs is not none and gcn > 150) else none %}
+          {% set text = states('sensor.temperatura_esterna_2_decimali') | float(none) %}
+          {% set ns = namespace(t=t0, mx=t0, prev=now_h, bias=0, best=99) %}
+          {% for o in ore %}
+            {% if (o.h - now_h) | abs < ns.best %}{% set ns.best = (o.h - now_h) | abs %}
+              {% if text is not none %}{% set ns.bias = [[text - o.t, -8] | max, 8] | min %}{% endif %}{% endif %}
+          {% endfor %}
+          {% for o in ore if o.h > now_h %}
+            {% set dt = o.h - ns.prev %}{% set ns.prev = o.h %}
+            {% set ktf = 1 - 0.75 * (o.n / 100) ** 3.4 %}
+            {% set kt = (ktf + (ktobs - ktf) * (e ** (-(o.h - now_h) / 2))) if ktobs is not none else ktf %}
+            {% set g = (gcl(o.h) | trim | float(0)) * kt %}
+            {% set treg = o.t + ns.bias + k * g * (1 - o.u / 600) %}
+            {% set ns.t = ns.t + (1 - e ** (-dt * 60 / tau)) * (treg - ns.t) %}
+            {% set ns.mx = [ns.mx, ns.t] | max %}
+          {% endfor %}
+          {{ ([oss, ns.mx] | max) | round(0) }}
+        attributes:
+          osservata_oggi: "{{ states('sensor.solare_pannello_massima_oggi') }}"
+          ore_di_previsione: >
+            {{ (state_attr('sensor.solare_previsione_oraria', 'ore') or []) | selectattr('oggi') | list | length }}
+          nuvolosita_media_10_16: >
+            {% set v = (state_attr('sensor.solare_previsione_oraria', 'ore') or []) | selectattr('oggi')
+                       | selectattr('h', 'ge', 10) | selectattr('h', 'le', 16) | map(attribute='n') | list %}
+            {{ ((v | sum) / (v | length)) | round(0) if v | length > 0 else 'nd' }}
+
+automation:
+  - id: solare_pannello_valori_iniziali
+    alias: Solare - pannello, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.solare_pannello_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_pannello_fattore_sereno}
+        data: {value: 1}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.solare_pannello_defaults_impostati}

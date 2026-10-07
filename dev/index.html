@@ -68,7 +68,7 @@ set("input_number.boiler_solare_volume", 190);
 set("input_number.boiler_solare_peso_alto", 50);
 set("input_number.boiler_solare_t_rete", 15);
 set("sensor.solare_termico_potenza", 0.81, { unit_of_measurement: "kW" });
-set("sensor.solare_termico_t_collettore_stimata", 28, { unit_of_measurement: "°C" });
+set("sensor.solare_termico_t_collettore_stimata", (q.get("pannello") === "sereno" ? 64 : 41.6), { unit_of_measurement: "°C" });
 // caldaia
 set("sensor.casale_stato", q.get("stato") || "WORK");
 set("sensor.casale_temperatura_acqua", 56);
@@ -96,7 +96,7 @@ set("sensor.caldaia_accensione_rapida_stato", q.get("boost") || "pronta");
 // pompe della centralina solare (?pompe=ferme|collettore|integrazione|entrambe|bloccata)
 const pompe = q.get("pompe") || "ferme";
 set("binary_sensor.caldaia_pompa_integrazione_attiva", ["integrazione", "entrambe"].includes(pompe) ? "on" : "off");
-set("binary_sensor.caldaia_pompa_collettore_attiva", ["collettore", "entrambe"].includes(pompe) ? "on" : "off");
+set("binary_sensor.caldaia_pompa_collettore_attiva", ["collettore", "entrambe"].includes(pompe) || q.get("pannello") === "attiva" ? "on" : "off");
 set("sensor.garage_bs_pompa_integrazione_potenza", ["integrazione", "entrambe"].includes(pompe) ? 47.2 : 0, { unit_of_measurement: "W" });
 set("sensor.garage_centralina_solare_pompe_potenza", ["collettore", "entrambe"].includes(pompe) ? 32.2 : 1.1, { unit_of_measurement: "W" });
 set("binary_sensor.garage_bs_pompa_integrazione_ingresso_0", ["integrazione", "entrambe", "bloccata"].includes(pompe) ? "on" : "off");
@@ -107,6 +107,14 @@ const pel = q.get("pellet") || "ok";
 set("binary_sensor.casale_riserva_legna", pel === "riserva" ? "on" : "off");
 set("binary_sensor.casale_pellet_empty", pel === "vuoto" ? "on" : "off");
 set("binary_sensor.casale_pellet_hopper_open", pel === "aperto" ? "on" : "off");
+// pannello solare e serpentine (?pannello=attiva|ferma|sereno)
+const pan = q.get("pannello") || "ferma";
+set("sensor.solare_termico_solare_serpentina_ingresso", pan === "attiva" ? 33.5 : 24.7, { unit_of_measurement: "°C" });
+set("sensor.solare_termico_solare_serpentina_uscita", pan === "attiva" ? 21.9 : 25.1, { unit_of_measurement: "°C" });
+set("sensor.solare_termico_integrazione_serpentina_ingresso", 41.9, { unit_of_measurement: "°C" });
+set("sensor.solare_termico_integrazione_serpentina_uscita", 21.7, { unit_of_measurement: "°C" });
+set("sensor.solare_pannello_massima_prevista", pan === "sereno" ? 72 : 58, { unit_of_measurement: "°C" });
+set("sensor.solare_pannello_massima_oggi", pan === "sereno" ? 61 : 42, { unit_of_measurement: "°C" });
 // consumo di pellet (stima)
 set("sensor.caldaia_pellet_oggi", 12.4, { unit_of_measurement: "kg" });
 set("sensor.caldaia_pellet_settimana", 63.8, { unit_of_measurement: "kg" });

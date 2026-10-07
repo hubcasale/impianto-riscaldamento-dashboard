@@ -3,7 +3,7 @@ import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
 import type { ImpiantoSettingsDialog } from "./settings-dialog";
 import "./settings-dialog";
-import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type StoveLook } from "./plant-logic";
+import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type StoveLook } from "./plant-logic";
 
 const CARD_TAG = "impianto-overview-card";
 
@@ -69,6 +69,16 @@ export interface PlantEntities {
   pellet_today: string;
   pellet_week: string;
   pellet_month: string;
+  /** temperatura misurata in ingresso alla serpentina solare del boiler (fluido caldo dal collettore) */
+  coil_solar_in: string;
+  /** temperatura misurata in uscita dalla serpentina solare (ritorno al collettore) */
+  coil_solar_out: string;
+  /** temperatura misurata in ingresso (mandata dal puffer) e in uscita (ritorno al puffer) della serpentina di integrazione */
+  coil_integ_in: string;
+  coil_integ_out: string;
+  /** massima prevista del collettore oggi e massima gia' raggiunta */
+  panel_max: string;
+  panel_max_today: string;
 }
 
 export const DEFAULT_ENTITIES: PlantEntities = {
@@ -115,6 +125,12 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   pellet_today: "sensor.caldaia_pellet_oggi",
   pellet_week: "sensor.caldaia_pellet_settimana",
   pellet_month: "sensor.caldaia_pellet_mese",
+  coil_solar_in: "sensor.solare_termico_solare_serpentina_ingresso",
+  coil_solar_out: "sensor.solare_termico_solare_serpentina_uscita",
+  coil_integ_in: "sensor.solare_termico_integrazione_serpentina_ingresso",
+  coil_integ_out: "sensor.solare_termico_integrazione_serpentina_uscita",
+  panel_max: "sensor.solare_pannello_massima_prevista",
+  panel_max_today: "sensor.solare_pannello_massima_oggi",
 };
 
 /** Un numero oppure l'id di un'entità numerica. */
@@ -329,6 +345,18 @@ export class ImpiantoOverviewCard extends LitElement {
     const collectorPill = collectorPumpPill(this._yes(e.collector_pump), this._n(e.collector_power));
     const pumpOn = integrationPill.key === "running";
     const collectorOn = collectorPill.key === "running";
+    const panel = panelModel(
+      this._yes(e.collector_pump),
+      this._n(e.coil_solar_in),
+      collector,
+      this._n(e.panel_max),
+      this._n(e.panel_max_today),
+    );
+    const panelFill = panelColor(panel.value);
+    const solarIn = this._n(e.coil_solar_in);
+    const solarOut = this._n(e.coil_solar_out);
+    const integIn = this._n(e.coil_integ_in);
+    const integOut = this._n(e.coil_integ_out);
     const btn = boostButton(this._s(e.boost_state), this._armed);
 
     return html`
@@ -362,8 +390,8 @@ export class ImpiantoOverviewCard extends LitElement {
           <path d="M440 268 H520 V315 H575" class="pipe warm thin" />
           <path d="M685 215 H700" class="pipe hot thin" />
           <path d="M685 300 H700" class="pipe warm thin" />
-          <text x="452" y="196" class="t2 s13">mandata</text>
-          <text x="528" y="338" class="t2 s13">ritorno</text>
+          <text x="452" y="196" class="t2 s13">mandata${integIn !== null ? ` · ${fmt(integIn, 1)} °C` : ""}</text>
+          <text x="452" y="258" class="t2 s13">ritorno${integOut !== null ? ` · ${fmt(integOut, 1)} °C` : ""}</text>
         </g>
 
         <!-- boiler -->
@@ -435,6 +463,33 @@ export class ImpiantoOverviewCard extends LitElement {
         <rect x="587" y="224" width="86" height="64" rx="14" class="pill big" />
         <text x="630" y="247" class="t2 s13" text-anchor="middle">temperatura</text>
         <text x="630" y="276" class="t1 b" font-size="23" text-anchor="middle">${fmt(puffer, 0)} °C</text>
+        </g>
+
+        <!-- pannello solare e circuito del collettore -->
+        <g class="pufgroup pannello">
+          <path d="M598 500 H540 V560 H440" class="pipe hot thin" />
+          <path d="M440 656 H570 V552 H598" class="pipe cold thin" />
+          ${collectorOn
+            ? svg`<path d="M598 500 H540 V560 H440" class="coilflow" /><path d="M440 656 H570 V552 H598" class="coilflow" />`
+            : nothing}
+          <text x="448" y="550" class="t2 s13">${solarIn !== null ? `${fmt(solarIn, 1)} °C` : ""}</text>
+          <text x="448" y="646" class="t2 s13">${solarOut !== null ? `${fmt(solarOut, 1)} °C` : ""}</text>
+          <text x="630" y="442" class="t1 b s14" text-anchor="middle">Pannello solare</text>
+          <polygon points="616,462 692,462 676,568 592,568" fill=${panelFill} class="outline panelbody" />
+          <g class="panelgrid">
+            <line x1="641" y1="462" x2="634" y2="568" /><line x1="667" y1="462" x2="655" y2="568" />
+            <line x1="604" y1="515" x2="684" y2="515" /><line x1="610" y1="541" x2="680" y2="541" /><line x1="610" y1="489" x2="688" y2="489" />
+          </g>
+          <polygon points="616,462 640,462 612,568 592,568" fill="#fff" opacity="0.16" />
+          <line x1="618" y1="568" x2="612" y2="586" class="panelleg" /><line x1="666" y1="568" x2="672" y2="586" class="panelleg" />
+          <text x="630" y="612" class="t1 b" font-size="23" text-anchor="middle">${panel.value === null ? "–" : `${fmt(panel.value, 0)} °C`}</text>
+          <text x="630" y="630" class="t2 s13" text-anchor="middle">${panel.caption}</text>
+          ${panel.maxPredicted !== null
+            ? svg`<text x="630" y="680" class="b s13" text-anchor="middle" fill="#f59e0b">max prevista ${fmt(panel.maxPredicted, 0)} °C</text>`
+            : nothing}
+          ${panel.maxToday !== null
+            ? svg`<text x="630" y="698" class="t2 s13" text-anchor="middle">raggiunta oggi ${fmt(panel.maxToday, 0)} °C</text>`
+            : nothing}
         </g>
       </svg>
     `;
@@ -770,6 +825,19 @@ export class ImpiantoOverviewCard extends LitElement {
       stroke-width: 8;
     }
     /* acqua che scorre dentro la serpentina: tratteggio chiaro che si muove */
+    .panelbody {
+      stroke-width: 3;
+    }
+    .panelgrid line {
+      stroke: #ffffff;
+      stroke-opacity: 0.5;
+      stroke-width: 1.5;
+    }
+    .panelleg {
+      stroke: #64748b;
+      stroke-width: 4;
+      stroke-linecap: round;
+    }
     .coilflow {
       fill: none;
       stroke: #ffffff;

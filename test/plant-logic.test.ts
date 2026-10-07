@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_MODEL, boostButton, collectorPumpPill, integrationPumpPill, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber } from "../src/plant-logic";
+import { DEFAULT_MODEL, boostButton, collectorPumpPill, integrationPumpPill, panelColor, panelModel, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber } from "../src/plant-logic";
 
 test("docce: boiler caldo in alto, freddo in basso", () => {
   // zona alta 95 L a 55,6 °C -> 95*(40,6)/23 = 167,7 L a 38 °C -> 4 docce da 40 L
@@ -112,4 +112,28 @@ test("pompa collettore: watt solo se in marcia e oltre la soglia", () => {
   assert.equal(collectorPumpPill(true, 1.1).label, "collettore");
   assert.equal(collectorPumpPill(false, 32).key, "idle");
   assert.equal(collectorPumpPill(null, null).key, "idle");
+});
+
+test("pannello: misurata a pompa in marcia, stimata altrimenti", () => {
+  assert.equal(panelModel(true, 33.5, 41.6, 60, 42).value, 33.5);
+  assert.equal(panelModel(true, 33.5, 41.6, 60, 42).source, "misurata");
+  assert.equal(panelModel(false, 33.5, 41.6, 60, 42).value, 41.6);
+  assert.equal(panelModel(false, 33.5, 41.6, 60, 42).caption, "stimata · pompa ferma");
+  assert.equal(panelModel(true, null, 41.6, 60, 42).source, "stimata");
+  assert.equal(panelModel(null, null, null, null, null).source, "nd");
+  assert.equal(panelModel(null, null, null, null, null).value, null);
+});
+
+test("pannello: la massima prevista non scende sotto quella di oggi", () => {
+  assert.equal(panelModel(false, null, 40, 55, 58).maxPredicted, 58);
+  assert.equal(panelModel(false, null, 40, 70, 58).maxPredicted, 70);
+  assert.equal(panelModel(false, null, 40, null, 58).maxPredicted, null);
+});
+
+test("pannello: colore sull'acqua fino a 65 gradi, poi piu' scuro", () => {
+  assert.equal(panelColor(30), tempColor(30));
+  assert.equal(panelColor(65), tempColor(65));
+  assert.notEqual(panelColor(90), tempColor(65));
+  assert.equal(panelColor(null), "#94a3b8");
+  assert.equal(panelColor(100), "rgb(127, 29, 29)");
 });
