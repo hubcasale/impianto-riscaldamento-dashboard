@@ -108,6 +108,7 @@ flowchart TD
 | Boiler alto / basso, grezzi (ESP32) | `sensor.solare_termico_boiler_alto`, `sensor.garage_solare_termico_boiler_basso` |
 | Boiler alto / basso, corretti (S3 / S2) | `sensor.boiler_solare_alto_stimato`, `sensor.boiler_solare_basso_stimato` |
 | Media, stratificazione, energia, acqua equivalente | `sensor.boiler_solare_temperatura_media`, `..._stratificazione`, `..._energia_accumulata`, `..._acqua_calda_equivalente` |
+| Sonde nuove (7/10/2026) | Sonde ESP32 più piccole su S3 e S2: k = 1, correzione fissa +4 °C (S3 della centralina sopra la sonda alta) e +3 °C (S2 sopra la bassa), punti di taratura azzerati (automazione v5 in `boiler_solare.yaml`). Letture di conferma: alto 50,1 → 54,1 °C, basso 20,4 → 23,4 °C. Per affinare, registrare nuovi punti con la scheda di taratura a temperature diverse. |
 | Curva di taratura (si adatta da sola) | `sensor.boiler_solare_curva_sonda_alta` / `..._bassa` (attributi `a`, `b`, `punti`), `input_text.boiler_cal_punti_alto` / `..._basso`, `input_number.boiler_cal_s3` / `..._s2`, script `boiler_cal_registra_*` e `boiler_cal_annulla_*` (scheda: `examples/taratura.yaml`) |
 | Modello di partenza (usato con meno di 3 punti) | `input_number.boiler_solare_t_ambiente` (16), `..._k_alto` (0,766), `..._k_basso` (0,73); `..._delta_alto` / `..._delta_basso` (0) per ritocchi fini |
 | Stato e puffer della Polygon | `sensor.casale_stato`, `sensor.casale_temperatura_boiler` (= puffer da 50 L), `sensor.casale_temperatura_acqua` |

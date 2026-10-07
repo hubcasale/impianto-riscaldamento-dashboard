@@ -4,7 +4,9 @@
 # il resto dalla sonda bassa (sul fondo del serbatoio).
 # Il peso della zona alta e' regolabile (default 40 %).
 # Le sonde NTC dell'ESP32 hanno oggi uno scarso contatto termico: sentono in parte l'aria del garage e leggono piu'
-# basso della centralina Elios (S3 alta, S2 bassa). Correzione provvisoria con il modello di accoppiamento:
+# basso della centralina Elios (S3 alta, S2 bassa). Il 7/10/2026 sono state montate sonde piu' piccole: k = 1 e correzioni
+# fisse di +4 C (S3) e +3 C (S2) rispetto alla lettura grezza, punti di taratura azzerati (v5 sotto).
+# Correzione con il modello di accoppiamento (valida per le sonde vecchie):
 #     stimata = T_ambiente + (grezza - T_ambiente) / k + delta
 # con T_ambiente = 16 C (garage), k_alto = 0.766, k_basso = 0.73 (ricavati da 5 letture di S3/S2 della centralina,
 # errore sotto 0.3 C). Il delta serve per ritocchi fini. Quando arrivano le sonde nuove: k = 1 e delta = 0.
@@ -26,6 +28,9 @@ input_boolean:
     icon: mdi:check
   boiler_solare_defaults_v4_impostati:
     name: Boiler solare - valori iniziali v4 impostati
+    icon: mdi:check
+  boiler_solare_defaults_v5_impostati:
+    name: Boiler solare - valori iniziali v5 impostati
     icon: mdi:check
 
 input_text:
@@ -405,6 +410,40 @@ automation:
         data: {value: "21.4:23.4,27.8:32.2"}
       - action: input_boolean.turn_on
         target: {entity_id: input_boolean.boiler_solare_defaults_v4_impostati}
+
+  - id: boiler_solare_valori_iniziali_v5
+    alias: Boiler solare - valori iniziali v5 (sonde nuove)
+    description: >-
+      Sonde ESP32 piu' piccole montate il 7/10/2026: accoppiamento perfetto (k = 1), S3 della centralina 4 C sopra la
+      sonda alta e S2 3 C sopra la sonda bassa (correzioni fisse), punti di taratura delle sonde vecchie azzerati.
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.boiler_solare_defaults_v5_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_k_alto}
+        data: {value: 1}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_k_basso}
+        data: {value: 1}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_delta_alto}
+        data: {value: 4}
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_delta_basso}
+        data: {value: 3}
+      - action: input_text.set_value
+        target: {entity_id: input_text.boiler_cal_punti_alto}
+        data: {value: ""}
+      - action: input_text.set_value
+        target: {entity_id: input_text.boiler_cal_punti_basso}
+        data: {value: ""}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.boiler_solare_defaults_v5_impostati}
 
   - id: boiler_solare_valori_iniziali_v3
     alias: Boiler solare - valori iniziali v3
