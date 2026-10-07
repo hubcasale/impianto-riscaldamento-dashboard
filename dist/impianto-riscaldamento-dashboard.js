@@ -672,6 +672,12 @@ var SETTINGS_SECTIONS = [
     fields: [
       {
         kind: "number",
+        entity: "input_number.caldaia_pellet_kg_h_min",
+        label: "Consumo a potenza minima (30 %)",
+        hint: "Chili all'ora quando la caldaia modula al minimo."
+      },
+      {
+        kind: "number",
         entity: "input_number.caldaia_pellet_kg_h_max",
         label: "Consumo a potenza 100 %",
         hint: "Chili all'ora quando la caldaia lavora al massimo."
@@ -3313,7 +3319,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.10";
+var VERSION = "0.3.11";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

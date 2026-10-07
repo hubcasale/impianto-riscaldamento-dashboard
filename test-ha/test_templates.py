@@ -264,15 +264,19 @@ PELLET = yaml.safe_load(open("ha-packages/caldaia_pellet.yaml"))
 rate_tpl = find("sensor", "Caldaia pellet consumo istantaneo", PELLET)["state"]
 acc_tpl = PELLET["template"][1]["sensor"][0]["state"]
 tot_tpl = find("sensor", "Caldaia pellet stimato totale", PELLET)["state"]
-def rate(stato, pot="100", fattore="1", kgh="5.5", mant="0.2"):
+def rate(stato, pot="100", fattore="1", kgh="5.6", kmin="1.63", mant="0.2"):
     return render(rate_tpl, {"sensor.casale_stato": stato, "sensor.casale_potenza_reale": pot,
                              "input_number.caldaia_pellet_fattore": fattore, "input_number.caldaia_pellet_kg_h_max": kgh,
+                             "input_number.caldaia_pellet_kg_h_min": kmin,
                              "input_number.caldaia_pellet_kg_h_mantenimento": mant})
-check("pellet: WORK al 100 %", float(rate("WORK")), 5.5)
-check("pellet: WORK al 30 %", float(rate("WORK", "30")), 1.65)
-check("pellet: WORK con fattore di taratura", float(rate("WORK", "100", "1.1")), 6.05)
-check("pellet: potenza non valida vale 100 %", float(rate("WORK", "32768")), 5.5)
-check("pellet: potenza non disponibile vale 100 %", float(rate("WORK", "unavailable")), 5.5)
+check("pellet: WORK al 100 %", float(rate("WORK")), 5.6)
+check("pellet: WORK al 30 %", float(rate("WORK", "30")), 1.63)
+check("pellet: WORK al 65 % (interpolato)", float(rate("WORK", "65")), 3.615)
+check("pellet: WORK al 50 % (interpolato)", abs(float(rate("WORK", "50")) - 2.764) < 0.001, True)
+check("pellet: WORK sotto il 30 % in proporzione", float(rate("WORK", "15")), 0.815)
+check("pellet: WORK con fattore di taratura", float(rate("WORK", "100", "1.1")), 6.16)
+check("pellet: potenza non valida vale 100 %", float(rate("WORK", "32768")), 5.6)
+check("pellet: potenza non disponibile vale 100 %", float(rate("WORK", "unavailable")), 5.6)
 check("pellet: STAND BY mantenimento", float(rate("STAND BY")), 0.2)
 check("pellet: STOP mantenimento", float(rate("STOP")), 0.2)
 for st_ in ("ECO STOP", "OFF", "WAIT", "START", "unavailable"):

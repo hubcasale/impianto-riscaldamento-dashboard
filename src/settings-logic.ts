@@ -95,6 +95,12 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
     fields: [
       {
         kind: "number",
+        entity: "input_number.caldaia_pellet_kg_h_min",
+        label: "Consumo a potenza minima (30 %)",
+        hint: "Chili all'ora quando la caldaia modula al minimo.",
+      },
+      {
+        kind: "number",
         entity: "input_number.caldaia_pellet_kg_h_max",
         label: "Consumo a potenza 100 %",
         hint: "Chili all'ora quando la caldaia lavora al massimo.",

@@ -29,9 +29,9 @@ Sotto il puffer da 50 litri la scheda disegna la sagoma del pannello solare, col
 ## Stima del consumo di pellet
 
 `ha-packages/caldaia_pellet.yaml` stima i chili di pellet bruciati e la scheda li mostra sotto i contatori di oggi (oggi, settimana, mese). È una **stima** da calibrare: la caldaia non comunica i chili. Il modello usa lo stato e la potenza reale:
-- **WORK:** consumo a potenza 100 % (5,5 kg/h di partenza) x potenza reale (30 % al minimo, 100 % al massimo);
-- **STAND BY e STOP:** consumo di mantenimento (0,2 kg/h di partenza);
-- **ogni accensione** (ingresso in START): 200 g di partenza;
+- **WORK:** consumo interpolato fra i due valori del costruttore (1,63 kg/h al 30 %, 5,6 kg/h al 100 %) in base alla potenza reale (30 % al minimo, 100 % al massimo);
+- **STAND BY e STOP:** consumo di mantenimento (0,2 kg/h, ipotesi);
+- **ogni accensione** (ingresso in START): 200 g (ipotesi);
 - ECO STOP, OFF e WAIT: nessun consumo.
 
 Per tarare: dividi i chili di pellet realmente consumati in un periodo (sacchi aperti e finiti) per la stima dello stesso periodo e inserisci il risultato come fattore di taratura nelle preferenze (sezione «Consumo di pellet», ripiegata). Entità: `sensor.caldaia_pellet_oggi`, `_settimana`, `_mese` (si azzerano da sole), `sensor.caldaia_pellet_stimato_totale`, `sensor.caldaia_pellet_consumo_istantaneo` (kg/h).
