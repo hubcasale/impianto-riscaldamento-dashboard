@@ -1,0 +1,84 @@
+# Proxy Bluetooth per la stufa: ESP32-C3 SuperMini accanto alla stufa.
+# Serve al modo "Bluetooth locale" di Micronova Agua IOT (hubcasale): Home Assistant parla con il modulo della stufa
+# (si annuncia come T009_BFDA9C) attraverso questa scheda, senza passare dal cloud.
+# Prima installazione: via USB con ESPHome Web (Chrome); poi gli aggiornamenti via Wi-Fi.
+# Alimentazione: caricatore USB da telefono in una presa vicina (non dalla USB della stufa, salvo prova con il tester).
+
+substitutions:
+  device_name: ble-proxy-stufa
+
+esphome:
+  name: ${device_name}
+  friendly_name: Proxy Bluetooth stufa
+
+esp32:
+  board: esp32-c3-devkitm-1
+  variant: esp32c3
+  framework:
+    type: esp-idf
+
+# porta USB nativa della C3: il log passa da qui (senza questa riga non si vede nulla via USB)
+logger:
+  hardware_uart: USB_SERIAL_JTAG
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # Wi-Fi e Bluetooth condividono la radio: niente risparmio energetico
+  power_save_mode: none
+  # molte SuperMini hanno l'antenna poco curata: con la potenza al massimo il Wi-Fi diventa instabile
+  output_power: 8.5dB
+  ap:
+    ssid: proxy-stufa-hotspot
+    password: !secret hotspot_password
+
+# se il Wi-Fi di casa cambia, la scheda crea la rete proxy-stufa-hotspot per reimpostarlo
+captive_portal:
+
+# ---------- Bluetooth: proxy attivo (serve per le connessioni, non solo per la scansione) ----------
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 320ms
+    window: 40ms
+    active: true
+  # segnala quando vede il modulo della stufa (aggiornato al massimo ogni 30 s)
+  on_ble_advertise:
+    then:
+      - lambda: |-
+          static uint32_t ultimo = 0;
+          const std::string &n = x.get_name();
+          if (n.rfind("T009_", 0) == 0 || n.rfind("NAVEL_", 0) == 0 || n.rfind("Navel_", 0) == 0) {
+            if (millis() - ultimo < 30000 && ultimo != 0) return;
+            ultimo = millis();
+            char buf[80];
+            snprintf(buf, sizeof(buf), "%s %s %d dBm", n.c_str(), x.address_str().c_str(), x.get_rssi());
+            id(ble_modulo_stufa).publish_state(buf);
+          }
+
+bluetooth_proxy:
+  active: true
+
+text_sensor:
+  - platform: template
+    name: "BLE modulo stufa"
+    id: ble_modulo_stufa
+    entity_category: diagnostic
+    icon: mdi:bluetooth
+
+sensor:
+  - platform: wifi_signal
+    name: "Segnale Wi-Fi"
+    update_interval: 60s
+    entity_category: diagnostic
+  - platform: uptime
+    name: "Tempo di attivita"
+    update_interval: 60s
+    entity_category: diagnostic
