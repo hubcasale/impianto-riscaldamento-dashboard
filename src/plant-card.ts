@@ -79,6 +79,8 @@ export interface PlantEntities {
   /** massima prevista del collettore oggi e massima gia' raggiunta */
   panel_max: string;
   panel_max_today: string;
+  /** puffer: lettura della caldaia oppure, senza Internet, stima dalla sonda in ingresso alla serpentina */
+  puffer_effective: string;
 }
 
 export const DEFAULT_ENTITIES: PlantEntities = {
@@ -131,6 +133,7 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   coil_integ_out: "sensor.solare_termico_integrazione_serpentina_uscita",
   panel_max: "sensor.solare_pannello_massima_prevista",
   panel_max_today: "sensor.solare_pannello_massima_oggi",
+  puffer_effective: "sensor.puffer_temperatura_effettiva",
 };
 
 /** Un numero oppure l'id di un'entità numerica. */
@@ -326,7 +329,9 @@ export class ImpiantoOverviewCard extends LitElement {
     const bottom = this._n(e.boiler_bottom);
     const outlet = this._n(e.outlet) ?? top;
     const showers = showersEstimate(top, bottom, m);
-    const puffer = this._n(e.puffer);
+    const pufferId = this.hass.states[e.puffer_effective] ? e.puffer_effective : e.puffer;
+    const puffer = this._n(pufferId);
+    const pufferEstimated = this.hass.states[pufferId]?.attributes?.fonte === "sonda ingresso";
     const solarKw = this._n(e.solar_power);
     const collector = this._n(e.collector_temp);
     const cTop = tempColor(top);
@@ -457,7 +462,7 @@ export class ImpiantoOverviewCard extends LitElement {
         <text x="532" y="796" class="b s14" fill="#3b82f6">Acqua fredda</text>
         <text x="532" y="814" class="t2 s13">dalla rete</text>
 
-        <g class="pufgroup">${this._pufferShape(puffer)}</g>
+        <g class="pufgroup">${this._pufferShape(puffer, pufferEstimated)}</g>
 
         <!-- pannello solare e circuito del collettore -->
         <g class="pufgroup pannello">
@@ -473,7 +478,7 @@ export class ImpiantoOverviewCard extends LitElement {
       </svg>
       ${this._narrow
         ? svg`<svg class="boiler mini" viewBox="0 0 640 330" role="img" aria-label="Puffer e pannello solare">
-            <g transform="translate(-480 -140)">${this._pufferShape(puffer)}</g>
+            <g transform="translate(-480 -140)">${this._pufferShape(puffer, pufferEstimated)}</g>
             <text x="150" y="236" class="tv">${integIn !== null ? `→ ${fmt(integIn, 1)} °C` : ""}</text>
             <text x="150" y="266" class="tv">${integOut !== null ? `← ${fmt(integOut, 1)} °C` : ""}</text>
             <g transform="translate(-160 -420)">${this._panelShape(panel, panelFill)}</g>
@@ -484,12 +489,13 @@ export class ImpiantoOverviewCard extends LitElement {
   }
 
   /** Il puffer da 50 litri, con le coordinate del disegno largo (al centro x = 630). */
-  private _pufferShape(puffer: number | null) {
+  private _pufferShape(puffer: number | null, estimated = false) {
     return svg`
       <text x="630" y="158" class="t1 b s15" text-anchor="middle">Puffer 50 L</text>
       <rect x="575" y="170" width="110" height="170" rx="26" fill="url(#puffer)" class="outline" />
       <rect x="587" y="224" width="86" height="64" rx="14" class="pill big" />
-      <text x="630" y="264" class="t1 b val" text-anchor="middle">${fmt(puffer, 0)} °C</text>`;
+      <text x="630" y="${estimated ? 258 : 264}" class="t1 b val" text-anchor="middle">${fmt(puffer, 0)} °C</text>
+      ${estimated ? svg`<text x="630" y="279" class="t2 s13" text-anchor="middle">stima sonda</text>` : nothing}`;
   }
 
   /** La sagoma del pannello con i suoi testi, con le coordinate del disegno largo (al centro x = 630). */
@@ -639,7 +645,7 @@ export class ImpiantoOverviewCard extends LitElement {
           <div>${this._legendFlame(0.62)}<b class="red">In lavoro</b><small>WORK</small></div>
         </div>
         <div class="tiles">
-          ${this._tile("Puffer 50 L", `${fmt(this._n(e.puffer), 1)} °C`, "#f59e0b")}
+          ${this._tile("Puffer 50 L", `${fmt(this._n(this.hass.states[e.puffer_effective] ? e.puffer_effective : e.puffer), 1)} °C${this.hass.states[e.puffer_effective]?.attributes?.fonte === "sonda ingresso" ? " (stima)" : ""}`, "#f59e0b")}
           ${this._tile("Set boiler", `${fmt(this._n(e.set_boiler), 0)} °C`)}
           ${this._tile("Set acqua", `${fmt(this._n(e.set_water), 0)} °C`)}
           ${this._tile("Fumi", `${fmt(this._n(e.smoke), 0)} °C`)}

@@ -1327,7 +1327,8 @@ var DEFAULT_ENTITIES = {
   coil_integ_in: "sensor.solare_termico_integrazione_serpentina_ingresso",
   coil_integ_out: "sensor.solare_termico_integrazione_serpentina_uscita",
   panel_max: "sensor.solare_pannello_massima_prevista",
-  panel_max_today: "sensor.solare_pannello_massima_oggi"
+  panel_max_today: "sensor.solare_pannello_massima_oggi",
+  puffer_effective: "sensor.puffer_temperatura_effettiva"
 };
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
@@ -1470,7 +1471,9 @@ var ImpiantoOverviewCard = class extends i4 {
     const bottom = this._n(e5.boiler_bottom);
     const outlet = this._n(e5.outlet) ?? top;
     const showers = showersEstimate(top, bottom, m2);
-    const puffer = this._n(e5.puffer);
+    const pufferId = this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer;
+    const puffer = this._n(pufferId);
+    const pufferEstimated = this.hass.states[pufferId]?.attributes?.fonte === "sonda ingresso";
     const solarKw = this._n(e5.solar_power);
     const collector = this._n(e5.collector_temp);
     const cTop = tempColor(top);
@@ -1596,7 +1599,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <text x="532" y="796" class="b s14" fill="#3b82f6">Acqua fredda</text>
         <text x="532" y="814" class="t2 s13">dalla rete</text>
 
-        <g class="pufgroup">${this._pufferShape(puffer)}</g>
+        <g class="pufgroup">${this._pufferShape(puffer, pufferEstimated)}</g>
 
         <!-- pannello solare e circuito del collettore -->
         <g class="pufgroup pannello">
@@ -1609,7 +1612,7 @@ var ImpiantoOverviewCard = class extends i4 {
         </g>
       </svg>
       ${this._narrow ? w`<svg class="boiler mini" viewBox="0 0 640 330" role="img" aria-label="Puffer e pannello solare">
-            <g transform="translate(-480 -140)">${this._pufferShape(puffer)}</g>
+            <g transform="translate(-480 -140)">${this._pufferShape(puffer, pufferEstimated)}</g>
             <text x="150" y="236" class="tv">${integIn !== null ? `\u2192 ${fmt(integIn, 1)} \xB0C` : ""}</text>
             <text x="150" y="266" class="tv">${integOut !== null ? `\u2190 ${fmt(integOut, 1)} \xB0C` : ""}</text>
             <g transform="translate(-160 -420)">${this._panelShape(panel, panelFill)}</g>
@@ -1618,12 +1621,13 @@ var ImpiantoOverviewCard = class extends i4 {
     `;
   }
   /** Il puffer da 50 litri, con le coordinate del disegno largo (al centro x = 630). */
-  _pufferShape(puffer) {
+  _pufferShape(puffer, estimated = false) {
     return w`
       <text x="630" y="158" class="t1 b s15" text-anchor="middle">Puffer 50 L</text>
       <rect x="575" y="170" width="110" height="170" rx="26" fill="url(#puffer)" class="outline" />
       <rect x="587" y="224" width="86" height="64" rx="14" class="pill big" />
-      <text x="630" y="264" class="t1 b val" text-anchor="middle">${fmt(puffer, 0)} °C</text>`;
+      <text x="630" y="${estimated ? 258 : 264}" class="t1 b val" text-anchor="middle">${fmt(puffer, 0)} °C</text>
+      ${estimated ? w`<text x="630" y="279" class="t2 s13" text-anchor="middle">stima sonda</text>` : A}`;
   }
   /** La sagoma del pannello con i suoi testi, con le coordinate del disegno largo (al centro x = 630). */
   _panelShape(panel, fill) {
@@ -1750,7 +1754,7 @@ var ImpiantoOverviewCard = class extends i4 {
           <div>${this._legendFlame(0.62)}<b class="red">In lavoro</b><small>WORK</small></div>
         </div>
         <div class="tiles">
-          ${this._tile("Puffer 50 L", `${fmt(this._n(e5.puffer), 1)} \xB0C`, "#f59e0b")}
+          ${this._tile("Puffer 50 L", `${fmt(this._n(this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer), 1)} \xB0C${this.hass.states[e5.puffer_effective]?.attributes?.fonte === "sonda ingresso" ? " (stima)" : ""}`, "#f59e0b")}
           ${this._tile("Set boiler", `${fmt(this._n(e5.set_boiler), 0)} \xB0C`)}
           ${this._tile("Set acqua", `${fmt(this._n(e5.set_water), 0)} \xB0C`)}
           ${this._tile("Fumi", `${fmt(this._n(e5.smoke), 0)} \xB0C`)}
@@ -3319,7 +3323,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.11";
+var VERSION = "0.3.12";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

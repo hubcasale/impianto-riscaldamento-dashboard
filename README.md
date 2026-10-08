@@ -17,6 +17,10 @@ Funzionano sia su tema chiaro che scuro (usano i colori del tema di Home Assista
 > Gli screenshot vengono dal banco di prova (`dev/index.html`) con dati di esempio.
 > Il lunedì P1 e P3 si sovrappongono apposta, per mostrare l'avviso.
 
+## Puffer senza Internet
+
+La temperatura del puffer arriva dal cloud Micronova e senza Internet diventa non disponibile. `sensor.puffer_temperatura_effettiva` (in `ha-packages/caldaia_integrazione_blocco.yaml`) usa la lettura della caldaia finché c'è; se manca da più di 5 minuti la ricava dalla sonda ESP32 in ingresso alla serpentina di integrazione con il modello `puffer = T_amb + (sonda − T_amb) / k` (k = 0,753 e T_amb = 19,7 °C, ricavati il 8/10/2026 da 747 letture a pompa in marcia: errore medio 0,8 °C). La sonda legge il puffer solo con la pompa in marcia: a pompa ferma il valore non è affidabile e la regola di blocco/forzatura **non interviene mai**. Sulla scheda il puffer compare con la scritta «stima sonda». Parametri regolabili: minuti di attesa, k e temperatura ambiente.
+
 ## Pannello solare sulla scheda
 
 Sotto il puffer da 50 litri la scheda disegna la sagoma del pannello solare, collegata alla serpentina solare del boiler. Il colore segue la temperatura (come il boiler, poi più scuro oltre i 65 °C).

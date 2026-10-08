@@ -18,7 +18,7 @@ def find(domain, name, pkg=None):
     raise KeyError(name)
 
 
-def make_env(states, attrs, now):
+def make_env(states, attrs, now, changed=None):
     env = Environment()
 
     def st(eid):
@@ -41,13 +41,23 @@ def make_env(states, attrs, now):
     env.filters['as_datetime'] = lambda v, d=None: dt.datetime.fromisoformat(v) if isinstance(v, str) else d
     env.filters['as_local'] = lambda v: v
     env.globals.update(sin=math.sin, cos=math.cos, tan=math.tan, sqrt=math.sqrt, pi=math.pi, e=math.e)
-    env.globals.update(timedelta=dt.timedelta, states=st, is_state=is_state, is_number=is_number, state_attr=state_attr, now=lambda: now)
+    class _Dom:
+        def __init__(self, dom): self._d = dom
+        def __getattr__(self, name):
+            eid = f"{self._d}.{name}"
+            return types.SimpleNamespace(state=st(eid), last_changed=(changed or {}).get(eid, now)) if eid in states else None
+
+    class _States:
+        def __call__(self, eid): return st(eid)
+        def __getattr__(self, dom): return _Dom(dom)
+
+    env.globals.update(timedelta=dt.timedelta, states=_States(), is_state=is_state, is_number=is_number, state_attr=state_attr, now=lambda: now)
     return env
 
 
-def render(tpl, states, attrs=None, now=None, this_state=None, extra=None, this_attrs=None):
+def render(tpl, states, attrs=None, now=None, this_state=None, extra=None, this_attrs=None, changed=None):
     now = now or dt.datetime(2026, 10, 5, 6, 0)  # lunedi
-    env = make_env(states, attrs or {}, now)
+    env = make_env(states, attrs or {}, now, changed or {})
     this = types.SimpleNamespace(state=this_state, attributes=this_attrs or {})
     return env.from_string(tpl).render(this=this, **(extra or {})).strip()
 
@@ -235,15 +245,15 @@ BLOCCO = yaml.safe_load(open("ha-packages/caldaia_integrazione_blocco.yaml"))
 inutile = find("binary_sensor", "Caldaia integrazione inutile", BLOCCO)["state"]
 forzare = find("binary_sensor", "Caldaia integrazione da forzare", BLOCCO)["state"]
 def inu(p, b, prima=None, **extra):
-    st = {"sensor.casale_temperatura_boiler": p, "sensor.boiler_solare_alto_stimato": b,
+    st = {"sensor.puffer_temperatura_effettiva": p, "sensor.boiler_solare_alto_stimato": b,
           "input_number.caldaia_integrazione_delta_blocco": "4", "input_number.caldaia_integrazione_delta_sblocco": "7"}
     st.update(extra)
-    return render(inutile, st, this_state=prima)
+    return render(inutile, st, attrs={("sensor.puffer_temperatura_effettiva", "affidabile"): True}, this_state=prima)
 def forz(p, b, inutile_state="off", prima=None, tmax="55", h="2"):
-    st = {"sensor.casale_temperatura_boiler": p, "sensor.boiler_solare_alto_stimato": b,
+    st = {"sensor.puffer_temperatura_effettiva": p, "sensor.boiler_solare_alto_stimato": b,
           "binary_sensor.caldaia_integrazione_inutile": inutile_state,
           "input_number.caldaia_integrazione_temp_max": tmax, "input_number.caldaia_integrazione_isteresi_max": h}
-    return render(forzare, st, this_state=prima)
+    return render(forzare, st, attrs={("sensor.puffer_temperatura_effettiva", "affidabile"): True}, this_state=prima)
 check("inutile: puffer appena sopra il boiler", inu("44", "43.2"), "True")
 check("inutile: puffer molto piu caldo", inu("60", "45"), "False")
 check("inutile: isteresi, resta inutile tra 4 e 7", inu("50", "45", "on"), "True")
@@ -360,6 +370,43 @@ check("previsione: umidita di riserva", out[1]["u"], 60.0)
 check("previsione: ora decimale", out[1]["h"], 11.5)
 out2 = eval(render(ore_tpl, {}, now=dt.datetime(2026, 10, 7, 9, 0), extra={}, this_state=None).replace("[]", "[]") or "[]")
 check("previsione: senza servizio resta l'elenco precedente (vuoto)", out2, [])
+
+
+# ---- puffer effettivo senza Internet
+EFF = find("sensor", "Puffer temperatura effettiva", BLOCCO)
+def eff(cloud, sonda="55.3", pompa="on", minuti_da=10, attesa="5"):
+    now_ = dt.datetime(2026, 10, 8, 19, 0)
+    stati = {"sensor.casale_temperatura_boiler": cloud, "sensor.solare_termico_integrazione_serpentina_ingresso": sonda,
+             "binary_sensor.caldaia_pompa_integrazione_attiva": pompa, "input_number.caldaia_puffer_attesa_minuti": attesa,
+             "input_number.caldaia_puffer_k_sonda": "0.753", "input_number.caldaia_puffer_t_ambiente_sonda": "19.7"}
+    ch = {"sensor.casale_temperatura_boiler": now_ - dt.timedelta(minutes=minuti_da)}
+    return (render(EFF["availability"], stati, now=now_, changed=ch), render(EFF["state"], stati, now=now_, changed=ch),
+            render(EFF["attributes"]["fonte"], stati, now=now_, changed=ch), render(EFF["attributes"]["affidabile"], stati, now=now_, changed=ch))
+check("puffer: con la lettura della caldaia usa quella", eff("64.0")[1], "64.0")
+check("puffer: fonte caldaia", eff("64.0")[2], "caldaia")
+check("puffer: caldaia non disponibile da 3 minuti, si aspetta", eff("unavailable", minuti_da=3)[0], "False")
+check("puffer: caldaia non disponibile da 10 minuti, disponibile dalla sonda", eff("unavailable", minuti_da=10)[0], "True")
+check("puffer: dalla sonda 55,3 C con k=0,753", float(eff("unavailable")[1]), 67.0)
+check("puffer: fonte sonda ingresso", eff("unavailable")[2], "sonda ingresso")
+check("puffer: sonda con pompa in marcia e' affidabile", eff("unavailable", pompa="on")[3], "True")
+check("puffer: sonda a pompa ferma non e' affidabile", eff("unavailable", pompa="off")[3], "False")
+check("puffer: lettura della caldaia e' sempre affidabile", eff("64.0", pompa="off")[3], "True")
+check("puffer: nessuna delle due letture", eff("unavailable", sonda="unavailable")[0], "False")
+INU = find("binary_sensor", "Caldaia integrazione inutile", BLOCCO)["state"]
+FOR = find("binary_sensor", "Caldaia integrazione da forzare", BLOCCO)["state"]
+def inu2(p, b, aff, prima=None):
+    st_ = {"sensor.puffer_temperatura_effettiva": p, "sensor.boiler_solare_alto_stimato": b,
+           "input_number.caldaia_integrazione_delta_blocco": "4", "input_number.caldaia_integrazione_delta_sblocco": "7"}
+    return render(INU, st_, attrs={("sensor.puffer_temperatura_effettiva", "affidabile"): aff}, this_state=prima)
+check("regola: puffer affidabile e freddo, blocca", inu2("44", "43", True), "True")
+check("regola: puffer non affidabile, non blocca mai", inu2("44", "43", False), "False")
+def for2(p, b, aff):
+    st_ = {"sensor.puffer_temperatura_effettiva": p, "sensor.boiler_solare_alto_stimato": b,
+           "binary_sensor.caldaia_integrazione_inutile": "off", "input_number.caldaia_integrazione_temp_max": "55",
+           "input_number.caldaia_integrazione_isteresi_max": "2"}
+    return render(FOR, st_, attrs={("sensor.puffer_temperatura_effettiva", "affidabile"): aff})
+check("regola: puffer affidabile e caldo, forza", for2("70", "45", True), "True")
+check("regola: puffer non affidabile, non forza", for2("70", "45", False), "False")
 
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

@@ -6,7 +6,17 @@
 # Home Assistant lo rinnova ogni 5 minuti e lo toglie subito con /unblock; se Home Assistant o il Wi-Fi spariscono la
 # pompa torna a seguire l'Elios.
 #
-# Regola (differenza = puffer, sensor.casale_temperatura_boiler, meno boiler alto stimato, sensor.boiler_solare_alto_stimato):
+# PUFFER SENZA INTERNET: la temperatura del puffer arriva dal cloud Micronova (sensor.casale_temperatura_boiler) e senza
+# Internet diventa non disponibile. sensor.puffer_temperatura_effettiva usa la lettura della caldaia finche' c'e'; se manca
+# da piu' di "minuti senza lettura" (5) usa la sonda ESP32 in ingresso alla serpentina di integrazione (mandata dal puffer,
+# sensor.solare_termico_integrazione_serpentina_ingresso) con il modello di accoppiamento
+#     puffer = T_ambiente + (sonda - T_ambiente) / k      con k = 0,753 e T_ambiente = 19,7 C
+# ricavato il 8/10/2026 da 747 letture con pompa in marcia (puffer = 1,328 x sonda - 6,46, errore medio 0,8 C; la sonda
+# legge circa 8-12 C meno del puffer perche' il tubo cede calore). Quella sonda legge il puffer solo
+# con la pompa in marcia (a pompa ferma il tubo si raffredda): con la sonda e la pompa ferma il valore NON e' affidabile
+# (attributo affidabile = false) e la regola non blocca e non forza mai.
+#
+# Regola (differenza = puffer effettivo, sensor.puffer_temperatura_effettiva, meno boiler alto stimato, sensor.boiler_solare_alto_stimato):
 #   - la pompa e' "inutile" quando la differenza e' sotto "delta blocco" (4 C) e torna "utile" sopra "delta sblocco" (7 C);
 #   - se e' inutile e l'Elios la chiama: BLOCCO (relè aperto);
 #   - se e' utile, il boiler alto e' sotto la temperatura massima e la forzatura e' attiva: ACCENSIONE FORZATA anche se
@@ -29,11 +39,34 @@ input_boolean:
   caldaia_integrazione_defaults_impostati:
     name: Integrazione - soglie blocco, valori iniziali impostati
     icon: mdi:check
+  caldaia_puffer_defaults_impostati:
+    name: Puffer - valori iniziali impostati
+    icon: mdi:check
   caldaia_integrazione_defaults_v2_impostati:
     name: Integrazione - soglie accensione forzata, valori iniziali impostati
     icon: mdi:check
 
 input_number:
+  caldaia_puffer_attesa_minuti:
+    name: Puffer - minuti senza lettura prima di usare la sonda di ingresso
+    min: 1
+    max: 120
+    step: 1
+    unit_of_measurement: min
+    mode: box
+  caldaia_puffer_k_sonda:
+    name: Puffer - accoppiamento della sonda di ingresso (1 = perfetto)
+    min: 0.3
+    max: 1
+    step: 0.001
+    mode: box
+  caldaia_puffer_t_ambiente_sonda:
+    name: Puffer - temperatura ambiente della sonda di ingresso
+    min: 0
+    max: 40
+    step: 0.1
+    unit_of_measurement: °C
+    mode: box
   caldaia_integrazione_delta_blocco:
     name: Integrazione - blocca se il puffer supera il boiler di meno di
     min: 0
@@ -78,14 +111,42 @@ rest_command:
     timeout: 8
 
 template:
+  - sensor:
+      - name: Puffer temperatura effettiva
+        unique_id: puffer_temperatura_effettiva
+        unit_of_measurement: °C
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-water
+        availability: >
+          {% set c = states('sensor.casale_temperatura_boiler') %}
+          {% set st = states.sensor.casale_temperatura_boiler %}
+          {% set minuti = ((now() - st.last_changed).total_seconds() / 60) if st is not none else 9999 %}
+          {{ is_number(c) or (is_number(states('sensor.solare_termico_integrazione_serpentina_ingresso'))
+                              and minuti >= states('input_number.caldaia_puffer_attesa_minuti') | float(5)) }}
+        state: >
+          {% set c = states('sensor.casale_temperatura_boiler') %}
+          {% if is_number(c) %}{{ c | float }}
+          {% else %}
+            {% set amb = states('input_number.caldaia_puffer_t_ambiente_sonda') | float(19.7) %}
+            {% set k = states('input_number.caldaia_puffer_k_sonda') | float(0.753) %}
+            {{ (amb + (states('sensor.solare_termico_integrazione_serpentina_ingresso') | float(0) - amb) / k) | round(1) }}
+          {% endif %}
+        attributes:
+          fonte: "{{ 'caldaia' if is_number(states('sensor.casale_temperatura_boiler')) else 'sonda ingresso' }}"
+          affidabile: >
+            {{ is_number(states('sensor.casale_temperatura_boiler'))
+               or is_state('binary_sensor.caldaia_pompa_integrazione_attiva', 'on') }}
+
   - binary_sensor:
       - name: Caldaia integrazione inutile
         unique_id: caldaia_integrazione_inutile
         icon: mdi:pump-off
         state: >
-          {% set p = states('sensor.casale_temperatura_boiler') | float(none) %}
+          {% set p = states('sensor.puffer_temperatura_effettiva') | float(none) %}
           {% set b = states('sensor.boiler_solare_alto_stimato') | float(none) %}
-          {% if p is none or b is none %}false
+          {% set aff = state_attr('sensor.puffer_temperatura_effettiva', 'affidabile') %}
+          {% if p is none or b is none or aff is false or aff == 'False' %}false
           {% else %}
             {% set d = p - b %}
             {% if this.state == 'on' %}{{ d < states('input_number.caldaia_integrazione_delta_sblocco') | float(7) }}
@@ -93,7 +154,7 @@ template:
           {% endif %}
         attributes:
           differenza: >
-            {% set p = states('sensor.casale_temperatura_boiler') | float(none) %}
+            {% set p = states('sensor.puffer_temperatura_effettiva') | float(none) %}
             {% set b = states('sensor.boiler_solare_alto_stimato') | float(none) %}
             {{ none if p is none or b is none else (p - b) | round(1) }}
 
@@ -102,10 +163,11 @@ template:
         unique_id: caldaia_integrazione_da_forzare
         icon: mdi:pump
         state: >
-          {% set p = states('sensor.casale_temperatura_boiler') | float(none) %}
+          {% set p = states('sensor.puffer_temperatura_effettiva') | float(none) %}
           {% set b = states('sensor.boiler_solare_alto_stimato') | float(none) %}
           {% set inutile = states('binary_sensor.caldaia_integrazione_inutile') %}
-          {% if p is none or b is none or inutile != 'off' %}false
+          {% set aff = state_attr('sensor.puffer_temperatura_effettiva', 'affidabile') %}
+          {% if p is none or b is none or inutile != 'off' or aff is false or aff == 'False' %}false
           {% else %}
             {% set tmax = states('input_number.caldaia_integrazione_temp_max') | float(55) %}
             {% set h = states('input_number.caldaia_integrazione_isteresi_max') | float(2) %}
@@ -194,3 +256,25 @@ automation:
         data: {value: 2}
       - action: input_boolean.turn_on
         target: {entity_id: input_boolean.caldaia_integrazione_defaults_v2_impostati}
+
+  - id: caldaia_puffer_valori_iniziali
+    alias: Caldaia - puffer senza Internet, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_puffer_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_puffer_attesa_minuti}
+        data: {value: 5}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_puffer_k_sonda}
+        data: {value: 0.753}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_puffer_t_ambiente_sonda}
+        data: {value: 19.7}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_puffer_defaults_impostati}

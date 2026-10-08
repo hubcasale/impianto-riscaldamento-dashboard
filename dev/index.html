@@ -73,6 +73,7 @@ set("sensor.solare_termico_t_collettore_stimata", (q.get("pannello") === "sereno
 set("sensor.casale_stato", q.get("stato") || "WORK");
 set("sensor.casale_temperatura_acqua", 56);
 set("sensor.casale_temperatura_boiler", 61);
+set("sensor.puffer_temperatura_effettiva", 61, { unit_of_measurement: "°C", fonte: q.get("puffer") === "stima" ? "sonda ingresso" : "caldaia", affidabile: true });
 set("sensor.casale_temperatura_fumi", 55);
 set("sensor.casale_temperatura_fiamma", 53);
 set("sensor.casale_potenza_reale", 100);
