@@ -21,8 +21,8 @@ input_boolean:
   caldaia_assenza_ha_spento:
     name: Caldaia - spenta per assenza
     icon: mdi:home-off-outline
-  caldaia_assenza_defaults_impostati:
-    name: Caldaia - assenza, valori iniziali impostati
+  caldaia_assenza_valori_impostati:
+    name: Caldaia - assenza, valori iniziali (60 min) impostati
     icon: mdi:check
 
 input_number:
@@ -73,7 +73,7 @@ automation:
         entity_id: binary_sensor.caldaia_nessuno_in_casa
         to: "on"
         for:
-          minutes: "{{ states('input_number.caldaia_assenza_minuti') | int(90) }}"
+          minutes: "{{ states('input_number.caldaia_assenza_minuti') | int(60) }}"
       - trigger: state
         entity_id: sensor.casale_stato
         from: ["OFF", "STOP"]
@@ -101,7 +101,7 @@ automation:
       - condition: template
         value_template: >
           {{ (now() - states.binary_sensor.caldaia_nessuno_in_casa.last_changed).total_seconds()
-             >= states('input_number.caldaia_assenza_minuti') | float(90) * 60 }}
+             >= states('input_number.caldaia_assenza_minuti') | float(60) * 60 }}
       # la caldaia deve essere accesa (non spenta, non in allarme)
       - condition: template
         value_template: >
@@ -121,7 +121,7 @@ automation:
       - action: logbook.log
         data:
           name: Caldaia
-          message: spenta per assenza (nessuno in casa da {{ states('input_number.caldaia_assenza_minuti') | int(90) }} minuti)
+          message: spenta per assenza (nessuno in casa da {{ states('input_number.caldaia_assenza_minuti') | int(60) }} minuti)
       - action: notify.send_message
         continue_on_error: true
         target: {entity_id: notify.iphone_corrado}
@@ -191,16 +191,16 @@ automation:
         event: start
     conditions:
       - condition: state
-        entity_id: input_boolean.caldaia_assenza_defaults_impostati
+        entity_id: input_boolean.caldaia_assenza_valori_impostati
         state: "off"
     actions:
       - action: input_number.set_value
         target: {entity_id: input_number.caldaia_assenza_minuti}
-        data: {value: 90}
+        data: {value: 60}
       - action: input_number.set_value
         target: {entity_id: input_number.caldaia_assenza_t_esterna_min}
         data: {value: 5}
       - action: input_boolean.turn_on
         target: {entity_id: input_boolean.caldaia_assenza_attiva}
       - action: input_boolean.turn_on
-        target: {entity_id: input_boolean.caldaia_assenza_defaults_impostati}
+        target: {entity_id: input_boolean.caldaia_assenza_valori_impostati}

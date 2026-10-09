@@ -164,7 +164,7 @@ Le schede leggono sensori che qui sono forniti come esempio:
 
 ## Spegnimento con nessuno in casa
 
-`ha-packages/caldaia_assenza.yaml`. La presenza viene dai quattro iPhone di iCloud3 (`device_tracker.iphone_camilla/corrado/matilde/roberta`) **e** dal Wi-Fi: nessun iPhone deve risultare connesso a `CASALE2G` (i `device_tracker` del router hanno l'attributo `ssid`). Se una delle due fonti non è disponibile non si considera nessuno fuori. Dopo 90 minuti di assenza (regolabili) la Polygon accesa viene fermata, tranne con termostato che chiede calore, modalità ospiti, accensione rapida, gelo (meno di 5 °C fuori) o caldaia già spenta o in allarme. Al rientro si riaccende solo se un programma è attivo in quel momento. Interruttore: `input_boolean.caldaia_assenza_attiva`; ospiti: `input_boolean.caldaia_assenza_ospiti`.
+`ha-packages/caldaia_assenza.yaml`. La presenza viene dai quattro iPhone di iCloud3 (`device_tracker.iphone_camilla/corrado/matilde/roberta`) **e** dal Wi-Fi: nessun iPhone deve risultare connesso a `CASALE2G` (i `device_tracker` del router hanno l'attributo `ssid`). Se una delle due fonti non è disponibile non si considera nessuno fuori. Dopo 60 minuti di assenza (regolabili) la Polygon accesa viene fermata, tranne con termostato che chiede calore, modalità ospiti, accensione rapida, gelo (meno di 5 °C fuori) o caldaia già spenta o in allarme. Al rientro si riaccende solo se un programma è attivo in quel momento. Interruttore: `input_boolean.caldaia_assenza_attiva`; ospiti: `input_boolean.caldaia_assenza_ospiti`.
 
 ## Accensione rapida
 

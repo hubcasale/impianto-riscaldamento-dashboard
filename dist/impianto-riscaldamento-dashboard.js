@@ -667,6 +667,25 @@ var SETTINGS_SECTIONS = [
     ]
   },
   {
+    title: "Spegnimento se nessuno \xE8 in casa",
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_assenza_attiva",
+        label: "Spegni la caldaia con la casa vuota",
+        hint: "Usa gli iPhone (iCloud3) e il Wi-Fi CASALE2G. Al rientro riaccende solo se un programma \xE8 attivo."
+      },
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_assenza_ospiti",
+        label: "Ospiti in casa (non spegnere)",
+        hint: "Per chi non ha un telefono tracciato."
+      },
+      { kind: "number", entity: "input_number.caldaia_assenza_minuti", label: "Spegni dopo questi minuti di assenza" },
+      { kind: "number", entity: "input_number.caldaia_assenza_t_esterna_min", label: "Non spegnere se fuori fa meno di" }
+    ]
+  },
+  {
     title: "Consumo di pellet (stima)",
     advanced: true,
     fields: [
