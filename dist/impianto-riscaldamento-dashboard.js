@@ -1295,6 +1295,105 @@ function panelColor(t3) {
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
 
+// src/summary-logic.ts
+var RESTART_BELOW_SETPOINT = 4;
+var OFF_STATES = ["OFF", "SPENTO", "STOP", "ARRESTO", "UNKNOWN", "UNAVAILABLE", ""];
+function stoveLine(i5) {
+  const raw = (i5.stoveState ?? "").trim().toUpperCase();
+  const look = stoveLook(i5.stoveState);
+  if (raw === "UNAVAILABLE" || raw === "UNKNOWN" || raw === "") {
+    return {
+      icon: "mdi:lan-disconnect",
+      text: i5.pufferEstimated ? "Caldaia non raggiungibile: per il puffer uso la stima dalla sonda." : "Caldaia non raggiungibile.",
+      tone: "warn"
+    };
+  }
+  if (raw === "ECO STOP") {
+    const dove = i5.setBoiler !== null ? ` Riparte quando il puffer scende a circa ${fmt(i5.setBoiler - RESTART_BELOW_SETPOINT)} \xB0C${i5.puffer !== null ? ` (ora ${fmt(i5.puffer)} \xB0C)` : ""}.` : "";
+    return { icon: "mdi:pause-circle-outline", text: `Caldaia ferma in ECO STOP: l'acqua ha raggiunto la temperatura.${dove}`, tone: "info" };
+  }
+  if (look === "work")
+    return {
+      icon: "mdi:fire",
+      text: `Caldaia in lavoro${i5.power !== null ? ` al ${fmt(i5.power)} %` : ""}${i5.setWater !== null ? `: scalda l'acqua fino a ${fmt(i5.setWater)} \xB0C, poi va in ECO STOP` : ""}.`,
+      tone: "ok"
+    };
+  if (look === "start" || look === "wait")
+    return { icon: "mdi:fire-circle", text: "Caldaia in accensione: servono circa 15 minuti prima che scaldi.", tone: "info" };
+  if (look === "standby") return { icon: "mdi:sleep", text: "Caldaia in stand-by: aspetta una richiesta di calore.", tone: "info" };
+  if (raw === "STOP" || look === "stopping")
+    return { icon: "mdi:fire-off", text: "Caldaia in spegnimento.", tone: "info" };
+  return { icon: "mdi:fire-off", text: "Caldaia spenta.", tone: "info" };
+}
+function whyOffLine(i5) {
+  const raw = (i5.stoveState ?? "").trim().toUpperCase();
+  if (!OFF_STATES.includes(raw) || raw === "UNAVAILABLE" || raw === "UNKNOWN" || raw === "") return null;
+  if (i5.awayFlag) return { icon: "mdi:home-off", text: "\xC8 spenta perch\xE9 nessuno era in casa: riparte al rientro se c'\xE8 un programma attivo.", tone: "info" };
+  if (i5.guardFlag)
+    return { icon: "mdi:shield-check", text: "Ho annullato una partenza inutile: puffer e boiler erano gi\xE0 caldi.", tone: "info" };
+  if (i5.boostActive) return null;
+  if (i5.cronoOn === false)
+    return { icon: "mdi:palm-tree", text: "Cronotermostato disattivato (vacanza): non parte da sola.", tone: "info" };
+  if (i5.cronoOn && i5.programActive === false)
+    return { icon: "mdi:calendar-clock", text: "Fuori dalle fasce del cronotermostato: riparte al prossimo programma.", tone: "info" };
+  if (i5.cronoOn && i5.programActive)
+    return { icon: "mdi:calendar-check", text: "C'\xE8 un programma attivo: la caldaia dovrebbe partire da sola.", tone: "info" };
+  return null;
+}
+function pumpLine(i5) {
+  const p3 = i5.puffer !== null ? `${fmt(i5.puffer)} \xB0C` : "\u2013";
+  const b3 = i5.boilerTop !== null ? `${fmt(i5.boilerTop)} \xB0C` : "\u2013";
+  if (i5.integrationPump === "running")
+    return { icon: "mdi:pump", text: `Pompa di integrazione accesa: porta il calore del puffer (${p3}) al boiler (${b3}).`, tone: "ok" };
+  if (i5.integrationPump === "blocked")
+    return { icon: "mdi:pump-off", text: `Pompa di integrazione ferma: il puffer (${p3}) non \xE8 abbastanza pi\xF9 caldo del boiler (${b3}).`, tone: "info" };
+  return null;
+}
+function solarLine(i5) {
+  if (i5.collectorPumpOn === true)
+    return {
+      icon: "mdi:solar-power",
+      text: `Il solare sta scaldando il boiler${i5.collector !== null ? ` (collettore a ${fmt(i5.collector)} \xB0C)` : ""}.`,
+      tone: "ok"
+    };
+  if (i5.collectorPumpOn === false && i5.collector !== null)
+    return { icon: "mdi:weather-sunny-off", text: `Il solare \xE8 fermo (collettore a ${fmt(i5.collector)} \xB0C).`, tone: "info" };
+  return null;
+}
+function awayLine(i5) {
+  if (i5.guests) return { icon: "mdi:account-multiple", text: "Modalit\xE0 ospiti: la caldaia non si spegne per assenza.", tone: "info" };
+  if (i5.nobodyHome !== true) return null;
+  const min = i5.nobodyHomeMinutes !== null ? Math.round(i5.nobodyHomeMinutes) : null;
+  const da = min !== null ? ` da ${min} min` : "";
+  if (i5.awayEnabled === false) return { icon: "mdi:home-off", text: `Nessuno in casa${da} (lo spegnimento per assenza \xE8 disattivato).`, tone: "info" };
+  const raw = (i5.stoveState ?? "").trim().toUpperCase();
+  const accesa = !OFF_STATES.includes(raw);
+  if (accesa && min !== null && i5.awayMinutes !== null) {
+    const left = Math.max(0, Math.round(i5.awayMinutes - min));
+    return {
+      icon: "mdi:home-off",
+      text: left > 0 ? `Nessuno in casa${da}: la caldaia si spegne tra circa ${left} min.` : `Nessuno in casa${da}: sto per spegnere la caldaia.`,
+      tone: "warn"
+    };
+  }
+  return { icon: "mdi:home-off", text: `Nessuno in casa${da}.`, tone: "info" };
+}
+function summarize(i5) {
+  const lines = [];
+  const alarm = (i5.alarm ?? "").trim();
+  if (alarm) lines.push({ icon: "mdi:alert-octagon", text: `Allarme della caldaia: ${alarm}.`, tone: "bad" });
+  if (i5.pelletEmpty) lines.push({ icon: "mdi:grain", text: "Pellet esaurito: ricarica il serbatoio.", tone: "bad" });
+  else if (i5.pelletReserve) lines.push({ icon: "mdi:grain", text: "Il pellet sta per finire.", tone: "warn" });
+  lines.push(stoveLine(i5));
+  for (const l3 of [whyOffLine(i5), pumpLine(i5), solarLine(i5), awayLine(i5)]) if (l3) lines.push(l3);
+  if (i5.etaMinutes !== null) {
+    lines.push(
+      i5.etaMinutes > 0 ? { icon: "mdi:water-boiler", text: `L'acqua calda sar\xE0 pronta tra circa ${fmt(i5.etaMinutes)} min.`, tone: "info" } : { icon: "mdi:water-boiler", text: "L'acqua calda \xE8 gi\xE0 a temperatura d'uso.", tone: "ok" }
+    );
+  }
+  return lines;
+}
+
 // src/plant-card.ts
 var CARD_TAG = "impianto-overview-card";
 var DEFAULT_ENTITIES = {
@@ -1347,7 +1446,14 @@ var DEFAULT_ENTITIES = {
   coil_integ_out: "sensor.solare_termico_integrazione_serpentina_uscita",
   panel_max: "sensor.solare_pannello_massima_prevista",
   panel_max_today: "sensor.solare_pannello_massima_oggi",
-  puffer_effective: "sensor.puffer_temperatura_effettiva"
+  puffer_effective: "sensor.puffer_temperatura_effettiva",
+  crono_master: "switch.casale_cronotermostato_settimanale",
+  program_active: "binary_sensor.caldaia_programma_attivo_ora",
+  away: "binary_sensor.caldaia_nessuno_in_casa",
+  away_enabled: "input_boolean.caldaia_assenza_attiva",
+  away_flag: "input_boolean.caldaia_assenza_ha_spento",
+  away_guests: "input_boolean.caldaia_assenza_ospiti",
+  away_minutes: "input_number.caldaia_assenza_minuti"
 };
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
@@ -1804,6 +1910,57 @@ var ImpiantoOverviewCard = class extends i4 {
       </section>
     `;
   }
+  /** Riquadro "In breve": poche righe sul momento dell'impianto. */
+  _renderSummary() {
+    if (this._config.summary === false) return A;
+    const e5 = this._e;
+    const alarmRaw = (this._s(e5.alarm) ?? "").trim();
+    const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown" || alarmRaw.toLowerCase() === "unavailable";
+    const pufferId = this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer;
+    const awaySince = this.hass.states[e5.away]?.last_changed;
+    const pill = integrationPumpPill(
+      this._yes(e5.integration_pump),
+      this._yes(e5.integration_call),
+      this._yes(e5.integration_block_enabled),
+      this._yes(e5.integration_block_wanted),
+      this._n(e5.integration_power)
+    );
+    const eta = this.hass.states[e5.eta] ? this._n(e5.eta) : null;
+    const lines = summarize({
+      stoveState: this._s(e5.stove_state),
+      alarm: noAlarm ? null : alarmRaw,
+      power: this._n(e5.power),
+      setWater: this._n(e5.set_water),
+      setBoiler: this._n(e5.set_boiler),
+      puffer: this._n(pufferId),
+      pufferEstimated: this.hass.states[pufferId]?.attributes?.fonte === "sonda ingresso",
+      boilerTop: this._n(e5.boiler_top),
+      collector: this._n(e5.collector_temp),
+      integrationPump: pill.key,
+      collectorPumpOn: this._yes(e5.collector_pump),
+      etaMinutes: eta,
+      cronoOn: this._yes(e5.crono_master),
+      programActive: this._yes(e5.program_active),
+      guardFlag: this._yes(e5.guard_flag),
+      boostActive: this._s(e5.boost_state) === "attiva",
+      nobodyHome: this._yes(e5.away),
+      nobodyHomeMinutes: awaySince ? Math.max(0, (Date.now() - new Date(awaySince).getTime()) / 6e4) : null,
+      awayEnabled: this._yes(e5.away_enabled),
+      awayFlag: this._yes(e5.away_flag),
+      guests: this._yes(e5.away_guests),
+      awayMinutes: this._n(e5.away_minutes),
+      pelletEmpty: this._yes(e5.pellet_empty),
+      pelletReserve: this._yes(e5.pellet_reserve)
+    });
+    return b2`
+      <div class="summary" role="status" aria-label="In breve">
+        <span class="stitle">In breve</span>
+        ${lines.map(
+      (l3) => b2`<div class="sline ${l3.tone}"><ha-icon icon=${l3.icon}></ha-icon><span>${l3.text}</span></div>`
+    )}
+      </div>
+    `;
+  }
   render() {
     if (!this._config || !this.hass) return A;
     return b2`
@@ -1812,6 +1969,7 @@ var ImpiantoOverviewCard = class extends i4 {
               <ha-icon icon="mdi:cog-outline"></ha-icon>
             </button>`}
         ${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}
+        ${this._renderSummary()}
         <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()} ${this._renderStove()}</div>
       </ha-card>
     `;
@@ -1846,6 +2004,46 @@ var ImpiantoOverviewCard = class extends i4 {
     .gear:hover {
       background: var(--secondary-background-color);
       color: var(--primary-text-color);
+    }
+    .summary {
+      margin: 4px 4px 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--secondary-background-color);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stitle {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--secondary-text-color);
+    }
+    .sline {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .sline ha-icon {
+      --mdc-icon-size: 20px;
+      flex: none;
+      color: var(--secondary-text-color);
+    }
+    .sline.ok ha-icon {
+      color: #22c55e;
+    }
+    .sline.warn ha-icon {
+      color: #f59e0b;
+    }
+    .sline.bad {
+      color: #ef4444;
+      font-weight: 600;
+    }
+    .sline.bad ha-icon {
+      color: #ef4444;
     }
     .ctitle {
       font-size: 20px;
@@ -3342,7 +3540,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.13";
+var VERSION = "0.3.14";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

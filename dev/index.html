@@ -139,6 +139,14 @@ nb("input_number.caldaia_pellet_kg_h_mantenimento", 0.2, { min: 0, max: 1, step:
 nb("input_number.caldaia_pellet_g_accensione", 200, { min: 0, max: 500, step: 10, unit_of_measurement: "g" });
 nb("input_number.caldaia_pellet_fattore", 1, { min: 0.5, max: 2, step: 0.01 });
 nb("input_number.caldaia_salvaguardia_t_puffer", 40, { min: 30, max: 70, step: 1, unit_of_measurement: "°C" });
+// presenza e spegnimento per assenza (?assenza=on per simulare la casa vuota da 25 minuti)
+set("binary_sensor.caldaia_nessuno_in_casa", q.get("assenza") === "on" ? "on" : "off");
+S["binary_sensor.caldaia_nessuno_in_casa"].last_changed = new Date(Date.now() - 25 * 60000).toISOString();
+set("binary_sensor.caldaia_programma_attivo_ora", "on");
+set("input_boolean.caldaia_assenza_attiva", "on");
+set("input_boolean.caldaia_assenza_ha_spento", "off");
+set("input_boolean.caldaia_assenza_ospiti", "off");
+set("input_number.caldaia_assenza_minuti", 60);
 // salvaguardia (?salvaguardia=off)
 set("input_boolean.caldaia_salvaguardia_attiva", q.get("salvaguardia") === "off" ? "off" : "on");
 set("input_boolean.caldaia_salvaguardia_ha_spento", "off");

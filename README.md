@@ -162,6 +162,10 @@ Le schede leggono sensori che qui sono forniti come esempio:
   con spegnimento automatico (vedi sotto) e la stima `sensor.caldaia_acqua_pronta_tra`.
 - `esphome/solare-termico.yaml`: ESP32 con ADS1115 e sonde NTC 10k B3950 (serpentine) e due sonde sul boiler.
 
+## Riquadro «In breve»
+
+In cima alla scheda dell'impianto compaiono poche righe che dicono che cosa sta succedendo: la caldaia (in lavoro, in ECO STOP con la temperatura del puffer a cui riparte, in accensione, spenta e perché: vacanza, fuori fascia, salvaguardia, assenza), la pompa di integrazione (accesa o ferma e il motivo), il solare, chi è in casa con il conto alla rovescia dello spegnimento per assenza, il tempo per l'acqua calda e gli avvisi di allarme o pellet. Si nasconde con `summary: false`. La logica è in `src/summary-logic.ts`.
+
 ## Spegnimento con nessuno in casa
 
 `ha-packages/caldaia_assenza.yaml`. La presenza viene dai quattro iPhone di iCloud3 (`device_tracker.iphone_camilla/corrado/matilde/roberta`) **e** dal Wi-Fi: nessun iPhone deve risultare connesso a `CASALE2G` (i `device_tracker` del router hanno l'attributo `ssid`). Se una delle due fonti non è disponibile non si considera nessuno fuori. Dopo 60 minuti di assenza (regolabili) la Polygon accesa viene fermata, tranne con termostato che chiede calore, modalità ospiti, accensione rapida, gelo (meno di 5 °C fuori) o caldaia già spenta o in allarme. Al rientro si riaccende solo se un programma è attivo in quel momento. Interruttore: `input_boolean.caldaia_assenza_attiva`; ospiti: `input_boolean.caldaia_assenza_ospiti`.

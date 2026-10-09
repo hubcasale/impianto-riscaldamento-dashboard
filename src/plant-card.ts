@@ -3,6 +3,7 @@ import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
 import type { ImpiantoSettingsDialog } from "./settings-dialog";
 import "./settings-dialog";
+import { summarize, type SummaryLine } from "./summary-logic";
 import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
 const CARD_TAG = "impianto-overview-card";
@@ -81,6 +82,15 @@ export interface PlantEntities {
   panel_max_today: string;
   /** puffer: lettura della caldaia oppure, senza Internet, stima dalla sonda in ingresso alla serpentina */
   puffer_effective: string;
+  /** cronotermostato settimanale acceso e programma attivo adesso */
+  crono_master: string;
+  program_active: string;
+  /** nessuno in casa (iCloud3 + Wi-Fi), spegnimento per assenza: attivo, fatto, ospiti, minuti */
+  away: string;
+  away_enabled: string;
+  away_flag: string;
+  away_guests: string;
+  away_minutes: string;
 }
 
 export const DEFAULT_ENTITIES: PlantEntities = {
@@ -134,6 +144,13 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   panel_max: "sensor.solare_pannello_massima_prevista",
   panel_max_today: "sensor.solare_pannello_massima_oggi",
   puffer_effective: "sensor.puffer_temperatura_effettiva",
+  crono_master: "switch.casale_cronotermostato_settimanale",
+  program_active: "binary_sensor.caldaia_programma_attivo_ora",
+  away: "binary_sensor.caldaia_nessuno_in_casa",
+  away_enabled: "input_boolean.caldaia_assenza_attiva",
+  away_flag: "input_boolean.caldaia_assenza_ha_spento",
+  away_guests: "input_boolean.caldaia_assenza_ospiti",
+  away_minutes: "input_number.caldaia_assenza_minuti",
 };
 
 /** Un numero oppure l'id di un'entità numerica. */
@@ -144,6 +161,8 @@ export interface PlantCardConfig {
   title?: string;
   /** false per nascondere il pulsante delle preferenze */
   settings?: boolean;
+  /** false per nascondere il riquadro "In breve" */
+  summary?: boolean;
   /** "auto" (predefinito): compatta sugli schermi bassi (tablet); true/false per forzare */
   compact?: boolean | "auto";
   entities?: Partial<PlantEntities>;
@@ -677,6 +696,58 @@ export class ImpiantoOverviewCard extends LitElement {
     `;
   }
 
+  /** Riquadro "In breve": poche righe sul momento dell'impianto. */
+  private _renderSummary() {
+    if (this._config.summary === false) return nothing;
+    const e = this._e;
+    const alarmRaw = (this._s(e.alarm) ?? "").trim();
+    const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown" || alarmRaw.toLowerCase() === "unavailable";
+    const pufferId = this.hass.states[e.puffer_effective] ? e.puffer_effective : e.puffer;
+    const awaySince = this.hass.states[e.away]?.last_changed;
+    const pill = integrationPumpPill(
+      this._yes(e.integration_pump),
+      this._yes(e.integration_call),
+      this._yes(e.integration_block_enabled),
+      this._yes(e.integration_block_wanted),
+      this._n(e.integration_power),
+    );
+    const eta = this.hass.states[e.eta] ? this._n(e.eta) : null;
+    const lines: SummaryLine[] = summarize({
+      stoveState: this._s(e.stove_state),
+      alarm: noAlarm ? null : alarmRaw,
+      power: this._n(e.power),
+      setWater: this._n(e.set_water),
+      setBoiler: this._n(e.set_boiler),
+      puffer: this._n(pufferId),
+      pufferEstimated: this.hass.states[pufferId]?.attributes?.fonte === "sonda ingresso",
+      boilerTop: this._n(e.boiler_top),
+      collector: this._n(e.collector_temp),
+      integrationPump: pill.key,
+      collectorPumpOn: this._yes(e.collector_pump),
+      etaMinutes: eta,
+      cronoOn: this._yes(e.crono_master),
+      programActive: this._yes(e.program_active),
+      guardFlag: this._yes(e.guard_flag),
+      boostActive: this._s(e.boost_state) === "attiva",
+      nobodyHome: this._yes(e.away),
+      nobodyHomeMinutes: awaySince ? Math.max(0, (Date.now() - new Date(awaySince).getTime()) / 60000) : null,
+      awayEnabled: this._yes(e.away_enabled),
+      awayFlag: this._yes(e.away_flag),
+      guests: this._yes(e.away_guests),
+      awayMinutes: this._n(e.away_minutes),
+      pelletEmpty: this._yes(e.pellet_empty),
+      pelletReserve: this._yes(e.pellet_reserve),
+    });
+    return html`
+      <div class="summary" role="status" aria-label="In breve">
+        <span class="stitle">In breve</span>
+        ${lines.map(
+          (l) => html`<div class="sline ${l.tone}"><ha-icon icon=${l.icon}></ha-icon><span>${l.text}</span></div>`,
+        )}
+      </div>
+    `;
+  }
+
   render() {
     if (!this._config || !this.hass) return nothing;
     return html`
@@ -687,6 +758,7 @@ export class ImpiantoOverviewCard extends LitElement {
               <ha-icon icon="mdi:cog-outline"></ha-icon>
             </button>`}
         ${this._config.title ? html`<div class="ctitle">${this._config.title}</div>` : nothing}
+        ${this._renderSummary()}
         <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()} ${this._renderStove()}</div>
       </ha-card>
     `;
@@ -721,6 +793,46 @@ export class ImpiantoOverviewCard extends LitElement {
     .gear:hover {
       background: var(--secondary-background-color);
       color: var(--primary-text-color);
+    }
+    .summary {
+      margin: 4px 4px 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--secondary-background-color);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stitle {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--secondary-text-color);
+    }
+    .sline {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .sline ha-icon {
+      --mdc-icon-size: 20px;
+      flex: none;
+      color: var(--secondary-text-color);
+    }
+    .sline.ok ha-icon {
+      color: #22c55e;
+    }
+    .sline.warn ha-icon {
+      color: #f59e0b;
+    }
+    .sline.bad {
+      color: #ef4444;
+      font-weight: 600;
+    }
+    .sline.bad ha-icon {
+      color: #ef4444;
     }
     .ctitle {
       font-size: 20px;
