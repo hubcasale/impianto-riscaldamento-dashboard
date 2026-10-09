@@ -3342,7 +3342,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.12";
+var VERSION = "0.3.13";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
