@@ -5,6 +5,8 @@ import type { ImpiantoSettingsDialog } from "./settings-dialog";
 import "./settings-dialog";
 import type { ImpiantoInfoDialog } from "./info-dialog";
 import "./info-dialog";
+import type { ImpiantoChartsDialog } from "./charts-dialog";
+import "./charts-dialog";
 import { summarize, type SummaryLine } from "./summary-logic";
 import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
@@ -163,8 +165,10 @@ export interface PlantCardConfig {
   title?: string;
   /** false per nascondere il pulsante delle preferenze */
   settings?: boolean;
-  /** false per nascondere il riquadro "In breve" */
+  /** false per nascondere il pulsante "Stato" */
   summary?: boolean;
+  /** false per nascondere il pulsante "Grafici" */
+  charts?: boolean;
   /** "auto" (predefinito): compatta sugli schermi bassi (tablet); true/false per forzare */
   compact?: boolean | "auto";
   entities?: Partial<PlantEntities>;
@@ -222,6 +226,7 @@ export class ImpiantoOverviewCard extends LitElement {
   private _ro?: ResizeObserver;
   private _dialog?: ImpiantoSettingsDialog;
   private _info?: ImpiantoInfoDialog;
+  private _charts?: ImpiantoChartsDialog;
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -260,6 +265,7 @@ export class ImpiantoOverviewCard extends LitElement {
     // la finestra aperta segue gli stati di Home Assistant (interruttori e numeri si aggiornano subito)
     if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
     if (changed.has("hass") && this._info) this._info.lines = this._summaryLines();
+    if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
   }
 
   disconnectedCallback(): void {
@@ -268,6 +274,8 @@ export class ImpiantoOverviewCard extends LitElement {
     this._dialog = undefined;
     this._info?.remove();
     this._info = undefined;
+    this._charts?.remove();
+    this._charts = undefined;
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
@@ -484,6 +492,14 @@ export class ImpiantoOverviewCard extends LitElement {
               <circle cx="40" cy=${(btn.sub ? 340 + 78 : 340 + 64) + 34} r="10" class="infoc" />
               <text x="40" y=${(btn.sub ? 340 + 78 : 340 + 64) + 39} class="b" font-size="14" text-anchor="middle">i</text>
               <text x="92" y=${(btn.sub ? 340 + 78 : 340 + 64) + 40} class="b" font-size="17" text-anchor="middle">Stato</text>
+            </g>`}
+        ${this._config.charts === false
+          ? nothing
+          : svg`<g class="btn info" role="button" tabindex="0" aria-label="Grafici" @click=${() => this._openCharts()}
+              @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openCharts()}>
+              <rect x="14" y=${(btn.sub ? 340 + 78 : 340 + 64) + 66} width="136" height="44" rx="14" class="infobg" />
+              <polyline points="28,${(btn.sub ? 340 + 78 : 340 + 64) + 98} 35,${(btn.sub ? 340 + 78 : 340 + 64) + 88} 41,${(btn.sub ? 340 + 78 : 340 + 64) + 94} 51,${(btn.sub ? 340 + 78 : 340 + 64) + 80}" class="infoc" />
+              <text x="102" y=${(btn.sub ? 340 + 78 : 340 + 64) + 94} class="b" font-size="17" text-anchor="middle">Grafici</text>
             </g>`}
 
         <!-- solare -->
@@ -752,6 +768,19 @@ export class ImpiantoOverviewCard extends LitElement {
       pelletEmpty: this._yes(e.pellet_empty),
       pelletReserve: this._yes(e.pellet_reserve),
     });
+  }
+
+  /** Apre la finestra "Grafici" (storico dei valori principali). */
+  private _openCharts(): void {
+    if (this._charts) return;
+    const d = document.createElement("impianto-charts-dialog") as ImpiantoChartsDialog;
+    d.hass = this.hass;
+    d.entities = this._e;
+    d.addEventListener("closed", () => {
+      this._charts = undefined;
+    });
+    document.body.appendChild(d);
+    this._charts = d;
   }
 
   /** Apre la finestra "Stato" (si aggiunge alla pagina, come quella delle preferenze). */

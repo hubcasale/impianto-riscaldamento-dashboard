@@ -166,6 +166,17 @@ Le schede leggono sensori che qui sono forniti come esempio:
 
 Sotto il pulsante di accensione rapida, sul lato sinistro dello schema, c'è il pulsante **Stato** (con una «i»). Apre una finestra con poche righe che dicono che cosa sta succedendo: la caldaia (in lavoro, in ECO STOP con la temperatura del puffer a cui riparte, in accensione, spenta e perché: vacanza, fuori fascia, salvaguardia, assenza), la pompa di integrazione (accesa o ferma e il motivo), il solare, chi è in casa con il conto alla rovescia dello spegnimento per assenza, il tempo per l'acqua calda e gli avvisi di allarme o pellet. La finestra segue gli stati in tempo reale. Si nasconde con `summary: false`. La logica è in `src/summary-logic.ts`.
 
+## Pulsante «Grafici»
+
+Sotto «Stato» c'è il pulsante **Grafici**: apre una finestra con lo storico (letto dal recorder di Home Assistant, nessuna libreria esterna) di quattro gruppi di valori: *Temperature* (puffer, boiler alto e basso, acqua della caldaia, collettore), *Caldaia* (acqua, puffer, fumi e potenza), *Pompa di integrazione* (puffer, boiler, serpentina e potenza della pompa) e *Solare* (collettore, serpentine, potenza), più un *Confronto libero* con tutte le serie.
+
+- **Periodo:** 6 ore, 24 ore, 3 o 7 giorni.
+- **Sovrapporre:** ogni serie si accende e si spegne dai tasti sopra il grafico; «Confronta con il periodo prima» disegna in tratteggio lo stesso intervallo precedente; «Confronta le forme (0–100 %)» riporta ogni serie al proprio minimo-massimo per sovrapporre grandezze diverse (nel confronto libero è sempre attivo).
+- **Leggere i valori:** passando il mouse o il dito sul grafico compare la linea del cursore con i valori di tutte le serie (e quelli del periodo prima); sotto, la tabella con valore al cursore (o attuale), minimo, media e massimo.
+- **Stato della caldaia:** una fascia colorata sotto il grafico (in lavoro, accensione, ECO STOP, spenta) per capire perché le temperature cambiano.
+
+Si nasconde con `charts: false`. La logica (campionamento, scale, assi) è in `src/charts-logic.ts`, il disegno in `src/charts-dialog.ts`.
+
 ## Spegnimento con nessuno in casa
 
 `ha-packages/caldaia_assenza.yaml`. La presenza viene dai quattro iPhone di iCloud3 (`device_tracker.iphone_camilla/corrado/matilde/roberta`) **e** dal Wi-Fi: nessun iPhone deve risultare connesso a `CASALE2G` (i `device_tracker` del router hanno l'attributo `ssid`). Se una delle due fonti non è disponibile non si considera nessuno fuori. Dopo 60 minuti di assenza (regolabili) la Polygon accesa viene fermata, tranne con termostato che chiede calore, modalità ospiti, accensione rapida, gelo (meno di 5 °C fuori) o caldaia già spenta o in allarme. Al rientro si riaccende solo se un programma è attivo in quel momento. Interruttore: `input_boolean.caldaia_assenza_attiva`; ospiti: `input_boolean.caldaia_assenza_ospiti`.

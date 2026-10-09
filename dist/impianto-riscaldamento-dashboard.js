@@ -1299,6 +1299,968 @@ __decorateClass([
 ], ImpiantoInfoDialog.prototype, "lines", 2);
 if (!customElements.get(TAG2)) customElements.define(TAG2, ImpiantoInfoDialog);
 
+// src/charts-logic.ts
+function toMs(v2) {
+  if (v2 === void 0 || v2 === null) return null;
+  if (typeof v2 === "number") return v2 < 1e11 ? v2 * 1e3 : v2;
+  const d3 = Date.parse(v2);
+  return Number.isNaN(d3) ? null : d3;
+}
+function rawTime(r6) {
+  return toMs(r6.lu ?? r6.last_updated ?? r6.lc ?? r6.last_changed);
+}
+function rawState(r6) {
+  return r6.s ?? r6.state;
+}
+function parseNumeric(raw) {
+  const out = [];
+  for (const r6 of raw ?? []) {
+    const t3 = rawTime(r6);
+    const s4 = rawState(r6);
+    if (t3 === null || s4 === void 0 || s4 === "" || s4 === "unavailable" || s4 === "unknown") continue;
+    const v2 = Number(s4);
+    if (Number.isFinite(v2)) out.push({ t: t3, v: v2 });
+  }
+  return out.sort((a3, b3) => a3.t - b3.t);
+}
+function parseStates(raw) {
+  const out = [];
+  for (const r6 of raw ?? []) {
+    const t3 = rawTime(r6);
+    const s4 = rawState(r6);
+    if (t3 !== null && s4 !== void 0) out.push({ t: t3, s: s4 });
+  }
+  return out.sort((a3, b3) => a3.t - b3.t);
+}
+var MAX_GAP_MS = 3 * 3600 * 1e3;
+function resample(pts, t0, t1, n5, maxGap = MAX_GAP_MS) {
+  const out = new Array(n5).fill(null);
+  if (n5 <= 0 || t1 <= t0) return out;
+  const dt = (t1 - t0) / n5;
+  let idx = 0;
+  let curV = null;
+  let curT = 0;
+  for (let i5 = 0; i5 < n5; i5++) {
+    const a3 = t0 + i5 * dt;
+    const b3 = a3 + dt;
+    while (idx < pts.length && pts[idx].t <= a3) {
+      curV = pts[idx].v;
+      curT = pts[idx].t;
+      idx++;
+    }
+    let sum = 0;
+    let cov = 0;
+    let segStart = a3;
+    let v2 = curV;
+    let vT = curT;
+    const addSeg = (end) => {
+      if (v2 === null) return;
+      const validEnd = Math.min(end, vT + maxGap);
+      const len = validEnd - segStart;
+      if (len > 0) {
+        sum += v2 * len;
+        cov += len;
+      }
+    };
+    let k2 = idx;
+    while (k2 < pts.length && pts[k2].t < b3) {
+      addSeg(pts[k2].t);
+      segStart = pts[k2].t;
+      v2 = pts[k2].v;
+      vT = pts[k2].t;
+      k2++;
+    }
+    addSeg(b3);
+    out[i5] = cov > 0 ? sum / cov : null;
+  }
+  return out;
+}
+function seriesStats(values) {
+  let min = Infinity;
+  let max = -Infinity;
+  let sum = 0;
+  let cnt = 0;
+  let last = null;
+  for (const v2 of values) {
+    if (v2 === null) continue;
+    if (v2 < min) min = v2;
+    if (v2 > max) max = v2;
+    sum += v2;
+    cnt++;
+    last = v2;
+  }
+  return cnt === 0 || last === null ? null : { min, max, avg: sum / cnt, last };
+}
+function niceStep(raw) {
+  const p3 = Math.pow(10, Math.floor(Math.log10(raw)));
+  const f3 = raw / p3;
+  const m2 = f3 <= 1 ? 1 : f3 <= 2 ? 2 : f3 <= 2.5 ? 2.5 : f3 <= 5 ? 5 : 10;
+  return m2 * p3;
+}
+function niceAxis(min, max, count = 5) {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return { min: 0, max: 1, ticks: [0, 1] };
+  if (max - min < 1e-9) {
+    const c4 = min;
+    min = c4 - 1;
+    max = c4 + 1;
+  }
+  const step = niceStep((max - min) / Math.max(1, count - 1));
+  const lo = Math.floor(min / step + 1e-9) * step;
+  const hi = Math.ceil(max / step - 1e-9) * step;
+  const ticks = [];
+  for (let v2 = lo; v2 <= hi + step * 1e-6; v2 += step) ticks.push(Math.round(v2 / step) * step);
+  return { min: lo, max: hi, ticks };
+}
+var DAYS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+function hhmm(d3) {
+  return `${String(d3.getHours()).padStart(2, "0")}:${String(d3.getMinutes()).padStart(2, "0")}`;
+}
+var STEPS_H = [1, 2, 3, 6, 12, 24, 48];
+function timeTicks(t0, t1, maxTicks = 6) {
+  const hours = (t1 - t0) / 36e5;
+  const stepH = STEPS_H.find((s4) => hours / s4 <= maxTicks) ?? 48;
+  const stepMs = stepH * 36e5;
+  const first = new Date(t0);
+  first.setMinutes(0, 0, 0);
+  if (stepH >= 24) first.setHours(0);
+  else first.setHours(Math.ceil(first.getHours() / stepH) * stepH);
+  const out = [];
+  for (let t3 = first.getTime(); t3 <= t1; t3 += stepMs) {
+    if (t3 < t0) continue;
+    const d3 = new Date(t3);
+    const major = d3.getHours() === 0;
+    out.push({ t: t3, major, label: hours > 30 ? major ? `${DAYS[d3.getDay()]} ${d3.getDate()}` : hhmm(d3) : hhmm(d3) });
+  }
+  return out;
+}
+function formatMoment(t3) {
+  const d3 = new Date(t3);
+  const mesi = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
+  return `${DAYS[d3.getDay()]} ${d3.getDate()} ${mesi[d3.getMonth()]}, ${hhmm(d3)}`;
+}
+function linePath(values, xOf, yOf) {
+  let d3 = "";
+  let pen = false;
+  for (let i5 = 0; i5 < values.length; i5++) {
+    const v2 = values[i5];
+    if (v2 === null) {
+      pen = false;
+      continue;
+    }
+    d3 += `${pen ? "L" : "M"}${xOf(i5).toFixed(1)} ${yOf(v2).toFixed(1)}`;
+    pen = true;
+  }
+  return d3;
+}
+function statusSegments(states, t0, t1) {
+  const out = [];
+  let cur = null;
+  for (const p3 of states) {
+    if (p3.t <= t0) cur = p3;
+    else break;
+  }
+  let from = t0;
+  let state = cur?.s ?? "";
+  for (const p3 of states) {
+    if (p3.t <= t0 || p3.t >= t1) continue;
+    if (state !== "") out.push({ from, to: p3.t, state });
+    from = p3.t;
+    state = p3.s;
+  }
+  if (state !== "" && from < t1) out.push({ from, to: t1, state });
+  const merged = [];
+  for (const s4 of out) {
+    const last = merged[merged.length - 1];
+    if (last && last.state === s4.state && last.to === s4.from) last.to = s4.to;
+    else merged.push({ ...s4 });
+  }
+  return merged;
+}
+function stateAt(states, t3) {
+  let cur = null;
+  for (const p3 of states) {
+    if (p3.t <= t3) cur = p3.s;
+    else break;
+  }
+  return cur;
+}
+function stoveStateColor(state) {
+  const s4 = state.trim().toUpperCase();
+  if (["WORK", "LAVORO", "WORKING"].includes(s4)) return "#ef4444";
+  if (["START", "WAIT", "AVVIO", "ATTESA", "ACCENSIONE"].includes(s4)) return "#f59e0b";
+  if (s4 === "ECO STOP") return "#60a5fa";
+  if (["STAND BY", "STANDBY"].includes(s4)) return "#a78bfa";
+  if (s4.startsWith("ALARM") || s4 === "ALLARME") return "#b91c1c";
+  if (["UNAVAILABLE", "UNKNOWN"].includes(s4)) return "transparent";
+  return "#475569";
+}
+var S3 = {
+  puffer: { id: "puffer", entityKey: "puffer_effective", label: "Puffer 50 L", unit: "\xB0C", color: "#f97316", axis: "l", decimals: 1 },
+  boilerTop: { id: "boilerTop", entityKey: "boiler_top", label: "Boiler alto (S3)", unit: "\xB0C", color: "#ef4444", axis: "l", decimals: 1 },
+  boilerBottom: { id: "boilerBottom", entityKey: "boiler_bottom", label: "Boiler basso (S2)", unit: "\xB0C", color: "#3b82f6", axis: "l", decimals: 1 },
+  stoveWater: { id: "stoveWater", entityKey: "stove_water", label: "Acqua caldaia", unit: "\xB0C", color: "#a855f7", axis: "l", decimals: 1 },
+  collector: { id: "collector", entityKey: "collector_temp", label: "Collettore solare", unit: "\xB0C", color: "#eab308", axis: "l", decimals: 1 },
+  smoke: { id: "smoke", entityKey: "smoke", label: "Fumi", unit: "\xB0C", color: "#94a3b8", axis: "l", decimals: 0 },
+  power: { id: "power", entityKey: "power", label: "Potenza caldaia", unit: "%", color: "#22c55e", axis: "r", decimals: 0 },
+  integIn: { id: "integIn", entityKey: "coil_integ_in", label: "Serpentina integrazione, ingresso", unit: "\xB0C", color: "#ec4899", axis: "l", decimals: 1 },
+  integOut: { id: "integOut", entityKey: "coil_integ_out", label: "Serpentina integrazione, uscita", unit: "\xB0C", color: "#0ea5e9", axis: "l", decimals: 1 },
+  integW: { id: "integW", entityKey: "integration_power", label: "Pompa integrazione", unit: "W", color: "#22c55e", axis: "r", decimals: 0 },
+  solarIn: { id: "solarIn", entityKey: "coil_solar_in", label: "Serpentina solare, ingresso", unit: "\xB0C", color: "#f59e0b", axis: "l", decimals: 1 },
+  solarOut: { id: "solarOut", entityKey: "coil_solar_out", label: "Serpentina solare, uscita", unit: "\xB0C", color: "#06b6d4", axis: "l", decimals: 1 },
+  solarKw: { id: "solarKw", entityKey: "solar_power", label: "Potenza solare", unit: "kW", color: "#22c55e", axis: "r", decimals: 2 },
+  collectorW: { id: "collectorW", entityKey: "collector_power", label: "Alimentazione Elios (pompa collettore)", unit: "W", color: "#84cc16", axis: "r", decimals: 0 }
+};
+var on = (s4) => ({ ...s4, on: true });
+var off = (s4) => ({ ...s4, on: false });
+var CHART_GROUPS = [
+  {
+    id: "temperature",
+    title: "Temperature",
+    series: [on(S3.puffer), on(S3.boilerTop), on(S3.boilerBottom), on(S3.stoveWater), off(S3.collector)]
+  },
+  {
+    id: "caldaia",
+    title: "Caldaia",
+    series: [on(S3.stoveWater), on(S3.puffer), off(S3.smoke), on(S3.power)]
+  },
+  {
+    id: "integrazione",
+    title: "Pompa di integrazione",
+    series: [on(S3.puffer), on(S3.boilerTop), off(S3.integIn), off(S3.integOut), on(S3.integW)]
+  },
+  {
+    id: "solare",
+    title: "Solare",
+    series: [on(S3.collector), on(S3.solarIn), on(S3.solarOut), on(S3.boilerBottom), off(S3.solarKw)]
+  }
+];
+function allSeries() {
+  return Object.values(S3).map((s4) => ({ ...s4, on: ["puffer", "boilerTop", "stoveWater"].includes(s4.id) }));
+}
+var RANGES = [
+  { id: "6h", label: "6 h", hours: 6 },
+  { id: "24h", label: "24 h", hours: 24 },
+  { id: "3d", label: "3 gg", hours: 72 },
+  { id: "7d", label: "7 gg", hours: 168 }
+];
+function formatValue(v2, def) {
+  if (v2 === null || v2 === void 0 || !Number.isFinite(v2)) return "\u2013";
+  return `${v2.toFixed(def.decimals).replace(".", ",")} ${def.unit}`;
+}
+function normalizeValue(v2, st) {
+  if (st.max - st.min < 1e-9) return 0.5;
+  return (v2 - st.min) / (st.max - st.min);
+}
+
+// src/charts-dialog.ts
+var TAG3 = "impianto-charts-dialog";
+var H_MS = 36e5;
+var PLOT_H = 210;
+var MT = 10;
+var LABELS_H = 22;
+var STRIP_H = 12;
+var LIBERO = { id: "libero", title: "Confronto libero", normalized: true, series: allSeries() };
+var ImpiantoChartsDialog = class extends i4 {
+  constructor() {
+    super(...arguments);
+    this._group = CHART_GROUPS[0].id;
+    this._range = "24h";
+    this._compare = false;
+    this._normalized = false;
+    this._loading = false;
+    this._error = "";
+    this._w = 600;
+    this._hover = null;
+    this._hidden = /* @__PURE__ */ new Set();
+    this._shown = /* @__PURE__ */ new Set();
+    this._computed = [];
+    this._t0 = 0;
+    this._t1 = 0;
+    this._n = 240;
+    this._rawCur = /* @__PURE__ */ new Map();
+    this._rawPrev = /* @__PURE__ */ new Map();
+    this._states = [];
+    this._seq = 0;
+    this._onKey = (e5) => {
+      if (e5.key === "Escape") this._close();
+    };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("keydown", this._onKey);
+    this._timer = window.setInterval(() => void this._load(), 6e4);
+    void this._load();
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener("keydown", this._onKey);
+    this._ro?.disconnect();
+    if (this._timer) window.clearInterval(this._timer);
+  }
+  firstUpdated() {
+    const wrap = this.renderRoot.querySelector(".chartwrap");
+    if (!wrap) return;
+    this._ro = new ResizeObserver((entries) => {
+      const w2 = Math.floor(entries[0]?.contentRect.width ?? 600);
+      if (w2 > 100 && Math.abs(w2 - this._w) > 2) {
+        this._w = w2;
+        this._recompute();
+      }
+    });
+    this._ro.observe(wrap);
+  }
+  _close() {
+    this.dispatchEvent(new CustomEvent("closed"));
+    this.remove();
+  }
+  // ---- dati ----------------------------------------------------------------
+  get _def() {
+    return this._group === LIBERO.id ? LIBERO : CHART_GROUPS.find((g2) => g2.id === this._group) ?? CHART_GROUPS[0];
+  }
+  _entityOf(def) {
+    return this.entities[def.entityKey];
+  }
+  /** Serie del grafico attuale che esistono in Home Assistant. */
+  _available() {
+    return this._def.series.filter((s4) => {
+      const id = this._entityOf(s4);
+      return id !== void 0 && this.hass.states[id] !== void 0;
+    });
+  }
+  _isOn(def) {
+    const key = `${this._def.id}:${def.id}`;
+    if (this._shown.has(key)) return true;
+    if (this._hidden.has(key)) return false;
+    return !!def.on;
+  }
+  async _history(ids, start, end) {
+    const cw = this.hass.callWS;
+    return cw.call(this.hass, {
+      type: "history/history_during_period",
+      start_time: new Date(start).toISOString(),
+      end_time: new Date(end).toISOString(),
+      entity_ids: ids,
+      include_start_time_state: true,
+      significant_changes_only: false,
+      minimal_response: true,
+      no_attributes: true
+    });
+  }
+  async _load() {
+    if (!this.hass) return;
+    const seq = ++this._seq;
+    const range = RANGES.find((r6) => r6.id === this._range) ?? RANGES[1];
+    const span = range.hours * H_MS;
+    const now = Date.now();
+    const defs = this._available();
+    const ids = Array.from(new Set(defs.map((d3) => this._entityOf(d3)).concat(this.entities.stove_state)));
+    this._loading = this._computed.length === 0;
+    try {
+      const cur = await this._history(ids, now - span, now);
+      const prev = this._compare ? await this._history(ids, now - 2 * span, now - span) : null;
+      if (seq !== this._seq) return;
+      this._t0 = now - span;
+      this._t1 = now;
+      this._rawCur = new Map(Object.entries(cur).map(([k2, v2]) => [k2, parseNumeric(v2)]));
+      this._rawPrev = new Map(prev ? Object.entries(prev).map(([k2, v2]) => [k2, parseNumeric(v2)]) : []);
+      this._states = parseStates(cur[this.entities.stove_state]);
+      this._error = "";
+      this._recompute();
+    } catch (err) {
+      if (seq === this._seq) this._error = `Impossibile leggere lo storico: ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      if (seq === this._seq) this._loading = false;
+    }
+  }
+  _recompute() {
+    const n5 = Math.max(120, Math.min(360, Math.round(this._w / 2)));
+    this._n = n5;
+    const span = this._t1 - this._t0;
+    this._computed = this._available().map((def) => {
+      const id = this._entityOf(def);
+      const cur = resample(this._rawCur.get(id) ?? [], this._t0, this._t1, n5);
+      const prev = this._compare ? resample(this._rawPrev.get(id) ?? [], this._t0 - span, this._t0, n5) : null;
+      return { def, cur, prev, stats: seriesStats(cur) };
+    });
+  }
+  // ---- interazione -----------------------------------------------------------
+  _setGroup(id) {
+    this._group = id;
+    this._hover = null;
+    this._computed = [];
+    void this._load();
+  }
+  _setRange(id) {
+    this._range = id;
+    this._hover = null;
+    void this._load();
+  }
+  _toggleCompare() {
+    this._compare = !this._compare;
+    void this._load();
+  }
+  _toggleSeries(def) {
+    const key = `${this._def.id}:${def.id}`;
+    const turnOn = !this._isOn(def);
+    const shown = new Set(this._shown);
+    const hidden = new Set(this._hidden);
+    if (turnOn) {
+      shown.add(key);
+      hidden.delete(key);
+    } else {
+      hidden.add(key);
+      shown.delete(key);
+    }
+    this._shown = shown;
+    this._hidden = hidden;
+  }
+  _geometry() {
+    const visible = this._computed.filter((c4) => this._isOn(c4.def));
+    const norm = this._normalized || !!this._def.normalized;
+    const hasRight = !norm && visible.some((c4) => c4.def.axis === "r");
+    const ml = norm ? 38 : 46;
+    const mr = hasRight ? 46 : 12;
+    const plotW = Math.max(60, this._w - ml - mr);
+    return { visible, norm, hasRight, ml, mr, plotW };
+  }
+  _onMove(ev) {
+    const g2 = this._geometry();
+    const svgEl = ev.currentTarget;
+    const rect = svgEl.getBoundingClientRect();
+    const x2 = ev.clientX - rect.left - g2.ml;
+    const i5 = Math.round(x2 / g2.plotW * (this._n - 1));
+    this._hover = Math.max(0, Math.min(this._n - 1, i5));
+  }
+  _onLeave(ev) {
+    if (ev.pointerType === "mouse") this._hover = null;
+  }
+  // ---- disegno ---------------------------------------------------------------
+  _axisFor(visible, side) {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const c4 of visible) {
+      if (c4.def.axis !== side) continue;
+      for (const arr of [c4.cur, c4.prev ?? []]) {
+        for (const v2 of arr) {
+          if (v2 === null) continue;
+          if (v2 < min) min = v2;
+          if (v2 > max) max = v2;
+        }
+      }
+    }
+    return Number.isFinite(min) ? niceAxis(min, max, 5) : null;
+  }
+  _renderChart() {
+    const g2 = this._geometry();
+    const { visible, norm, hasRight, ml, plotW } = g2;
+    const axL = norm ? null : this._axisFor(visible, "l");
+    const axR = norm ? null : this._axisFor(visible, "r");
+    const svgH = MT + PLOT_H + LABELS_H + STRIP_H + 6;
+    const xOf = (i5) => ml + i5 / (this._n - 1) * plotW;
+    const yBase = MT + PLOT_H;
+    const yFor = (c4) => {
+      if (norm) {
+        const st = c4.stats;
+        return (v2) => yBase - (st ? normalizeValue(v2, st) : 0.5) * PLOT_H;
+      }
+      const ax = c4.def.axis === "r" ? axR : axL;
+      return (v2) => ax ? yBase - (v2 - ax.min) / (ax.max - ax.min) * PLOT_H : yBase;
+    };
+    const ticks = timeTicks(this._t0, this._t1, Math.max(3, Math.floor(plotW / 80)));
+    const xOfT = (t3) => ml + (t3 - this._t0) / (this._t1 - this._t0) * plotW;
+    const segs = statusSegments(this._states, this._t0, this._t1);
+    const hov = this._hover;
+    const hx = hov !== null ? xOf(hov) : null;
+    const gridAxis = axL ?? axR;
+    return b2`
+      <div class="chartwrap">
+        <svg width=${this._w} height=${svgH} viewBox="0 0 ${this._w} ${svgH}" role="img" aria-label="Grafico ${this._def.title}"
+          @pointermove=${(e5) => this._onMove(e5)} @pointerdown=${(e5) => this._onMove(e5)} @pointerleave=${(e5) => this._onLeave(e5)}>
+          ${norm ? [0, 0.25, 0.5, 0.75, 1].map((f3) => w`<line class="grid" x1=${ml} x2=${ml + plotW} y1=${yBase - f3 * PLOT_H} y2=${yBase - f3 * PLOT_H} />`) : gridAxis?.ticks.map((tv) => {
+      const y3 = yBase - (tv - gridAxis.min) / (gridAxis.max - gridAxis.min) * PLOT_H;
+      return w`<line class="grid" x1=${ml} x2=${ml + plotW} y1=${y3} y2=${y3} />`;
+    })}
+          ${norm ? w`<text class="ax" x=${ml - 6} y=${MT + 4} text-anchor="end">max</text><text class="ax" x=${ml - 6} y=${yBase + 4} text-anchor="end">min</text>` : axL?.ticks.map((tv) => {
+      const y3 = yBase - (tv - axL.min) / (axL.max - axL.min) * PLOT_H;
+      return w`<text class="ax" x=${ml - 6} y=${y3 + 4} text-anchor="end">${Number.isInteger(tv) ? tv : tv.toFixed(1).replace(".", ",")}</text>`;
+    })}
+          ${hasRight && axR ? axR.ticks.map((tv) => {
+      const y3 = yBase - (tv - axR.min) / (axR.max - axR.min) * PLOT_H;
+      return w`<text class="ax" x=${ml + plotW + 6} y=${y3 + 4}>${Number.isInteger(tv) ? tv : tv.toFixed(1).replace(".", ",")}</text>`;
+    }) : A}
+          ${ticks.map(
+      (t3) => w`<line class=${t3.major ? "vgrid major" : "vgrid"} x1=${xOfT(t3.t)} x2=${xOfT(t3.t)} y1=${MT} y2=${yBase} />
+              <text class="ax" x=${xOfT(t3.t)} y=${yBase + 15} text-anchor="middle">${t3.label}</text>`
+    )}
+          ${visible.map(
+      (c4) => c4.prev ? w`<path class="line prev" d=${linePath(c4.prev, xOf, yFor(c4))} stroke=${c4.def.color} />` : A
+    )}
+          ${visible.map((c4) => w`<path class="line" d=${linePath(c4.cur, xOf, yFor(c4))} stroke=${c4.def.color} />`)}
+          <!-- stato della caldaia -->
+          ${segs.map(
+      (s4) => w`<rect x=${xOfT(s4.from)} y=${yBase + LABELS_H + 2} width=${Math.max(1, xOfT(s4.to) - xOfT(s4.from))} height=${STRIP_H} fill=${stoveStateColor(s4.state)}><title>${s4.state}</title></rect>`
+    )}
+          ${hx !== null ? w`<line class="cursor" x1=${hx} x2=${hx} y1=${MT} y2=${yBase} />
+                ${visible.map((c4) => {
+      const v2 = c4.cur[hov];
+      return v2 === null ? A : w`<circle cx=${hx} cy=${yFor(c4)(v2)} r="4" fill=${c4.def.color} class="dot" />`;
+    })}` : A}
+        </svg>
+        ${hov !== null ? this._renderTip(visible, hov, hx) : A}
+      </div>
+      <div class="strip-legend">
+        <span class="swatch" style="background:#ef4444"></span>in lavoro
+        <span class="swatch" style="background:#f59e0b"></span>accensione
+        <span class="swatch" style="background:#60a5fa"></span>ECO STOP
+        <span class="swatch" style="background:#475569"></span>spenta
+        <small>(fascia sotto il grafico: stato della caldaia)</small>
+      </div>
+    `;
+  }
+  _renderTip(visible, i5, x2) {
+    const t3 = this._t0 + i5 / (this._n - 1) * (this._t1 - this._t0);
+    const st = stateAt(this._states, t3);
+    const left = x2 > this._w / 2;
+    return b2`
+      <div class="tip ${left ? "l" : "r"}" style=${left ? `right:${this._w - x2 + 10}px` : `left:${x2 + 10}px`}>
+        <div class="tt">${formatMoment(t3)}</div>
+        ${visible.map(
+      (c4) => b2`<div class="tr">
+            <i style="background:${c4.def.color}"></i><span class="tn">${c4.def.label}</span>
+            <b>${formatValue(c4.cur[i5], c4.def)}</b>
+            ${c4.prev ? b2`<span class="pv">${formatValue(c4.prev[i5], c4.def)}</span>` : A}
+          </div>`
+    )}
+        ${st ? b2`<div class="tr"><i style="background:${stoveStateColor(st)}"></i><span class="tn">Caldaia</span><b>${st}</b></div>` : A}
+        ${visible.some((c4) => c4.prev) ? b2`<div class="note">grigio: stesso momento del periodo prima</div>` : A}
+      </div>
+    `;
+  }
+  _renderTable(visible) {
+    const hov = this._hover;
+    if (visible.length === 0) return b2`<div class="empty">Scegli almeno una serie qui sopra.</div>`;
+    return b2`
+      <table>
+        <thead>
+          <tr><th></th><th>${hov !== null ? "Cursore" : "Ora"}</th><th>Min</th><th>Media</th><th>Max</th></tr>
+        </thead>
+        <tbody>
+          ${visible.map((c4) => {
+      const v2 = hov !== null ? c4.cur[hov] : c4.stats?.last ?? null;
+      return b2`<tr>
+              <td><i style="background:${c4.def.color}"></i>${c4.def.label}</td>
+              <td><b>${formatValue(v2, c4.def)}</b></td>
+              <td>${formatValue(c4.stats?.min, c4.def)}</td>
+              <td>${formatValue(c4.stats?.avg, c4.def)}</td>
+              <td>${formatValue(c4.stats?.max, c4.def)}</td>
+            </tr>`;
+    })}
+        </tbody>
+      </table>
+    `;
+  }
+  render() {
+    if (!this.hass || !this.entities) return A;
+    const groups = [...CHART_GROUPS, LIBERO];
+    const available = this._available();
+    const visible = this._computed.filter((c4) => this._isOn(c4.def));
+    const forced = !!this._def.normalized;
+    return b2`
+      <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
+        <div class="panel" role="dialog" aria-modal="true" aria-label="Grafici dell'impianto">
+          <div class="head">
+            <div class="title">Grafici</div>
+            <button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button>
+          </div>
+          <div class="body">
+            <div class="tabs" role="tablist">
+              ${groups.map(
+      (gr) => b2`<button role="tab" aria-selected=${gr.id === this._group} class=${gr.id === this._group ? "tab on" : "tab"} @click=${() => this._setGroup(gr.id)}>${gr.title}</button>`
+    )}
+            </div>
+            <div class="bar">
+              <div class="seg">
+                ${RANGES.map(
+      (r6) => b2`<button class=${r6.id === this._range ? "on" : ""} @click=${() => this._setRange(r6.id)}>${r6.label}</button>`
+    )}
+              </div>
+              <label class="chk"><input type="checkbox" .checked=${this._compare} @change=${() => this._toggleCompare()} />Confronta con il periodo prima</label>
+              <label class="chk" title="Ogni serie è riportata da 0 a 100 % del proprio intervallo: serve a confrontare le forme di grandezze diverse">
+                <input type="checkbox" .checked=${forced || this._normalized} ?disabled=${forced} @change=${() => this._normalized = !this._normalized} />Confronta le forme (0–100 %)
+              </label>
+            </div>
+            <div class="chips">
+              ${available.map(
+      (d3) => b2`<button class=${this._isOn(d3) ? "chip on" : "chip"} aria-pressed=${this._isOn(d3)} @click=${() => this._toggleSeries(d3)}>
+                  <i style="background:${this._isOn(d3) ? d3.color : "transparent"};border-color:${d3.color}"></i>${d3.label}
+                </button>`
+    )}
+            </div>
+            ${this._error ? b2`<div class="err">${this._error}</div>` : A}
+            <div class="chartarea ${this._loading ? "loading" : ""}">${this._renderChart()} ${this._loading ? b2`<div class="spin">Carico lo storico…</div>` : A}</div>
+            ${this._renderTable(visible)}
+            <p class="hint">Passa il dito o il mouse sul grafico per leggere i valori in ogni momento.</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  static {
+    this.styles = i`
+    :host {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      color: var(--primary-text-color, #212121);
+      font-family: var(--paper-font-body1_-_font-family, Roboto, Helvetica, Arial, sans-serif);
+    }
+    .backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .panel {
+      background: var(--card-background-color, #fff);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 940px;
+      max-height: min(94vh, 900px);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+    }
+    .title {
+      font-size: 19px;
+      font-weight: 700;
+    }
+    .x {
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+    .x:hover {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.15));
+    }
+    .body {
+      overflow-y: auto;
+      padding: 10px 18px 18px;
+    }
+    .tabs {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+    }
+    .tab {
+      flex: none;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.4));
+      background: none;
+      color: inherit;
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .tab.on {
+      background: var(--primary-color, #03a9f4);
+      border-color: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+      font-weight: 600;
+    }
+    .bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      align-items: center;
+      margin: 8px 0;
+    }
+    .seg {
+      display: inline-flex;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.4));
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .seg button {
+      background: none;
+      border: none;
+      color: inherit;
+      padding: 7px 14px;
+      cursor: pointer;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .seg button.on {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.2));
+      font-weight: 700;
+    }
+    .chk {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13.5px;
+      cursor: pointer;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 6px 0 10px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.4));
+      background: none;
+      color: var(--secondary-text-color, #727272);
+      border-radius: 999px;
+      padding: 5px 11px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .chip.on {
+      color: var(--primary-text-color, #212121);
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+    }
+    .chip i {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      border: 2px solid;
+      box-sizing: border-box;
+    }
+    .chartarea {
+      position: relative;
+    }
+    .chartarea.loading svg {
+      opacity: 0.35;
+    }
+    .spin {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--secondary-text-color, #727272);
+    }
+    .chartwrap {
+      position: relative;
+      width: 100%;
+    }
+    svg {
+      display: block;
+      touch-action: pan-y;
+      user-select: none;
+    }
+    .grid {
+      stroke: var(--divider-color, rgba(127, 127, 127, 0.3));
+      stroke-width: 1;
+    }
+    .vgrid {
+      stroke: var(--divider-color, rgba(127, 127, 127, 0.2));
+      stroke-width: 1;
+      stroke-dasharray: 2 4;
+    }
+    .vgrid.major {
+      stroke-dasharray: none;
+      stroke: var(--secondary-text-color, rgba(127, 127, 127, 0.5));
+    }
+    .ax {
+      font-size: 11.5px;
+      fill: var(--secondary-text-color, #727272);
+    }
+    .line {
+      fill: none;
+      stroke-width: 2.2;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+    .line.prev {
+      stroke-width: 1.6;
+      stroke-dasharray: 5 4;
+      opacity: 0.45;
+    }
+    .cursor {
+      stroke: var(--primary-text-color, #212121);
+      stroke-width: 1;
+      opacity: 0.6;
+    }
+    .dot {
+      stroke: var(--card-background-color, #fff);
+      stroke-width: 2;
+    }
+    .tip {
+      position: absolute;
+      top: 6px;
+      z-index: 2;
+      pointer-events: none;
+      min-width: 190px;
+      max-width: 300px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    }
+    .tt {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .tr {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      line-height: 1.55;
+    }
+    .tr i,
+    td i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: none;
+      display: inline-block;
+      margin-right: 6px;
+    }
+    .tr .tn {
+      flex: 1;
+      color: var(--secondary-text-color, #727272);
+    }
+    .tr .pv {
+      color: var(--secondary-text-color, #727272);
+      font-size: 11.5px;
+    }
+    .note {
+      font-size: 11px;
+      color: var(--secondary-text-color, #727272);
+      margin-top: 2px;
+    }
+    .strip-legend {
+      font-size: 12px;
+      color: var(--secondary-text-color, #727272);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+      align-items: center;
+      margin: 2px 0 10px;
+    }
+    .swatch {
+      display: inline-block;
+      width: 12px;
+      height: 8px;
+      border-radius: 2px;
+      margin-right: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+    th {
+      text-align: right;
+      font-weight: 600;
+      color: var(--secondary-text-color, #727272);
+      font-size: 12px;
+      padding: 4px 6px;
+    }
+    th:first-child,
+    td:first-child {
+      text-align: left;
+    }
+    td {
+      text-align: right;
+      padding: 6px 6px;
+      border-top: 1px solid var(--divider-color, rgba(127, 127, 127, 0.2));
+      white-space: nowrap;
+    }
+    td:first-child {
+      white-space: normal;
+    }
+    .empty,
+    .hint {
+      color: var(--secondary-text-color, #727272);
+      font-size: 13px;
+      margin: 10px 0 0;
+    }
+    .err {
+      color: #ef4444;
+      font-size: 13.5px;
+      margin: 6px 0;
+    }
+    @media (max-width: 520px) {
+      .body {
+        padding: 8px 10px 14px;
+      }
+      td:nth-child(4) {
+        display: none;
+      }
+      th:nth-child(4) {
+        display: none;
+      }
+    }
+  `;
+  }
+};
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoChartsDialog.prototype, "hass", 2);
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoChartsDialog.prototype, "entities", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_group", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_range", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_compare", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_normalized", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_loading", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_error", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_w", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_hover", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_hidden", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_shown", 2);
+__decorateClass([
+  r5()
+], ImpiantoChartsDialog.prototype, "_computed", 2);
+if (!customElements.get(TAG3)) customElements.define(TAG3, ImpiantoChartsDialog);
+
 // src/plant-logic.ts
 var DEFAULT_MODEL = {
   volume: 190,
@@ -1658,6 +2620,7 @@ var ImpiantoOverviewCard = class extends i4 {
   updated(changed) {
     if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
     if (changed.has("hass") && this._info) this._info.lines = this._summaryLines();
+    if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
   }
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -1665,6 +2628,8 @@ var ImpiantoOverviewCard = class extends i4 {
     this._dialog = void 0;
     this._info?.remove();
     this._info = void 0;
+    this._charts?.remove();
+    this._charts = void 0;
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
@@ -1862,6 +2827,12 @@ var ImpiantoOverviewCard = class extends i4 {
               <text x="40" y=${(btn.sub ? 340 + 78 : 340 + 64) + 39} class="b" font-size="14" text-anchor="middle">i</text>
               <text x="92" y=${(btn.sub ? 340 + 78 : 340 + 64) + 40} class="b" font-size="17" text-anchor="middle">Stato</text>
             </g>`}
+        ${this._config.charts === false ? A : w`<g class="btn info" role="button" tabindex="0" aria-label="Grafici" @click=${() => this._openCharts()}
+              @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._openCharts()}>
+              <rect x="14" y=${(btn.sub ? 340 + 78 : 340 + 64) + 66} width="136" height="44" rx="14" class="infobg" />
+              <polyline points="28,${(btn.sub ? 340 + 78 : 340 + 64) + 98} 35,${(btn.sub ? 340 + 78 : 340 + 64) + 88} 41,${(btn.sub ? 340 + 78 : 340 + 64) + 94} 51,${(btn.sub ? 340 + 78 : 340 + 64) + 80}" class="infoc" />
+              <text x="102" y=${(btn.sub ? 340 + 78 : 340 + 64) + 94} class="b" font-size="17" text-anchor="middle">Grafici</text>
+            </g>`}
 
         <!-- solare -->
         <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
@@ -1966,13 +2937,13 @@ var ImpiantoOverviewCard = class extends i4 {
   _renderGuard() {
     const e5 = this._e;
     if (!this.hass.states[e5.guard]) return A;
-    const on = this._s(e5.guard) === "on";
+    const on2 = this._s(e5.guard) === "on";
     const flagged = this._s(e5.guard_flag) === "on";
     return b2`
-      <button class="guard ${on ? "on" : "off"}" @click=${() => this._toggleGuard()} aria-pressed=${on}>
+      <button class="guard ${on2 ? "on" : "off"}" @click=${() => this._toggleGuard()} aria-pressed=${on2}>
         <span class="gtxt">
           <b>Evita partenze inutili</b>
-          <small>${on ? flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze con puffer e boiler gi\xE0 caldi" : "disattivata: i programmi partono sempre"}</small>
+          <small>${on2 ? flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze con puffer e boiler gi\xE0 caldi" : "disattivata: i programmi partono sempre"}</small>
         </span>
         <span class="gsw"><i></i></span>
       </button>
@@ -2100,6 +3071,18 @@ var ImpiantoOverviewCard = class extends i4 {
       pelletEmpty: this._yes(e5.pellet_empty),
       pelletReserve: this._yes(e5.pellet_reserve)
     });
+  }
+  /** Apre la finestra "Grafici" (storico dei valori principali). */
+  _openCharts() {
+    if (this._charts) return;
+    const d3 = document.createElement("impianto-charts-dialog");
+    d3.hass = this.hass;
+    d3.entities = this._e;
+    d3.addEventListener("closed", () => {
+      this._charts = void 0;
+    });
+    document.body.appendChild(d3);
+    this._charts = d3;
   }
   /** Apre la finestra "Stato" (si aggiunge alla pagina, come quella delle preferenze). */
   _openInfo() {
@@ -2845,14 +3828,14 @@ function hasWindow(p3) {
 function segmentsOnDay(p3, d3) {
   const out = [];
   if (!hasWindow(p3)) return out;
-  const on = p3.on;
-  const off = p3.off;
+  const on2 = p3.on;
+  const off2 = p3.off;
   if (p3.days[d3]) {
-    if (off === 0 || off > on) out.push({ start: on, end: off === 0 ? 1440 : off });
-    else out.push({ start: on, end: 1440 });
+    if (off2 === 0 || off2 > on2) out.push({ start: on2, end: off2 === 0 ? 1440 : off2 });
+    else out.push({ start: on2, end: 1440 });
   }
   const prev = (d3 + 6) % 7;
-  if (p3.days[prev] && off > 0 && off < on) out.push({ start: 0, end: off });
+  if (p3.days[prev] && off2 > 0 && off2 < on2) out.push({ start: 0, end: off2 });
   return out;
 }
 function findOverlaps(programs) {
@@ -3093,13 +4076,13 @@ var CaldaiaScheduleCard = class extends i4 {
     });
   }
   _toggleMaster() {
-    const on = this._cronoOn();
+    const on2 = this._cronoOn();
     void this._run({
       domain: "switch",
-      service: on ? "turn_off" : "turn_on",
+      service: on2 ? "turn_off" : "turn_on",
       entity_id: this._master,
       data: {},
-      label: `Cronotermostato ${on ? "disattivato" : "attivo"}`
+      label: `Cronotermostato ${on2 ? "disattivato" : "attivo"}`
     });
   }
   get _presets() {
@@ -3669,7 +4652,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.15";
+var VERSION = "0.3.16";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
