@@ -242,6 +242,7 @@ for (const [tag, cfg] of [
 }
 push();
 if (q.get("impostazioni")) setTimeout(() => cards[0]._openSettings(), 200);
+if (q.get("stato_popup")) setTimeout(() => cards[0]._openInfo(), 200);
 
 document.getElementById("t").onclick = () => document.body.classList.toggle("chiaro") | document.body.classList.toggle("scuro");
 document.getElementById("stato").value = q.get("stato") || "WORK";

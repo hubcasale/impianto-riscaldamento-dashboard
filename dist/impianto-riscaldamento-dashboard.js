@@ -1160,6 +1160,145 @@ __decorateClass([
 ], ImpiantoSettingsDialog.prototype, "_error", 2);
 if (!customElements.get(TAG)) customElements.define(TAG, ImpiantoSettingsDialog);
 
+// src/info-dialog.ts
+var TAG2 = "impianto-info-dialog";
+var ImpiantoInfoDialog = class extends i4 {
+  constructor() {
+    super(...arguments);
+    this.lines = [];
+    this._onKey = (e5) => {
+      if (e5.key === "Escape") this._close();
+    };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("keydown", this._onKey);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener("keydown", this._onKey);
+  }
+  _close() {
+    this.dispatchEvent(new CustomEvent("closed"));
+    this.remove();
+  }
+  render() {
+    return b2`
+      <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
+        <div class="panel" role="dialog" aria-modal="true" aria-label="Stato dell'impianto">
+          <div class="head">
+            <div class="title">Stato dell'impianto</div>
+            <button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button>
+          </div>
+          <div class="body">
+            ${this.lines.length === 0 ? b2`<div class="empty">Nessuna informazione disponibile.</div>` : this.lines.map(
+      (l3) => b2`<div class="line ${l3.tone}"><ha-icon icon=${l3.icon}></ha-icon><span>${l3.text}</span></div>`
+    )}
+          </div>
+        </div>
+      </div>
+      ${A}
+    `;
+  }
+  static {
+    this.styles = i`
+    :host {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      color: var(--primary-text-color, #212121);
+      font-family: var(--paper-font-body1_-_font-family, Roboto, Helvetica, Arial, sans-serif);
+    }
+    .backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .panel {
+      background: var(--card-background-color, #fff);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 520px;
+      max-height: min(86vh, 700px);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+    }
+    .title {
+      font-size: 19px;
+      font-weight: 700;
+    }
+    .x {
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+    .x:hover {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.15));
+    }
+    .body {
+      overflow-y: auto;
+      padding: 8px 18px 18px;
+    }
+    .line {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 10px 0;
+      font-size: 15px;
+      line-height: 1.4;
+      border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.2));
+    }
+    .line:last-child {
+      border-bottom: none;
+    }
+    .line ha-icon {
+      --mdc-icon-size: 22px;
+      flex: none;
+      color: var(--secondary-text-color, #727272);
+    }
+    .line.ok ha-icon {
+      color: #22c55e;
+    }
+    .line.warn ha-icon {
+      color: #f59e0b;
+    }
+    .line.bad {
+      color: #ef4444;
+      font-weight: 600;
+    }
+    .line.bad ha-icon {
+      color: #ef4444;
+    }
+    .empty {
+      padding: 16px 0;
+      color: var(--secondary-text-color, #727272);
+    }
+  `;
+  }
+};
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoInfoDialog.prototype, "lines", 2);
+if (!customElements.get(TAG2)) customElements.define(TAG2, ImpiantoInfoDialog);
+
 // src/plant-logic.ts
 var DEFAULT_MODEL = {
   volume: 190,
@@ -1518,11 +1657,14 @@ var ImpiantoOverviewCard = class extends i4 {
   }
   updated(changed) {
     if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
+    if (changed.has("hass") && this._info) this._info.lines = this._summaryLines();
   }
   disconnectedCallback() {
     super.disconnectedCallback();
     this._dialog?.remove();
     this._dialog = void 0;
+    this._info?.remove();
+    this._info = void 0;
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
@@ -1713,6 +1855,13 @@ var ImpiantoOverviewCard = class extends i4 {
           <text x="82" y=${btn.sub ? 372 : 380} class="b" font-size="18" text-anchor="middle">${btn.label}</text>
           ${btn.sub ? w`<text x="82" y="396" class="s13" text-anchor="middle" opacity="0.85">${btn.sub}</text>` : A}
         </g>
+        ${this._config.summary === false ? A : w`<g class="btn info" role="button" tabindex="0" aria-label="Stato dell'impianto" @click=${() => this._openInfo()}
+              @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._openInfo()}>
+              <rect x="14" y=${(btn.sub ? 340 + 78 : 340 + 64) + 12} width="136" height="44" rx="14" class="infobg" />
+              <circle cx="40" cy=${(btn.sub ? 340 + 78 : 340 + 64) + 34} r="10" class="infoc" />
+              <text x="40" y=${(btn.sub ? 340 + 78 : 340 + 64) + 39} class="b" font-size="14" text-anchor="middle">i</text>
+              <text x="92" y=${(btn.sub ? 340 + 78 : 340 + 64) + 40} class="b" font-size="17" text-anchor="middle">Stato</text>
+            </g>`}
 
         <!-- solare -->
         <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
@@ -1910,9 +2059,8 @@ var ImpiantoOverviewCard = class extends i4 {
       </section>
     `;
   }
-  /** Riquadro "In breve": poche righe sul momento dell'impianto. */
-  _renderSummary() {
-    if (this._config.summary === false) return A;
+  /** Le righe della finestra "Stato": poche frasi sul momento dell'impianto. */
+  _summaryLines() {
     const e5 = this._e;
     const alarmRaw = (this._s(e5.alarm) ?? "").trim();
     const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown" || alarmRaw.toLowerCase() === "unavailable";
@@ -1926,7 +2074,7 @@ var ImpiantoOverviewCard = class extends i4 {
       this._n(e5.integration_power)
     );
     const eta = this.hass.states[e5.eta] ? this._n(e5.eta) : null;
-    const lines = summarize({
+    return summarize({
       stoveState: this._s(e5.stove_state),
       alarm: noAlarm ? null : alarmRaw,
       power: this._n(e5.power),
@@ -1952,14 +2100,17 @@ var ImpiantoOverviewCard = class extends i4 {
       pelletEmpty: this._yes(e5.pellet_empty),
       pelletReserve: this._yes(e5.pellet_reserve)
     });
-    return b2`
-      <div class="summary" role="status" aria-label="In breve">
-        <span class="stitle">In breve</span>
-        ${lines.map(
-      (l3) => b2`<div class="sline ${l3.tone}"><ha-icon icon=${l3.icon}></ha-icon><span>${l3.text}</span></div>`
-    )}
-      </div>
-    `;
+  }
+  /** Apre la finestra "Stato" (si aggiunge alla pagina, come quella delle preferenze). */
+  _openInfo() {
+    if (this._info) return;
+    const d3 = document.createElement("impianto-info-dialog");
+    d3.lines = this._summaryLines();
+    d3.addEventListener("closed", () => {
+      this._info = void 0;
+    });
+    document.body.appendChild(d3);
+    this._info = d3;
   }
   render() {
     if (!this._config || !this.hass) return A;
@@ -1969,7 +2120,6 @@ var ImpiantoOverviewCard = class extends i4 {
               <ha-icon icon="mdi:cog-outline"></ha-icon>
             </button>`}
         ${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}
-        ${this._renderSummary()}
         <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()} ${this._renderStove()}</div>
       </ha-card>
     `;
@@ -2004,46 +2154,6 @@ var ImpiantoOverviewCard = class extends i4 {
     .gear:hover {
       background: var(--secondary-background-color);
       color: var(--primary-text-color);
-    }
-    .summary {
-      margin: 4px 4px 12px;
-      padding: 10px 14px;
-      border-radius: 12px;
-      background: var(--secondary-background-color);
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .stitle {
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--secondary-text-color);
-    }
-    .sline {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      font-size: 14px;
-      line-height: 1.35;
-    }
-    .sline ha-icon {
-      --mdc-icon-size: 20px;
-      flex: none;
-      color: var(--secondary-text-color);
-    }
-    .sline.ok ha-icon {
-      color: #22c55e;
-    }
-    .sline.warn ha-icon {
-      color: #f59e0b;
-    }
-    .sline.bad {
-      color: #ef4444;
-      font-weight: 600;
-    }
-    .sline.bad ha-icon {
-      color: #ef4444;
     }
     .ctitle {
       font-size: 20px;
@@ -2182,6 +2292,25 @@ var ImpiantoOverviewCard = class extends i4 {
     }
     .btn.off text {
       fill: var(--secondary-text-color);
+    }
+    .btn.info .infobg {
+      fill: var(--secondary-background-color);
+      stroke: var(--divider-color);
+      stroke-width: 2;
+    }
+    .btn.info:hover .infobg {
+      stroke: var(--primary-color);
+    }
+    .btn.info text {
+      fill: var(--primary-text-color);
+    }
+    .btn.info .infoc {
+      fill: none;
+      stroke: var(--primary-color);
+      stroke-width: 2;
+    }
+    .btn.info text:nth-of-type(1) {
+      fill: var(--primary-color);
     }
     .probe {
       fill: var(--card-background-color);
@@ -3540,7 +3669,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.14";
+var VERSION = "0.3.15";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

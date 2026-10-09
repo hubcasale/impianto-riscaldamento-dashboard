@@ -3,6 +3,8 @@ import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
 import type { ImpiantoSettingsDialog } from "./settings-dialog";
 import "./settings-dialog";
+import type { ImpiantoInfoDialog } from "./info-dialog";
+import "./info-dialog";
 import { summarize, type SummaryLine } from "./summary-logic";
 import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
@@ -219,6 +221,7 @@ export class ImpiantoOverviewCard extends LitElement {
   private _armTimer?: number;
   private _ro?: ResizeObserver;
   private _dialog?: ImpiantoSettingsDialog;
+  private _info?: ImpiantoInfoDialog;
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -256,12 +259,15 @@ export class ImpiantoOverviewCard extends LitElement {
   protected updated(changed: Map<string, unknown>): void {
     // la finestra aperta segue gli stati di Home Assistant (interruttori e numeri si aggiornano subito)
     if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
+    if (changed.has("hass") && this._info) this._info.lines = this._summaryLines();
   }
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this._dialog?.remove();
     this._dialog = undefined;
+    this._info?.remove();
+    this._info = undefined;
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
@@ -470,6 +476,15 @@ export class ImpiantoOverviewCard extends LitElement {
           <text x="82" y=${btn.sub ? 372 : 380} class="b" font-size="18" text-anchor="middle">${btn.label}</text>
           ${btn.sub ? svg`<text x="82" y="396" class="s13" text-anchor="middle" opacity="0.85">${btn.sub}</text>` : nothing}
         </g>
+        ${this._config.summary === false
+          ? nothing
+          : svg`<g class="btn info" role="button" tabindex="0" aria-label="Stato dell'impianto" @click=${() => this._openInfo()}
+              @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openInfo()}>
+              <rect x="14" y=${(btn.sub ? 340 + 78 : 340 + 64) + 12} width="136" height="44" rx="14" class="infobg" />
+              <circle cx="40" cy=${(btn.sub ? 340 + 78 : 340 + 64) + 34} r="10" class="infoc" />
+              <text x="40" y=${(btn.sub ? 340 + 78 : 340 + 64) + 39} class="b" font-size="14" text-anchor="middle">i</text>
+              <text x="92" y=${(btn.sub ? 340 + 78 : 340 + 64) + 40} class="b" font-size="17" text-anchor="middle">Stato</text>
+            </g>`}
 
         <!-- solare -->
         <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
@@ -696,9 +711,8 @@ export class ImpiantoOverviewCard extends LitElement {
     `;
   }
 
-  /** Riquadro "In breve": poche righe sul momento dell'impianto. */
-  private _renderSummary() {
-    if (this._config.summary === false) return nothing;
+  /** Le righe della finestra "Stato": poche frasi sul momento dell'impianto. */
+  private _summaryLines(): SummaryLine[] {
     const e = this._e;
     const alarmRaw = (this._s(e.alarm) ?? "").trim();
     const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown" || alarmRaw.toLowerCase() === "unavailable";
@@ -712,7 +726,7 @@ export class ImpiantoOverviewCard extends LitElement {
       this._n(e.integration_power),
     );
     const eta = this.hass.states[e.eta] ? this._n(e.eta) : null;
-    const lines: SummaryLine[] = summarize({
+    return summarize({
       stoveState: this._s(e.stove_state),
       alarm: noAlarm ? null : alarmRaw,
       power: this._n(e.power),
@@ -738,14 +752,18 @@ export class ImpiantoOverviewCard extends LitElement {
       pelletEmpty: this._yes(e.pellet_empty),
       pelletReserve: this._yes(e.pellet_reserve),
     });
-    return html`
-      <div class="summary" role="status" aria-label="In breve">
-        <span class="stitle">In breve</span>
-        ${lines.map(
-          (l) => html`<div class="sline ${l.tone}"><ha-icon icon=${l.icon}></ha-icon><span>${l.text}</span></div>`,
-        )}
-      </div>
-    `;
+  }
+
+  /** Apre la finestra "Stato" (si aggiunge alla pagina, come quella delle preferenze). */
+  private _openInfo(): void {
+    if (this._info) return;
+    const d = document.createElement("impianto-info-dialog") as ImpiantoInfoDialog;
+    d.lines = this._summaryLines();
+    d.addEventListener("closed", () => {
+      this._info = undefined;
+    });
+    document.body.appendChild(d);
+    this._info = d;
   }
 
   render() {
@@ -758,7 +776,6 @@ export class ImpiantoOverviewCard extends LitElement {
               <ha-icon icon="mdi:cog-outline"></ha-icon>
             </button>`}
         ${this._config.title ? html`<div class="ctitle">${this._config.title}</div>` : nothing}
-        ${this._renderSummary()}
         <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()} ${this._renderStove()}</div>
       </ha-card>
     `;
@@ -793,46 +810,6 @@ export class ImpiantoOverviewCard extends LitElement {
     .gear:hover {
       background: var(--secondary-background-color);
       color: var(--primary-text-color);
-    }
-    .summary {
-      margin: 4px 4px 12px;
-      padding: 10px 14px;
-      border-radius: 12px;
-      background: var(--secondary-background-color);
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .stitle {
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--secondary-text-color);
-    }
-    .sline {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      font-size: 14px;
-      line-height: 1.35;
-    }
-    .sline ha-icon {
-      --mdc-icon-size: 20px;
-      flex: none;
-      color: var(--secondary-text-color);
-    }
-    .sline.ok ha-icon {
-      color: #22c55e;
-    }
-    .sline.warn ha-icon {
-      color: #f59e0b;
-    }
-    .sline.bad {
-      color: #ef4444;
-      font-weight: 600;
-    }
-    .sline.bad ha-icon {
-      color: #ef4444;
     }
     .ctitle {
       font-size: 20px;
@@ -971,6 +948,25 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .btn.off text {
       fill: var(--secondary-text-color);
+    }
+    .btn.info .infobg {
+      fill: var(--secondary-background-color);
+      stroke: var(--divider-color);
+      stroke-width: 2;
+    }
+    .btn.info:hover .infobg {
+      stroke: var(--primary-color);
+    }
+    .btn.info text {
+      fill: var(--primary-text-color);
+    }
+    .btn.info .infoc {
+      fill: none;
+      stroke: var(--primary-color);
+      stroke-width: 2;
+    }
+    .btn.info text:nth-of-type(1) {
+      fill: var(--primary-color);
     }
     .probe {
       fill: var(--card-background-color);

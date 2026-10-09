@@ -162,9 +162,9 @@ Le schede leggono sensori che qui sono forniti come esempio:
   con spegnimento automatico (vedi sotto) e la stima `sensor.caldaia_acqua_pronta_tra`.
 - `esphome/solare-termico.yaml`: ESP32 con ADS1115 e sonde NTC 10k B3950 (serpentine) e due sonde sul boiler.
 
-## Riquadro «In breve»
+## Pulsante «Stato»
 
-In cima alla scheda dell'impianto compaiono poche righe che dicono che cosa sta succedendo: la caldaia (in lavoro, in ECO STOP con la temperatura del puffer a cui riparte, in accensione, spenta e perché: vacanza, fuori fascia, salvaguardia, assenza), la pompa di integrazione (accesa o ferma e il motivo), il solare, chi è in casa con il conto alla rovescia dello spegnimento per assenza, il tempo per l'acqua calda e gli avvisi di allarme o pellet. Si nasconde con `summary: false`. La logica è in `src/summary-logic.ts`.
+Sotto il pulsante di accensione rapida, sul lato sinistro dello schema, c'è il pulsante **Stato** (con una «i»). Apre una finestra con poche righe che dicono che cosa sta succedendo: la caldaia (in lavoro, in ECO STOP con la temperatura del puffer a cui riparte, in accensione, spenta e perché: vacanza, fuori fascia, salvaguardia, assenza), la pompa di integrazione (accesa o ferma e il motivo), il solare, chi è in casa con il conto alla rovescia dello spegnimento per assenza, il tempo per l'acqua calda e gli avvisi di allarme o pellet. La finestra segue gli stati in tempo reale. Si nasconde con `summary: false`. La logica è in `src/summary-logic.ts`.
 
 ## Spegnimento con nessuno in casa
 
