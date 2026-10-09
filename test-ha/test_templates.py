@@ -408,5 +408,23 @@ def for2(p, b, aff):
 check("regola: puffer affidabile e caldo, forza", for2("70", "45", True), "True")
 check("regola: puffer non affidabile, non forza", for2("70", "45", False), "False")
 
+# ---------------------------------------------------------------- assenza (nessuno in casa)
+ASSENZA = yaml.safe_load(open("ha-packages/caldaia_assenza.yaml"))
+NES = find("binary_sensor", "Caldaia nessuno in casa", ASSENZA)["state"]
+TEL = ["device_tracker.iphone_camilla", "device_tracker.iphone_corrado", "device_tracker.iphone_matilde", "device_tracker.iphone_roberta"]
+RTR = ["device_tracker.iphone", "device_tracker.iphone_2", "device_tracker.iphone_3", "device_tracker.iphone12camilla"]
+def nes(tel="not_home", rtr="not_home", ssid="CASALE2G", **over):
+    st_ = {e: tel for e in TEL}
+    st_.update({e: rtr for e in RTR})
+    st_.update(over)
+    return render(NES, st_, attrs={(e, "ssid"): ssid for e in RTR})
+check("assenza: tutti fuori e nessun iPhone sul Wi-Fi", nes(), "True")
+check("assenza: un telefono iCloud3 a casa", nes(**{TEL[1]: "home"}), "False")
+check("assenza: telefono in un'altra zona conta come fuori", nes(**{TEL[2]: "Nonna Maria"}), "True")
+check("assenza: iPhone sul Wi-Fi CASALE2G", nes(**{RTR[1]: "home"}), "False")
+check("assenza: iPhone del router a casa ma su un'altra rete", render(NES, {**{e: "not_home" for e in TEL}, **{e: "home" for e in RTR}}, attrs={(e, "ssid"): "OSPITI" for e in RTR}), "True")
+check("assenza: telefono iCloud3 non disponibile, nel dubbio non fuori", nes(**{TEL[0]: "unavailable"}), "False")
+check("assenza: router non disponibile, nel dubbio non fuori", nes(**{RTR[2]: "unavailable"}), "False")
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

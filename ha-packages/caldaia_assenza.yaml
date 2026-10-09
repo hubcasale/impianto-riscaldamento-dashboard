@@ -1,0 +1,206 @@
+# Spegnimento della caldaia quando nessuno e' in casa.
+#
+# Presenza: i quattro iPhone seguiti da iCloud3 (device_tracker.iphone_camilla/corrado/matilde/roberta) devono essere
+# tutti fuori casa E nessun iPhone deve risultare connesso al Wi-Fi CASALE2G (i device_tracker del router
+# device_tracker.iphone, _2, _3 e iphone12camilla hanno l'attributo ssid). Se una delle due fonti non e' disponibile
+# non si considera nessuno fuori: nel dubbio la caldaia resta com'e'.
+#
+# Dopo l'assenza prolungata (minuti regolabili) la Polygon accesa viene fermata con il normale arresto. Non interviene:
+# - se un termostato chiede riscaldamento, se e' attiva la modalita' ospiti o un'accensione rapida con il pulsante;
+# - se fuori fa piu' freddo della soglia (rischio gelo), se la caldaia e' gia' spenta o in allarme.
+# Al rientro (iCloud3 o Wi-Fi) la caldaia si riaccende solo se un programma del cronotermostato e' attivo in quel momento;
+# altrimenti resta spenta e riparte al prossimo programma. Arriva una notifica ad ogni intervento.
+
+input_boolean:
+  caldaia_assenza_attiva:
+    name: Caldaia - spegni se nessuno e' in casa
+    icon: mdi:home-off
+  caldaia_assenza_ospiti:
+    name: Caldaia - ospiti in casa (non spegnere)
+    icon: mdi:account-multiple
+  caldaia_assenza_ha_spento:
+    name: Caldaia - spenta per assenza
+    icon: mdi:home-off-outline
+  caldaia_assenza_defaults_impostati:
+    name: Caldaia - assenza, valori iniziali impostati
+    icon: mdi:check
+
+input_number:
+  caldaia_assenza_minuti:
+    name: Caldaia - minuti di assenza prima di spegnere
+    min: 15
+    max: 480
+    step: 15
+    unit_of_measurement: min
+    mode: box
+  caldaia_assenza_t_esterna_min:
+    name: Caldaia - non spegnere se fuori fa meno di
+    min: -10
+    max: 15
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+
+template:
+  - binary_sensor:
+      - name: Caldaia nessuno in casa
+        unique_id: caldaia_nessuno_in_casa
+        icon: mdi:home-off
+        state: >
+          {% set telefoni = ['device_tracker.iphone_camilla', 'device_tracker.iphone_corrado',
+                             'device_tracker.iphone_matilde', 'device_tracker.iphone_roberta'] %}
+          {% set router = ['device_tracker.iphone', 'device_tracker.iphone_2',
+                           'device_tracker.iphone_3', 'device_tracker.iphone12camilla'] %}
+          {% set ns = namespace(fuori=true) %}
+          {% for e in telefoni %}
+            {% if states(e) in ['home', 'unknown', 'unavailable'] %}{% set ns.fuori = false %}{% endif %}
+          {% endfor %}
+          {% for e in router %}
+            {% if states(e) in ['unknown', 'unavailable'] %}{% set ns.fuori = false %}
+            {% elif states(e) == 'home' and state_attr(e, 'ssid') == 'CASALE2G' %}{% set ns.fuori = false %}{% endif %}
+          {% endfor %}
+          {{ ns.fuori }}
+
+automation:
+  - id: caldaia_assenza_spegni
+    alias: Caldaia - spegni per assenza
+    description: >
+      Con nessuno in casa da almeno N minuti ferma la Polygon accesa (controllo ogni 10 minuti, al passaggio a "nessuno
+      in casa" e alla partenza di un programma).
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.caldaia_nessuno_in_casa
+        to: "on"
+        for:
+          minutes: "{{ states('input_number.caldaia_assenza_minuti') | int(90) }}"
+      - trigger: state
+        entity_id: sensor.casale_stato
+        from: ["OFF", "STOP"]
+        to: ["WAIT", "START"]
+        for: "00:00:30"
+      - trigger: time_pattern
+        minutes: "/10"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_assenza_attiva
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.caldaia_assenza_ospiti
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.caldaia_boost_attivo
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.caldaia_richiesta_riscaldamento
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.caldaia_nessuno_in_casa
+        state: "on"
+      # assenza gia' abbastanza lunga
+      - condition: template
+        value_template: >
+          {{ (now() - states.binary_sensor.caldaia_nessuno_in_casa.last_changed).total_seconds()
+             >= states('input_number.caldaia_assenza_minuti') | float(90) * 60 }}
+      # la caldaia deve essere accesa (non spenta, non in allarme)
+      - condition: template
+        value_template: >
+          {% set s = states('sensor.casale_stato') %}
+          {{ s not in ['OFF', 'STOP', 'unknown', 'unavailable', 'SPENTO', 'ARRESTO', 'ALLARME'] and not s.startswith('ALARM') }}
+      # niente spegnimento con il gelo (se la temperatura esterna non si conosce non blocca)
+      - condition: template
+        value_template: >
+          {% set t = state_attr('weather.casale', 'temperature') %}
+          {{ not is_number(t) or t | float >= states('input_number.caldaia_assenza_t_esterna_min') | float(5) }}
+    actions:
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_assenza_ha_spento}
+      - action: climate.set_hvac_mode
+        target: {entity_id: climate.casale_acqua}
+        data: {hvac_mode: "off"}
+      - action: logbook.log
+        data:
+          name: Caldaia
+          message: spenta per assenza (nessuno in casa da {{ states('input_number.caldaia_assenza_minuti') | int(90) }} minuti)
+      - action: notify.send_message
+        continue_on_error: true
+        target: {entity_id: notify.iphone_corrado}
+        data:
+          title: Caldaia spenta
+          message: "Nessuno in casa, ho spento la caldaia. Si riaccende al rientro se c'e' un programma attivo."
+
+  - id: caldaia_assenza_rientro
+    alias: Caldaia - rientro dopo l'assenza
+    description: >
+      Al primo rientro riaccende la caldaia solo se un programma e' attivo ora; altrimenti la lascia spenta fino al
+      prossimo programma. Se il programma era gia' finito, azzera il ricordo.
+    mode: single
+    triggers:
+      - trigger: state
+        id: rientro
+        entity_id: binary_sensor.caldaia_nessuno_in_casa
+        to: "off"
+      - trigger: state
+        id: fine_programma
+        entity_id: binary_sensor.caldaia_programma_attivo_ora
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_assenza_ha_spento
+        state: "on"
+    actions:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: rientro
+              - condition: state
+                entity_id: binary_sensor.caldaia_programma_attivo_ora
+                state: "on"
+              - condition: template
+                value_template: "{{ states('sensor.casale_stato') in ['OFF', 'STOP', 'SPENTO', 'ARRESTO'] }}"
+            sequence:
+              - action: climate.set_hvac_mode
+                target: {entity_id: climate.casale_acqua}
+                data: {hvac_mode: heat}
+              - action: logbook.log
+                data:
+                  name: Caldaia
+                  message: riaccesa al rientro (programma attivo)
+              - action: notify.send_message
+                continue_on_error: true
+                target: {entity_id: notify.iphone_corrado}
+                data:
+                  title: Caldaia riaccesa
+                  message: "Bentornati, c'e' un programma attivo: ho riacceso la caldaia."
+          - conditions:
+              - condition: trigger
+                id: rientro
+            sequence:
+              - action: logbook.log
+                data:
+                  name: Caldaia
+                  message: rientro senza programma attivo, la caldaia resta spenta fino al prossimo programma
+      # in ogni caso il ricordo dell'assenza finisce qui: al rientro oppure a fine programma
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_assenza_ha_spento}
+
+  - id: caldaia_assenza_valori_iniziali
+    alias: Caldaia - assenza, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_assenza_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_assenza_minuti}
+        data: {value: 90}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_assenza_t_esterna_min}
+        data: {value: 5}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_assenza_attiva}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_assenza_defaults_impostati}
