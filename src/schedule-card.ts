@@ -6,6 +6,13 @@ import {
   DAY_SHORT,
   DEFAULT_PRESETS,
   PROGRAMS,
+  SAVED_PRESETS_KEY,
+  describeProgram,
+  mergePresets,
+  removeSaved,
+  sanitizeSaved,
+  snapshotPreset,
+  upsertSaved,
   describeOverlaps,
   findOverlaps,
   formatHM,
@@ -48,6 +55,11 @@ export class CaldaiaScheduleCard extends LitElement {
   @state() private _config!: ScheduleCardConfig;
   @state() private _pending: Pending = {};
   @state() private _confirm: Preset | null = null;
+  /** preset salvati dall'utente (dati utente di Home Assistant) */
+  @state() private _saved: Preset[] = [];
+  /** finestrella "Salva": dove salvare la programmazione attuale (nome di un preset o NEW) */
+  @state() private _saving: { target: string; newName: string } | null = null;
+  private _savedRequested = false;
   @state() private _busy: { done: number; total: number; label: string } | null = null;
   @state() private _message: { kind: "ok" | "err"; text: string } | null = null;
   private _tick?: number;
@@ -182,7 +194,72 @@ export class CaldaiaScheduleCard extends LitElement {
   }
 
   private get _presets(): Preset[] {
+    const base = this._config.presets && this._config.presets.length ? this._config.presets : DEFAULT_PRESETS;
+    return mergePresets(base, this._saved);
+  }
+
+  private get _basePresets(): Preset[] {
     return this._config.presets && this._config.presets.length ? this._config.presets : DEFAULT_PRESETS;
+  }
+
+  protected updated(changed: Map<string, unknown>): void {
+    if (changed.has("hass") && this.hass && !this._savedRequested) {
+      this._savedRequested = true;
+      void this._loadSaved();
+    }
+  }
+
+  private _ws(msg: Record<string, unknown>): Promise<{ value?: unknown } | null> {
+    const cw = this.hass.callWS as unknown as ((m: Record<string, unknown>) => Promise<{ value?: unknown } | null>) | undefined;
+    return cw ? cw.call(this.hass, msg) : Promise.reject(new Error("callWS non disponibile"));
+  }
+
+  private async _loadSaved(): Promise<void> {
+    try {
+      const r = await this._ws({ type: "frontend/get_user_data", key: SAVED_PRESETS_KEY });
+      this._saved = sanitizeSaved(r?.value);
+    } catch {
+      this._saved = [];
+    }
+  }
+
+  private async _persistSaved(next: Preset[]): Promise<void> {
+    await this._ws({ type: "frontend/set_user_data", key: SAVED_PRESETS_KEY, value: { version: 1, presets: next } });
+    this._saved = next;
+  }
+
+  private _openSave(): void {
+    this._confirm = null;
+    this._message = null;
+    this._saving = { target: "__new__", newName: "" };
+  }
+
+  private async _doSave(): Promise<void> {
+    const sv = this._saving;
+    if (!sv) return;
+    const isNew = sv.target === "__new__";
+    const name = isNew ? sv.newName.trim() : sv.target;
+    if (!name) return;
+    const base = this._presets.find((p) => p.name === name);
+    const preset = snapshotPreset(name, this._programs(), this._cronoOn(), base);
+    try {
+      await this._persistSaved(upsertSaved(this._saved, preset));
+      this._saving = null;
+      this._message = { kind: "ok", text: `Preset "${name}" salvato con la programmazione attuale (orari, giorni, temperature e cronotermostato).` };
+    } catch (err) {
+      this._message = { kind: "err", text: `Non sono riuscito a salvare: ${(err as Error).message ?? err}` };
+    }
+  }
+
+  private async _deleteSaved(name: string): Promise<void> {
+    const isDefault = this._basePresets.some((p) => p.name === name);
+    try {
+      await this._persistSaved(removeSaved(this._saved, name));
+      this._message = { kind: "ok", text: isDefault ? `Preset "${name}" ripristinato com'era in origine.` : `Preset "${name}" eliminato.` };
+      if (this._saving?.target === name) this._saving = { target: "__new__", newName: "" };
+    } catch (err) {
+      this._message = { kind: "err", text: `Non sono riuscito a eliminare: ${(err as Error).message ?? err}` };
+    }
   }
 
   private _plan(preset: Preset): ServiceAction[] {
@@ -252,6 +329,62 @@ export class CaldaiaScheduleCard extends LitElement {
     </div>`;
   }
 
+  private _renderSave() {
+    const sv = this._saving;
+    if (!sv) return nothing;
+    const programs = this._programs();
+    const crono = this._cronoOn();
+    const isNew = sv.target === "__new__";
+    const canSave = isNew ? sv.newName.trim() !== "" : true;
+    const targetName = isNew ? sv.newName.trim() : sv.target;
+    const exists = this._presets.some((p) => p.name === targetName);
+    return html`<div class="confirm save">
+      <div><b>Salva la programmazione attuale</b></div>
+      <ul>
+        ${programs.map((p) => html`<li>${describeProgram(p)}</li>`)}
+        <li>Cronotermostato ${crono === null ? "non disponibile" : crono ? "attivo" : "spento"}</li>
+      </ul>
+      <div class="small">In quale preset la salvo?</div>
+      <div class="targets">
+        ${this._presets.map((p) => {
+          const saved = this._saved.some((x) => x.name === p.name);
+          const isDefault = this._basePresets.some((b) => b.name === p.name);
+          return html`<div class="target">
+            <label>
+              <input type="radio" name="target" .checked=${sv.target === p.name} @change=${() => (this._saving = { ...sv, target: p.name })} />
+              <span>${p.name}${saved ? html` <small>(personalizzato)</small>` : html` <small>(predefinito)</small>`}</span>
+            </label>
+            ${saved
+              ? html`<button class="mini" @click=${() => this._deleteSaved(p.name)}>${isDefault ? "Ripristina" : "Elimina"}</button>`
+              : nothing}
+          </div>`;
+        })}
+        <div class="target">
+          <label>
+            <input type="radio" name="target" .checked=${isNew} @change=${() => (this._saving = { ...sv, target: "__new__" })} />
+            <span>Nuovo preset</span>
+          </label>
+          <input
+            class="name"
+            type="text"
+            placeholder="Nome (per esempio Inverno)"
+            maxlength="30"
+            .value=${sv.newName}
+            @focus=${() => (this._saving = { ...sv, target: "__new__" })}
+            @input=${(e: Event) => (this._saving = { target: "__new__", newName: (e.target as HTMLInputElement).value })}
+          />
+        </div>
+      </div>
+      ${canSave && targetName
+        ? html`<div class="small">${exists ? html`Sostituisce il contenuto di <b>${targetName}</b>.` : html`Crea il preset <b>${targetName}</b>.`}</div>`
+        : nothing}
+      <div class="row">
+        <button class="primary" ?disabled=${!canSave} @click=${() => this._doSave()}>Salva</button>
+        <button @click=${() => (this._saving = null)}>Annulla</button>
+      </div>
+    </div>`;
+  }
+
   private _renderPresets() {
     if (this._config.hide?.includes("presets")) return nothing;
     const confirm = this._confirm;
@@ -260,11 +393,15 @@ export class CaldaiaScheduleCard extends LitElement {
       <div class="section">Preset</div>
       <div class="presets">
         ${this._presets.map(
-          (p) => html`<button class="preset" ?disabled=${!!this._busy} @click=${() => (this._confirm = p)} title=${p.description ?? ""}>
+          (p) => html`<button class="preset" ?disabled=${!!this._busy} @click=${() => { this._saving = null; this._confirm = p; }} title=${p.description ?? ""}>
             ${p.icon ? html`<ha-icon .icon=${p.icon}></ha-icon>` : nothing}<span>${p.name}</span>
           </button>`
         )}
+        <button class="preset save" ?disabled=${!!this._busy} @click=${() => this._openSave()} title="Salva la programmazione attuale come preset">
+          <ha-icon icon="mdi:content-save-outline"></ha-icon><span>Salva…</span>
+        </button>
       </div>
+      ${this._renderSave()}
       ${confirm
         ? html`<div class="confirm">
             <div><b>${confirm.name}</b>${confirm.description ? html` · ${confirm.description}` : nothing}</div>
@@ -490,6 +627,54 @@ export class CaldaiaScheduleCard extends LitElement {
     .preset:disabled {
       opacity: 0.5;
       cursor: default;
+    }
+    .confirm.save .targets {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 6px 0;
+    }
+    .target {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 4px 0;
+      border-bottom: 1px solid var(--divider-color);
+    }
+    .target label {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--primary-text-color);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .target label small {
+      color: var(--secondary-text-color);
+      font-size: 12px;
+    }
+    .target input[type="radio"] {
+      width: auto;
+      margin: 0;
+    }
+    .target input.name {
+      flex: 1;
+      min-width: 0;
+      max-width: 240px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      font: inherit;
+    }
+    .mini {
+      font-size: 12px;
+      padding: 4px 10px;
     }
     .confirm {
       margin-top: 10px;

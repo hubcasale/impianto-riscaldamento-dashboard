@@ -3963,6 +3963,66 @@ function planPreset(input, preset) {
     });
   return actions;
 }
+var SAVED_PRESETS_KEY = "impianto_riscaldamento_presets";
+function formatDays(days) {
+  const on2 = days.map((d3, i5) => d3 ? i5 : -1).filter((i5) => i5 >= 0);
+  if (on2.length === 0) return "nessun giorno";
+  if (on2.length === 7) return "tutti i giorni";
+  const runs = [];
+  for (const i5 of on2) {
+    const last = runs[runs.length - 1];
+    if (last && last[1] === i5 - 1) last[1] = i5;
+    else runs.push([i5, i5]);
+  }
+  return runs.map(([a3, b3]) => a3 === b3 ? DAY_SHORT[a3] : b3 === a3 + 1 ? `${DAY_SHORT[a3]}, ${DAY_SHORT[b3]}` : `${DAY_SHORT[a3]}\u2013${DAY_SHORT[b3]}`).join(", ");
+}
+function describeProgram(p3) {
+  const when = `${formatHM(p3.on)}\u2013${formatHM(p3.off)}`;
+  const temps = [
+    p3.setBoiler !== null ? `Set boiler ${p3.setBoiler} \xB0C` : null,
+    p3.setWater !== null ? `Set acqua ${p3.setWater} \xB0C` : null
+  ].filter(Boolean).join(", ");
+  return `P${p3.n} ${when} \xB7 ${formatDays(p3.days)}${temps ? ` \xB7 ${temps}` : ""}`;
+}
+function snapshotPreset(name, programs, cronoOn, base, now = /* @__PURE__ */ new Date()) {
+  const out = {};
+  for (const n5 of PROGRAMS) {
+    const p3 = programs.find((x2) => x2.n === n5);
+    if (!p3) continue;
+    const pp = { days: p3.days.map((on2, i5) => on2 ? DAY_SHORT[i5].toLowerCase() : "").filter(Boolean) };
+    if (p3.on !== null) pp.on = formatHM(p3.on);
+    if (p3.off !== null) pp.off = formatHM(p3.off);
+    if (p3.setBoiler !== null) pp.set_boiler = p3.setBoiler;
+    if (p3.setWater !== null) pp.set_water = p3.setWater;
+    out[String(n5)] = pp;
+  }
+  const d3 = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+  const preset = {
+    name: name.trim(),
+    icon: base?.icon ?? "mdi:bookmark-outline",
+    description: `Salvato il ${d3}`,
+    programs: out
+  };
+  if (cronoOn !== null) preset.crono = cronoOn;
+  return preset;
+}
+function mergePresets(base, saved) {
+  const out = base.map((b3) => saved.find((s4) => s4.name === b3.name) ?? b3);
+  for (const s4 of saved) if (!base.some((b3) => b3.name === s4.name)) out.push(s4);
+  return out;
+}
+function upsertSaved(saved, preset) {
+  const i5 = saved.findIndex((s4) => s4.name === preset.name);
+  return i5 >= 0 ? saved.map((s4, k2) => k2 === i5 ? preset : s4) : [...saved, preset];
+}
+function removeSaved(saved, name) {
+  return saved.filter((s4) => s4.name !== name);
+}
+function sanitizeSaved(raw) {
+  const list = raw?.presets;
+  if (!Array.isArray(list)) return [];
+  return list.filter((p3) => !!p3 && typeof p3 === "object" && typeof p3.name === "string" && p3.name.trim() !== "");
+}
 
 // src/schedule-card.ts
 var CARD_TAG2 = "caldaia-schedule-card";
@@ -3972,6 +4032,9 @@ var CaldaiaScheduleCard = class extends i4 {
     super(...arguments);
     this._pending = {};
     this._confirm = null;
+    this._saved = [];
+    this._saving = null;
+    this._savedRequested = false;
     this._busy = null;
     this._message = null;
   }
@@ -4086,7 +4149,64 @@ var CaldaiaScheduleCard = class extends i4 {
     });
   }
   get _presets() {
+    const base = this._config.presets && this._config.presets.length ? this._config.presets : DEFAULT_PRESETS;
+    return mergePresets(base, this._saved);
+  }
+  get _basePresets() {
     return this._config.presets && this._config.presets.length ? this._config.presets : DEFAULT_PRESETS;
+  }
+  updated(changed) {
+    if (changed.has("hass") && this.hass && !this._savedRequested) {
+      this._savedRequested = true;
+      void this._loadSaved();
+    }
+  }
+  _ws(msg) {
+    const cw = this.hass.callWS;
+    return cw ? cw.call(this.hass, msg) : Promise.reject(new Error("callWS non disponibile"));
+  }
+  async _loadSaved() {
+    try {
+      const r6 = await this._ws({ type: "frontend/get_user_data", key: SAVED_PRESETS_KEY });
+      this._saved = sanitizeSaved(r6?.value);
+    } catch {
+      this._saved = [];
+    }
+  }
+  async _persistSaved(next) {
+    await this._ws({ type: "frontend/set_user_data", key: SAVED_PRESETS_KEY, value: { version: 1, presets: next } });
+    this._saved = next;
+  }
+  _openSave() {
+    this._confirm = null;
+    this._message = null;
+    this._saving = { target: "__new__", newName: "" };
+  }
+  async _doSave() {
+    const sv = this._saving;
+    if (!sv) return;
+    const isNew = sv.target === "__new__";
+    const name = isNew ? sv.newName.trim() : sv.target;
+    if (!name) return;
+    const base = this._presets.find((p3) => p3.name === name);
+    const preset = snapshotPreset(name, this._programs(), this._cronoOn(), base);
+    try {
+      await this._persistSaved(upsertSaved(this._saved, preset));
+      this._saving = null;
+      this._message = { kind: "ok", text: `Preset "${name}" salvato con la programmazione attuale (orari, giorni, temperature e cronotermostato).` };
+    } catch (err) {
+      this._message = { kind: "err", text: `Non sono riuscito a salvare: ${err.message ?? err}` };
+    }
+  }
+  async _deleteSaved(name) {
+    const isDefault = this._basePresets.some((p3) => p3.name === name);
+    try {
+      await this._persistSaved(removeSaved(this._saved, name));
+      this._message = { kind: "ok", text: isDefault ? `Preset "${name}" ripristinato com'era in origine.` : `Preset "${name}" eliminato.` };
+      if (this._saving?.target === name) this._saving = { target: "__new__", newName: "" };
+    } catch (err) {
+      this._message = { kind: "err", text: `Non sono riuscito a eliminare: ${err.message ?? err}` };
+    }
   }
   _plan(preset) {
     return planPreset(
@@ -4148,6 +4268,57 @@ var CaldaiaScheduleCard = class extends i4 {
       <ul>${lines.map((l3) => b2`<li>${l3}</li>`)}</ul>
     </div>`;
   }
+  _renderSave() {
+    const sv = this._saving;
+    if (!sv) return A;
+    const programs = this._programs();
+    const crono = this._cronoOn();
+    const isNew = sv.target === "__new__";
+    const canSave = isNew ? sv.newName.trim() !== "" : true;
+    const targetName = isNew ? sv.newName.trim() : sv.target;
+    const exists = this._presets.some((p3) => p3.name === targetName);
+    return b2`<div class="confirm save">
+      <div><b>Salva la programmazione attuale</b></div>
+      <ul>
+        ${programs.map((p3) => b2`<li>${describeProgram(p3)}</li>`)}
+        <li>Cronotermostato ${crono === null ? "non disponibile" : crono ? "attivo" : "spento"}</li>
+      </ul>
+      <div class="small">In quale preset la salvo?</div>
+      <div class="targets">
+        ${this._presets.map((p3) => {
+      const saved = this._saved.some((x2) => x2.name === p3.name);
+      const isDefault = this._basePresets.some((b3) => b3.name === p3.name);
+      return b2`<div class="target">
+            <label>
+              <input type="radio" name="target" .checked=${sv.target === p3.name} @change=${() => this._saving = { ...sv, target: p3.name }} />
+              <span>${p3.name}${saved ? b2` <small>(personalizzato)</small>` : b2` <small>(predefinito)</small>`}</span>
+            </label>
+            ${saved ? b2`<button class="mini" @click=${() => this._deleteSaved(p3.name)}>${isDefault ? "Ripristina" : "Elimina"}</button>` : A}
+          </div>`;
+    })}
+        <div class="target">
+          <label>
+            <input type="radio" name="target" .checked=${isNew} @change=${() => this._saving = { ...sv, target: "__new__" }} />
+            <span>Nuovo preset</span>
+          </label>
+          <input
+            class="name"
+            type="text"
+            placeholder="Nome (per esempio Inverno)"
+            maxlength="30"
+            .value=${sv.newName}
+            @focus=${() => this._saving = { ...sv, target: "__new__" }}
+            @input=${(e5) => this._saving = { target: "__new__", newName: e5.target.value }}
+          />
+        </div>
+      </div>
+      ${canSave && targetName ? b2`<div class="small">${exists ? b2`Sostituisce il contenuto di <b>${targetName}</b>.` : b2`Crea il preset <b>${targetName}</b>.`}</div>` : A}
+      <div class="row">
+        <button class="primary" ?disabled=${!canSave} @click=${() => this._doSave()}>Salva</button>
+        <button @click=${() => this._saving = null}>Annulla</button>
+      </div>
+    </div>`;
+  }
   _renderPresets() {
     if (this._config.hide?.includes("presets")) return A;
     const confirm = this._confirm;
@@ -4156,11 +4327,18 @@ var CaldaiaScheduleCard = class extends i4 {
       <div class="section">Preset</div>
       <div class="presets">
         ${this._presets.map(
-      (p3) => b2`<button class="preset" ?disabled=${!!this._busy} @click=${() => this._confirm = p3} title=${p3.description ?? ""}>
+      (p3) => b2`<button class="preset" ?disabled=${!!this._busy} @click=${() => {
+        this._saving = null;
+        this._confirm = p3;
+      }} title=${p3.description ?? ""}>
             ${p3.icon ? b2`<ha-icon .icon=${p3.icon}></ha-icon>` : A}<span>${p3.name}</span>
           </button>`
     )}
+        <button class="preset save" ?disabled=${!!this._busy} @click=${() => this._openSave()} title="Salva la programmazione attuale come preset">
+          <ha-icon icon="mdi:content-save-outline"></ha-icon><span>Salva…</span>
+        </button>
       </div>
+      ${this._renderSave()}
       ${confirm ? b2`<div class="confirm">
             <div><b>${confirm.name}</b>${confirm.description ? b2` · ${confirm.description}` : A}</div>
             ${plan.length ? b2`<div class="small">${plan.length} modifiche:</div>
@@ -4377,6 +4555,54 @@ var CaldaiaScheduleCard = class extends i4 {
     .preset:disabled {
       opacity: 0.5;
       cursor: default;
+    }
+    .confirm.save .targets {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 6px 0;
+    }
+    .target {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 4px 0;
+      border-bottom: 1px solid var(--divider-color);
+    }
+    .target label {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--primary-text-color);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .target label small {
+      color: var(--secondary-text-color);
+      font-size: 12px;
+    }
+    .target input[type="radio"] {
+      width: auto;
+      margin: 0;
+    }
+    .target input.name {
+      flex: 1;
+      min-width: 0;
+      max-width: 240px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      font: inherit;
+    }
+    .mini {
+      font-size: 12px;
+      padding: 4px 10px;
     }
     .confirm {
       margin-top: 10px;
@@ -4645,6 +4871,12 @@ __decorateClass([
 ], CaldaiaScheduleCard.prototype, "_confirm", 2);
 __decorateClass([
   r5()
+], CaldaiaScheduleCard.prototype, "_saved", 2);
+__decorateClass([
+  r5()
+], CaldaiaScheduleCard.prototype, "_saving", 2);
+__decorateClass([
+  r5()
 ], CaldaiaScheduleCard.prototype, "_busy", 2);
 __decorateClass([
   r5()
@@ -4652,7 +4884,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.16";
+var VERSION = "0.3.17";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

@@ -292,3 +292,89 @@ export function planPreset(input: PlanInput, preset: Preset): ServiceAction[] {
     });
   return actions;
 }
+
+// ---------------------------------------------------------------------------
+// Preset personalizzati: salvare la programmazione attuale
+// ---------------------------------------------------------------------------
+
+/** Chiave dei dati utente di Home Assistant (frontend/set_user_data) in cui si salvano i preset dell'utente. */
+export const SAVED_PRESETS_KEY = "impianto_riscaldamento_presets";
+
+/** Giorni come testo: "tutti i giorni", "Lun–Sab", "Lun, Mer, Ven", "nessun giorno". */
+export function formatDays(days: boolean[]): string {
+  const on = days.map((d, i) => (d ? i : -1)).filter((i) => i >= 0);
+  if (on.length === 0) return "nessun giorno";
+  if (on.length === 7) return "tutti i giorni";
+  const runs: [number, number][] = [];
+  for (const i of on) {
+    const last = runs[runs.length - 1];
+    if (last && last[1] === i - 1) last[1] = i;
+    else runs.push([i, i]);
+  }
+  return runs
+    .map(([a, b]) => (a === b ? DAY_SHORT[a] : b === a + 1 ? `${DAY_SHORT[a]}, ${DAY_SHORT[b]}` : `${DAY_SHORT[a]}–${DAY_SHORT[b]}`))
+    .join(", ");
+}
+
+/** Una riga per programma, per far vedere che cosa si sta per salvare. */
+export function describeProgram(p: ProgramState): string {
+  const when = `${formatHM(p.on)}–${formatHM(p.off)}`;
+  const temps = [
+    p.setBoiler !== null ? `Set boiler ${p.setBoiler} °C` : null,
+    p.setWater !== null ? `Set acqua ${p.setWater} °C` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return `P${p.n} ${when} · ${formatDays(p.days)}${temps ? ` · ${temps}` : ""}`;
+}
+
+/**
+ * Un preset con la fotografia della programmazione attuale: orari, giorni e temperature dei quattro programmi e lo
+ * stato del cronotermostato. Un programma senza giorni resta salvato con i suoi orari e tutti i giorni spenti.
+ */
+export function snapshotPreset(name: string, programs: ProgramState[], cronoOn: boolean | null, base?: Preset, now = new Date()): Preset {
+  const out: Record<string, PresetProgram> = {};
+  for (const n of PROGRAMS) {
+    const p = programs.find((x) => x.n === n);
+    if (!p) continue;
+    const pp: PresetProgram = { days: p.days.map((on, i) => (on ? DAY_SHORT[i].toLowerCase() : "")).filter(Boolean) };
+    if (p.on !== null) pp.on = formatHM(p.on);
+    if (p.off !== null) pp.off = formatHM(p.off);
+    if (p.setBoiler !== null) pp.set_boiler = p.setBoiler;
+    if (p.setWater !== null) pp.set_water = p.setWater;
+    out[String(n)] = pp;
+  }
+  const d = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+  const preset: Preset = {
+    name: name.trim(),
+    icon: base?.icon ?? "mdi:bookmark-outline",
+    description: `Salvato il ${d}`,
+    programs: out,
+  };
+  if (cronoOn !== null) preset.crono = cronoOn;
+  return preset;
+}
+
+/** I preset predefiniti (o della configurazione) con sopra quelli salvati: stesso nome = sostituisce, nome nuovo = in fondo. */
+export function mergePresets(base: Preset[], saved: Preset[]): Preset[] {
+  const out = base.map((b) => saved.find((s) => s.name === b.name) ?? b);
+  for (const s of saved) if (!base.some((b) => b.name === s.name)) out.push(s);
+  return out;
+}
+
+/** Aggiunge o sostituisce (per nome) un preset salvato. */
+export function upsertSaved(saved: Preset[], preset: Preset): Preset[] {
+  const i = saved.findIndex((s) => s.name === preset.name);
+  return i >= 0 ? saved.map((s, k) => (k === i ? preset : s)) : [...saved, preset];
+}
+
+export function removeSaved(saved: Preset[], name: string): Preset[] {
+  return saved.filter((s) => s.name !== name);
+}
+
+/** Legge i dati salvati ignorando tutto ciò che non ha la forma di un preset. */
+export function sanitizeSaved(raw: unknown): Preset[] {
+  const list = (raw as { presets?: unknown } | null | undefined)?.presets;
+  if (!Array.isArray(list)) return [];
+  return list.filter((p): p is Preset => !!p && typeof p === "object" && typeof (p as Preset).name === "string" && (p as Preset).name.trim() !== "");
+}

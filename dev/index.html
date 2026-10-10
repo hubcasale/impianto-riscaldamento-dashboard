@@ -176,6 +176,8 @@ const hass = {
   // storico finto per la finestra dei grafici: curve plausibili ogni 5 minuti
   async callWS(msg) {
     await new Promise((r) => setTimeout(r, 150));
+    if (msg.type === "frontend/get_user_data") { const v = localStorage.getItem("dev_ud_" + msg.key); return { value: v ? JSON.parse(v) : null }; }
+    if (msg.type === "frontend/set_user_data") { localStorage.setItem("dev_ud_" + msg.key, JSON.stringify(msg.value)); return null; }
     const a = Date.parse(msg.start_time), b = Date.parse(msg.end_time);
     const out = {};
     const cycle = (t) => { const h = (t / 3600000) % 6; return h < 0.4 ? "START" : h < 2.2 ? "WORK" : h < 4.5 ? "ECO STOP" : "OFF"; };
@@ -274,6 +276,7 @@ for (const [tag, cfg] of [
 push();
 if (q.get("impostazioni")) setTimeout(() => cards[0]._openSettings(), 200);
 if (q.get("stato_popup")) setTimeout(() => cards[0]._openInfo(), 200);
+if (q.get("salva")) setTimeout(() => { const c = cards.find((x) => x.localName === "caldaia-schedule-card"); c._openSave(); if (q.get("salva") === "nuovo") c._saving = { target: "__new__", newName: "Inverno" }; }, 600);
 if (q.get("grafici")) setTimeout(() => {
   cards[0]._openCharts();
   const d = document.querySelector("impianto-charts-dialog");

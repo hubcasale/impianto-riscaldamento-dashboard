@@ -135,3 +135,80 @@ test("id delle entità", () => {
   assert.equal(ids.setWater, "number.casale_crono_p2_setpoint_acqua");
   assert.equal(ids.day[2], "switch.casale_crono_p2_mercoledi");
 });
+
+import { describeProgram, formatDays, mergePresets, removeSaved, sanitizeSaved, snapshotPreset, upsertSaved, planPreset as _plan, DEFAULT_PRESETS as _DEF, programEntityIds as _ids } from "../src/schedule-logic";
+
+const pg = (n: number, on: number | null, off: number | null, days: number[], sb: number | null = 45, sw: number | null = 65) => ({
+  n, on, off, days: [0, 1, 2, 3, 4, 5, 6].map((d) => days.includes(d)), setBoiler: sb, setWater: sw,
+});
+
+test("giorni: tutti, intervalli, elenco, nessuno", () => {
+  assert.equal(formatDays([true, true, true, true, true, true, true]), "tutti i giorni");
+  assert.equal(formatDays([true, true, true, true, true, true, false]), "Lun–Sab");
+  assert.equal(formatDays([true, false, true, false, true, false, false]), "Lun, Mer, Ven");
+  assert.equal(formatDays([false, false, false, false, false, false, true]), "Dom");
+  assert.equal(formatDays([true, true, false, false, false, false, false]), "Lun, Mar");
+  assert.equal(formatDays([false, false, false, false, false, false, false]), "nessun giorno");
+});
+
+test("descrizione del programma", () => {
+  assert.equal(describeProgram(pg(1, 330, 480, [0, 1, 2, 3, 4, 5])), "P1 05:30–08:00 · Lun–Sab · Set boiler 45 °C, Set acqua 65 °C");
+  assert.equal(describeProgram(pg(2, 1020, 0, [0], null, null)), "P2 17:00–00:00 · Lun");
+});
+
+test("istantanea: orari, giorni, temperature e crono", () => {
+  const programs = [pg(1, 330, 480, [0, 1, 2, 3, 4, 5], 50, 65), pg(2, 1020, 0, [0, 1, 2, 3, 4, 5], 50, 65), pg(3, 420, 570, [6]), pg(4, 1020, 0, [6])];
+  const p = snapshotPreset("  Inverno ", programs, true, undefined, new Date(2026, 9, 10));
+  assert.equal(p.name, "Inverno");
+  assert.equal(p.crono, true);
+  assert.equal(p.description, "Salvato il 10/10/2026");
+  assert.deepEqual(p.programs?.["1"], { days: ["lun", "mar", "mer", "gio", "ven", "sab"], on: "05:30", off: "08:00", set_boiler: 50, set_water: 65 });
+  assert.equal((p.programs?.["2"] as { off: string }).off, "00:00");
+  assert.deepEqual((p.programs?.["4"] as { days: string[] }).days, ["dom"]);
+});
+
+test("istantanea: crono non disponibile non si salva; icona del preset sostituito", () => {
+  const p = snapshotPreset("X", [pg(1, 330, 480, [])], null, { name: "X", icon: "mdi:palm-tree" });
+  assert.equal(p.crono, undefined);
+  assert.equal(p.icon, "mdi:palm-tree");
+  assert.deepEqual((p.programs?.["1"] as { days: string[] }).days, []);
+});
+
+test("istantanea riapplicata sulla stessa programmazione: nessuna modifica", () => {
+  const programs = [pg(1, 330, 480, [0, 1, 2, 3, 4, 5], 50, 65), pg(2, 1020, 0, [0, 1, 2, 3, 4, 5]), pg(3, 420, 570, [6]), pg(4, 1020, 0, [6])];
+  const p = snapshotPreset("Tutto", programs, true);
+  assert.equal(_plan({ prefix: "casale", master: "switch.m", programs, cronoOn: true }, p).length, 0);
+});
+
+test("istantanea applicata a un'altra programmazione: riporta tutto com'era", () => {
+  const saved = [pg(1, 330, 480, [0, 1, 2], 50, 65), pg(2, 1020, 0, [0]), pg(3, 420, 570, []), pg(4, 1020, 0, [])];
+  const now = [pg(1, 360, 480, [0, 1, 2, 3], 45, 65), pg(2, 1020, 0, [0]), pg(3, 420, 570, [6]), pg(4, 1020, 0, [])];
+  const plan = _plan({ prefix: "casale", master: "switch.m", programs: now, cronoOn: false }, snapshotPreset("S", saved, true));
+  const labels = plan.map((a) => a.label);
+  assert.ok(labels.includes("P1 accensione 05:30"));
+  assert.ok(labels.includes("P1 set boiler 50 °C"));
+  assert.ok(labels.includes("P1 Gio spento"));
+  assert.ok(labels.includes("P3 Dom spento"));
+  assert.ok(labels.includes("Cronotermostato attivo"));
+});
+
+test("unione con i preset predefiniti", () => {
+  const custom = snapshotPreset("Weekend", [pg(1, 420, 1380, [5, 6])], true);
+  const extra = snapshotPreset("Inverno", [pg(1, 330, 480, [0])], true);
+  const merged = mergePresets(_DEF, [custom, extra]);
+  assert.equal(merged.length, _DEF.length + 1);
+  assert.equal(merged.find((p) => p.name === "Weekend"), custom); // sostituisce quello predefinito
+  assert.equal(merged[merged.length - 1].name, "Inverno");
+  assert.equal(merged.map((p) => p.name).indexOf("Weekend"), _DEF.map((p) => p.name).indexOf("Weekend")); // stessa posizione
+});
+
+test("salvati: sostituzione per nome, eliminazione, dati sporchi", () => {
+  const a = snapshotPreset("A", [], null);
+  const a2 = { ...a, description: "nuovo" };
+  assert.deepEqual(upsertSaved([a], a2), [a2]);
+  assert.equal(upsertSaved([a], snapshotPreset("B", [], null)).length, 2);
+  assert.deepEqual(removeSaved([a], "A"), []);
+  assert.deepEqual(sanitizeSaved(null), []);
+  assert.deepEqual(sanitizeSaved({ presets: [a, { name: "" }, 5, null, { x: 1 }] }), [a]);
+  assert.equal(_ids("casale", 1).on, "time.casale_crono_p1_accensione");
+});
