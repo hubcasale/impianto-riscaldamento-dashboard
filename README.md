@@ -147,6 +147,10 @@ presets:
 
 I giorni si scrivono in italiano o inglese, corti o lunghi (`lun`, `mon`, `lunedì`…).
 
+#### Salvare i propri preset
+
+Il pulsante **Salva…** accanto ai preset salva la programmazione attuale (orari, giorni e set di temperatura dei quattro programmi, più lo stato del cronotermostato): scegli quale preset sostituire (anche quelli predefiniti) oppure dai un nome a un preset nuovo. Prima di salvare vedi le righe che verranno memorizzate. I preset salvati compaiono insieme agli altri; per quelli predefiniti sostituiti c'è «Ripristina», per quelli nuovi «Elimina». Si salvano nei dati utente di Home Assistant (`frontend/set_user_data`, chiave `impianto_riscaldamento_presets`), quindi restano dopo gli aggiornamenti e valgono su tutti i dispositivi dello stesso utente. Con `presets:` nella configurazione si sostituiscono i predefiniti, e quelli salvati vengono sopra.
+
 ## Pacchetti di Home Assistant e ESPHome
 
 Le schede leggono sensori che qui sono forniti come esempio:
