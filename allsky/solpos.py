@@ -19,5 +19,5 @@ def sun_position(when_utc: datetime.datetime, lat: float, lon: float):
 
 
 if __name__ == "__main__":
-    # prova: mezzogiorno solare a 45 N, 9 E il 21 giugno (elevazione circa 68 gradi, azimut 180)
+    # prova: 21 giugno 2026, 10:36 UTC a 45 N, 9 E (elevazione circa 66 gradi, azimut circa 151)
     print(sun_position(datetime.datetime(2026, 6, 21, 10, 36, 0), 45.0, 9.0))
