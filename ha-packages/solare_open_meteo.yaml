@@ -1,0 +1,210 @@
+# Open-Meteo per il solare termico: FASE 1, solo osservazione (nessuna modifica a cio' che mostra la scheda).
+#
+# Due letture gratuite, senza chiave, con le coordinate di zone.home arrotondate a 0,01 gradi (circa 1 km):
+#  - previsione (api.open-meteo.com, ogni 30 minuti): irraggiamento sul PIANO DEI COLLETTORI (global_tilted_irradiance,
+#    con l'inclinazione e l'orientamento di packages/solare_termico.yaml), nuvolosita' totale e per strati (bassa, media,
+#    alta), temperatura, vento e pioggia, per ieri, oggi e domani;
+#  - satellite (satellite-api.open-meteo.com, ogni ora): irraggiamento osservato da EUMETSAT, con circa 2 ore di ritardo.
+#    Le ore piu' recenti dell'ora attuale meno 2 non sono osservate (il servizio le riempie a cielo sereno): si scartano.
+#
+# Se all'avvio zone.home non e' ancora pronta le coordinate diventano 999 (il servizio risponde con un errore e non si
+# usa nessun dato sbagliato); un minuto e mezzo dopo l'avvio le due letture vengono ripetute.
+#
+# Orari: le etichette dei dati sono nell'ora locale e valgono come media dell'ora che FINISCE all'etichetta
+# (l'etichetta 11:00 e' la media tra le 10 e le 11).
+#
+# Il confronto che interessa: per ogni giorno, energia sul piano dei collettori (kWh/m2) prevista alle 06:05, osservata dal
+# satellite e misurata dalla tua stazione (sensor.solare_termico_irraggiamento_sul_piano). Serve a decidere se usare il
+# modello di Open-Meteo al posto di "cielo sereno x nuvolosita'" e a tarare il fattore della stazione.
+
+rest:
+  - resource_template: >-
+      https://api.open-meteo.com/v1/forecast?latitude={{ state_attr('zone.home', 'latitude') | float(999) | round(2) }}&longitude={{ state_attr('zone.home', 'longitude') | float(999) | round(2) }}&hourly=temperature_2m,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,shortwave_radiation,direct_radiation,diffuse_radiation,global_tilted_irradiance,wind_speed_10m,precipitation&tilt={{ states('input_number.solare_termico_inclinazione') | float(35) }}&azimuth={{ (states('input_number.solare_termico_orientamento') | float(180)) - 180 }}&timezone=Europe%2FRome&forecast_days=2&past_days=1&wind_speed_unit=ms
+    scan_interval: 1800
+    timeout: 20
+    sensor:
+      - name: Open-Meteo previsione
+        unique_id: open_meteo_previsione
+        icon: mdi:weather-partly-cloudy
+        value_template: "{{ value_json.hourly.time | length }}"
+        json_attributes:
+          - hourly
+          - elevation
+
+  - resource_template: >-
+      https://satellite-api.open-meteo.com/v1/archive?latitude={{ state_attr('zone.home', 'latitude') | float(999) | round(2) }}&longitude={{ state_attr('zone.home', 'longitude') | float(999) | round(2) }}&hourly=shortwave_radiation,global_tilted_irradiance&tilt={{ states('input_number.solare_termico_inclinazione') | float(35) }}&azimuth={{ (states('input_number.solare_termico_orientamento') | float(180)) - 180 }}&timezone=Europe%2FRome&past_days=2&forecast_days=1
+    scan_interval: 3600
+    timeout: 20
+    sensor:
+      - name: Open-Meteo satellite
+        unique_id: open_meteo_satellite
+        icon: mdi:satellite-variant
+        value_template: "{{ value_json.hourly.time | length }}"
+        json_attributes:
+          - hourly
+
+automation:
+  - id: solare_open_meteo_aggiorna_all_avvio
+    alias: Solare - Open-Meteo, aggiorna all'avvio
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: "00:01:30"
+      - action: homeassistant.update_entity
+        target:
+          entity_id:
+            - sensor.open_meteo_previsione
+            - sensor.open_meteo_satellite
+
+template:
+  - sensor:
+      # ---- previsione: valori dell'ora in corso ----------------------------------------------------------------------
+      - name: Open-Meteo irraggiamento previsto sul piano
+        unique_id: open_meteo_gti_previsione
+        unit_of_measurement: W/m²
+        device_class: irradiance
+        state_class: measurement
+        availability: >
+          {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+          {% set key = (now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)).strftime('%Y-%m-%dT%H:00') %}
+          {{ h is mapping and key in h.time }}
+        state: >
+          {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+          {% set key = (now().replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)).strftime('%Y-%m-%dT%H:00') %}
+          {{ (h.global_tilted_irradiance[h.time.index(key)] or 0) | float(0) | round(0) | int }}
+
+      - name: Open-Meteo nuvolosita
+        unique_id: open_meteo_nuvolosita
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:cloud-percent
+        availability: >
+          {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+          {% set key = now().replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%dT%H:00') %}
+          {{ h is mapping and key in h.time }}
+        state: >
+          {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+          {% set key = now().replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%dT%H:00') %}
+          {{ (h.cloud_cover[h.time.index(key)] or 0) | float(0) | round(0) | int }}
+        attributes:
+          bassa: >
+            {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+            {% set key = now().replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%dT%H:00') %}
+            {% if h is mapping and key in h.time %}{{ (h.cloud_cover_low[h.time.index(key)] or 0) | float(0) | round(0) | int }}{% endif %}
+          media: >
+            {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+            {% set key = now().replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%dT%H:00') %}
+            {% if h is mapping and key in h.time %}{{ (h.cloud_cover_mid[h.time.index(key)] or 0) | float(0) | round(0) | int }}{% endif %}
+          alta: >
+            {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+            {% set key = now().replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%dT%H:00') %}
+            {% if h is mapping and key in h.time %}{{ (h.cloud_cover_high[h.time.index(key)] or 0) | float(0) | round(0) | int }}{% endif %}
+
+      # ---- previsione: energia sul piano dei collettori, kWh/m2 -------------------------------------------------------
+      - name: Open-Meteo energia prevista oggi
+        unique_id: open_meteo_energia_prevista_oggi
+        unit_of_measurement: kWh/m²
+        state_class: measurement
+        icon: mdi:solar-power-variant
+        availability: "{{ state_attr('sensor.open_meteo_previsione', 'hourly') is mapping }}"
+        state: >
+          {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+          {% set d = now().strftime('%Y-%m-%d') %}
+          {% set ns = namespace(s=0) %}
+          {% for i in range(h.time | length) %}{% if h.time[i][:10] == d %}{% set ns.s = ns.s + ((h.global_tilted_irradiance[i] or 0) | float(0)) %}{% endif %}{% endfor %}
+          {{ (ns.s / 1000) | round(2) }}
+        attributes:
+          picco_w_m2: >
+            {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+            {% set d = now().strftime('%Y-%m-%d') %}
+            {% set ns = namespace(m=0) %}
+            {% if h is mapping %}{% for i in range(h.time | length) %}{% if h.time[i][:10] == d %}{% set ns.m = [ns.m, (h.global_tilted_irradiance[i] or 0) | float(0)] | max %}{% endif %}{% endfor %}{% endif %}
+            {{ ns.m | round(0) | int }}
+
+      - name: Open-Meteo energia prevista domani
+        unique_id: open_meteo_energia_prevista_domani
+        unit_of_measurement: kWh/m²
+        state_class: measurement
+        icon: mdi:solar-power-variant-outline
+        availability: "{{ state_attr('sensor.open_meteo_previsione', 'hourly') is mapping }}"
+        state: >
+          {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+          {% set d = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
+          {% set ns = namespace(s=0) %}
+          {% for i in range(h.time | length) %}{% if h.time[i][:10] == d %}{% set ns.s = ns.s + ((h.global_tilted_irradiance[i] or 0) | float(0)) %}{% endif %}{% endfor %}
+          {{ (ns.s / 1000) | round(2) }}
+
+      # ---- satellite: ultima ora osservata ed energia osservata oggi --------------------------------------------------
+      - name: Open-Meteo irraggiamento osservato dal satellite
+        unique_id: open_meteo_gti_satellite
+        unit_of_measurement: W/m²
+        device_class: irradiance
+        state_class: measurement
+        availability: >
+          {% set h = state_attr('sensor.open_meteo_satellite', 'hourly') %}
+          {% set key = (now() - timedelta(hours=2)).replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%dT%H:00') %}
+          {{ h is mapping and key in h.time }}
+        state: >
+          {% set h = state_attr('sensor.open_meteo_satellite', 'hourly') %}
+          {% set key = (now() - timedelta(hours=2)).replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%dT%H:00') %}
+          {{ (h.global_tilted_irradiance[h.time.index(key)] or 0) | float(0) | round(0) | int }}
+        attributes:
+          ora: >
+            {{ (now() - timedelta(hours=2)).replace(minute=0, second=0, microsecond=0).strftime('%H:00') }}
+
+      - name: Open-Meteo energia osservata dal satellite oggi
+        unique_id: open_meteo_energia_satellite_oggi
+        unit_of_measurement: kWh/m²
+        state_class: measurement
+        icon: mdi:satellite-variant
+        availability: "{{ state_attr('sensor.open_meteo_satellite', 'hourly') is mapping }}"
+        state: >
+          {% set h = state_attr('sensor.open_meteo_satellite', 'hourly') %}
+          {% set d = now().strftime('%Y-%m-%d') %}
+          {% set ultimo = (now() - timedelta(hours=2)).replace(minute=0, second=0, microsecond=0).strftime('%Y-%m-%dT%H:00') %}
+          {% set ns = namespace(s=0) %}
+          {% for i in range(h.time | length) %}{% if h.time[i][:10] == d and h.time[i] <= ultimo %}{% set ns.s = ns.s + ((h.global_tilted_irradiance[i] or 0) | float(0)) %}{% endif %}{% endfor %}
+          {{ (ns.s / 1000) | round(2) }}
+
+  # istantanea delle 06:05: energia prevista per la giornata, da confrontare a fine giornata con satellite e stazione
+  - triggers:
+      - trigger: time
+        at: "06:05:00"
+      - trigger: state
+        entity_id: sensor.open_meteo_previsione
+        id: aggiornata
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.platform == 'time' or (now().hour == 6 and now().minute >= 5 and now().minute < 40) }}"
+    sensor:
+      - name: Open-Meteo energia prevista alle 6
+        unique_id: open_meteo_energia_prevista_alle_6
+        unit_of_measurement: kWh/m²
+        icon: mdi:camera-timer
+        state: "{{ states('sensor.open_meteo_energia_prevista_oggi') | float(0) }}"
+        attributes:
+          giorno: "{{ now().strftime('%Y-%m-%d') }}"
+          nuvolosita_media: >
+            {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+            {% set d = now().strftime('%Y-%m-%d') %}
+            {% set ns = namespace(s=0, n=0) %}
+            {% if h is mapping %}{% for i in range(h.time | length) %}{% if h.time[i][:10] == d and 8 <= i % 24 <= 17 %}{% set ns.s = ns.s + ((h.cloud_cover[i] or 0) | float(0)) %}{% set ns.n = ns.n + 1 %}{% endif %}{% endfor %}{% endif %}
+            {{ ((ns.s / ns.n) if ns.n else 0) | round(0) }}
+
+# energia misurata dalla stazione sul piano dei collettori (stesso dato che alimenta il modello del collettore)
+sensor:
+  - platform: integration
+    source: sensor.solare_termico_irraggiamento_sul_piano
+    name: Solare energia sul piano misurata
+    unique_id: solare_energia_piano_misurata
+    unit_prefix: k
+    unit_time: h
+    method: trapezoidal
+    round: 3
+
+utility_meter:
+  solare_energia_piano_giornaliera:
+    source: sensor.solare_energia_piano_misurata
+    name: Solare energia sul piano oggi (stazione)
+    cycle: daily

@@ -426,5 +426,47 @@ check("assenza: iPhone del router a casa ma su un'altra rete", render(NES, {**{e
 check("assenza: telefono iCloud3 non disponibile, nel dubbio non fuori", nes(**{TEL[0]: "unavailable"}), "False")
 check("assenza: router non disponibile, nel dubbio non fuori", nes(**{RTR[2]: "unavailable"}), "False")
 
+# ---------------------------------------------------------------- Open-Meteo (solare)
+import json
+OM = yaml.safe_load(open("ha-packages/solare_open_meteo.yaml"))
+FC = json.load(open("test-ha/fixtures/open_meteo_forecast.json"))["hourly"]
+SAT = json.load(open("test-ha/fixtures/open_meteo_satellite.json"))["hourly"]
+ATTRS = {("sensor.open_meteo_previsione", "hourly"): FC, ("sensor.open_meteo_satellite", "hourly"): SAT}
+def om(name, now, key="state", attrs=None, states=None):
+    ent = find("sensor", name, OM)
+    tpl = ent[key] if key == "state" else ent["attributes"][key]
+    return render(tpl, states or {}, attrs=attrs if attrs is not None else ATTRS, now=now)
+def om_av(name, now, attrs=None):
+    return render(find("sensor", name, OM)["availability"], {}, attrs=attrs if attrs is not None else ATTRS, now=now)
+T = dt.datetime(2026, 10, 12, 12, 40)  # 12:40 locale
+check("open-meteo: GTI dell'ora in corso (etichetta 13:00)", om("Open-Meteo irraggiamento previsto sul piano", T), "230")
+check("open-meteo: nuvolosita' all'ora piu' vicina (12:00)", om("Open-Meteo nuvolosita", T), "100")
+check("open-meteo: strato basso", om("Open-Meteo nuvolosita", T, key="bassa"), "91")
+check("open-meteo: strato alto", om("Open-Meteo nuvolosita", T, key="alta"), "0")
+tot = sum(v or 0 for t, v in zip(FC["time"], FC["global_tilted_irradiance"]) if t.startswith("2026-10-12")) / 1000
+check("open-meteo: energia prevista oggi", float(om("Open-Meteo energia prevista oggi", T)), round(tot, 2))
+picco = max(v or 0 for t, v in zip(FC["time"], FC["global_tilted_irradiance"]) if t.startswith("2026-10-12"))
+check("open-meteo: picco previsto oggi", float(om("Open-Meteo energia prevista oggi", T, key="picco_w_m2")), round(picco))
+check("open-meteo: domani senza dati completi ma calcolabile", om("Open-Meteo energia prevista domani", T) != "", True)
+# satellite: a mezzogiorno le ore osservate arrivano fino alle 10:00 (ora attuale meno 2)
+check("open-meteo: satellite, ultima ora osservata", om("Open-Meteo irraggiamento osservato dal satellite", T, key="ora"), "10:00")
+idx = SAT["time"].index("2026-10-12T10:00")
+check("open-meteo: satellite, valore dell'ultima ora osservata", float(om("Open-Meteo irraggiamento osservato dal satellite", T)), round(SAT["global_tilted_irradiance"][idx]))
+oss = sum(v or 0 for t, v in zip(SAT["time"], SAT["global_tilted_irradiance"]) if t.startswith("2026-10-12") and t <= "2026-10-12T10:00") / 1000
+check("open-meteo: satellite, le ore future (cielo sereno) non si sommano", float(om("Open-Meteo energia osservata dal satellite oggi", T)), round(oss, 2))
+check("open-meteo: senza dati non disponibile", om_av("Open-Meteo irraggiamento previsto sul piano", T, attrs={}), "False")
+check("open-meteo: ora fuori dall'elenco non disponibile", om_av("Open-Meteo irraggiamento previsto sul piano", dt.datetime(2027, 1, 1, 12, 0)), "False")
+
+# l'indirizzo del servizio: coordinate di esempio (non quelle di casa), inclinazione e orientamento dai parametri
+URL = OM["rest"][0]["resource_template"]
+st_geo = {"input_number.solare_termico_inclinazione": "35", "input_number.solare_termico_orientamento": "180"}
+u = render(URL, st_geo, attrs={("zone.home", "latitude"): 45.4567, ("zone.home", "longitude"): 9.1234})
+check("open-meteo: indirizzo con le coordinate arrotondate", ("latitude=45.46&longitude=9.12" in u), True)
+check("open-meteo: orientamento sud = azimuth 0, inclinazione 35", ("tilt=35.0&azimuth=0.0" in u), True)
+u2 = render(URL, st_geo, attrs={("zone.home", "latitude"): None})
+check("open-meteo: senza zone.home coordinate non valide (999), mai 0,0", ("latitude=999&longitude=999" in u2), True)
+u3 = render(URL, {**st_geo, "input_number.solare_termico_orientamento": "225"}, attrs={("zone.home", "latitude"): 45.0, ("zone.home", "longitude"): 9.0})
+check("open-meteo: orientamento sud-ovest 225 = azimuth 45", ("azimuth=45.0" in u3), True)
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)
