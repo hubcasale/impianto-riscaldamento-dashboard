@@ -172,7 +172,7 @@ Sotto il pulsante di accensione rapida, sul lato sinistro dello schema, c'è il 
 
 ## Pulsante «Grafici»
 
-Sotto «Stato» c'è il pulsante **Grafici**: apre una finestra con lo storico (letto dal recorder di Home Assistant, nessuna libreria esterna) di quattro gruppi di valori: *Temperature* (puffer, boiler alto e basso, acqua della caldaia, collettore), *Caldaia* (acqua, puffer, fumi e potenza), *Pompa di integrazione* (puffer, boiler, serpentina e potenza della pompa) *Irraggiamento* (sul piano dei collettori: stazione, previsione di Open-Meteo, osservato dal satellite, con la nuvolosità prevista a destra; il satellite è spostato indietro di 2 ore perché pubblica in ritardo) e *Solare* (collettore, serpentine, potenza), più un *Confronto libero* con tutte le serie.
+Sotto «Stato» c'è il pulsante **Grafici**: apre una finestra con lo storico (letto dal recorder di Home Assistant, nessuna libreria esterna) di quattro gruppi di valori: *Temperature* (puffer, boiler alto e basso, acqua della caldaia, collettore), *Caldaia* (acqua, puffer, fumi e potenza), *Pompa di integrazione* (puffer, boiler, serpentina e potenza della pompa) *AllSky* (irraggiamento orizzontale della stazione, originale e corretto, stimato dalla foto, e copertura nuvolosa), *Irraggiamento* (sul piano dei collettori: stazione, previsione di Open-Meteo, osservato dal satellite, con la nuvolosità prevista a destra; il satellite è spostato indietro di 2 ore perché pubblica in ritardo) e *Solare* (collettore, serpentine, potenza), più un *Confronto libero* con tutte le serie.
 
 - **Periodo:** 6 ore, 24 ore, 3 o 7 giorni.
 - **Sovrapporre:** ogni serie si accende e si spegne dai tasti sopra il grafico; «Confronta con il periodo prima» disegna in tratteggio lo stesso intervallo precedente; «Confronta le forme (0–100 %)» riporta ogni serie al proprio minimo-massimo per sovrapporre grandezze diverse (nel confronto libero è sempre attivo).
@@ -180,6 +180,14 @@ Sotto «Stato» c'è il pulsante **Grafici**: apre una finestra con lo storico (
 - **Stato della caldaia:** una fascia colorata sotto il grafico (in lavoro, accensione, ECO STOP, spenta) per capire perché le temperature cambiano.
 
 Si nasconde con `charts: false`. La logica (campionamento, scale, assi) è in `src/charts-logic.ts`, il disegno in `src/charts-dialog.ts`.
+
+## AllSky: copertura nuvolosa e irraggiamento dalla foto
+
+`ha-packages/solare_allsky.yaml` e la cartella `allsky/` (`allsky_clouds.py`, `allsky_config.json`, `obst_mask.png`, `solpos.py`, da copiare in `/config/allsky/`). Ogni 3 minuti di giorno lo script scarica l'ultima immagine dal web server dell'allsky (`image_url` in `allsky_config.json`), esclude con una maschera gli ostacoli fissi (edifici, alberi, antenne), classifica il cielo in **sereno / velato / coperto** dal colore e guarda il **disco del sole e l'alone** intorno, da cui stima la trasmissione dell'irraggiamento rispetto al cielo sereno. Gira come processo separato (`command_line`, con le coordinate di `zone.home`) e non da' nessun valore di notte, con il sole sotto gli 8 gradi o con la foto vecchia di piu' di 15 minuti.
+
+Sensori: `sensor.allsky_analisi` (stato e attributi), `sensor.allsky_copertura_equivalente` (%), `binary_sensor.allsky_sole_libero`, `sensor.allsky_irraggiamento_stimato` (W/m², orizzontale) e `sensor.irraggiamento_stazione_corretto`.
+
+**Taratura (12/10/2026):** geometria dell'obiettivo (centro 999, 750, raggio 665 px su 2000 px, rotazione 14°) verificata sul sole in foto serene; sulle 399 foto di 8 giorni il modello spiega il 62 % della variabilita' del rapporto irraggiamento reale / cielo sereno (convalida un-giorno-alla-volta, errore tipico 0,11). La stazione (BH1750 lux / 120) legge circa il 54 % dell'irraggiamento osservato dal satellite: `input_number.solare_fattore_stazione` (1,6) la porta a W/m² realistici nei sensori «corretto» e «stimato»; il sensore originale, che alimenta il modello del collettore e l'irrigazione, non e' stato toccato.
 
 ## Spegnimento con nessuno in casa
 

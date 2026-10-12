@@ -91,6 +91,11 @@ export interface PlantEntities {
   gti_forecast: string;
   gti_satellite: string;
   cloud_forecast: string;
+  /** irraggiamento orizzontale: stazione originale e corretta, stimato dall'allsky, e copertura nuvolosa dell'allsky */
+  irr_station_raw: string;
+  irr_station_corrected: string;
+  allsky_irradiance: string;
+  allsky_cloud: string;
   /** cronotermostato settimanale acceso e programma attivo adesso */
   crono_master: string;
   program_active: string;
@@ -157,6 +162,10 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   gti_forecast: "sensor.open_meteo_irraggiamento_previsto_sul_piano",
   gti_satellite: "sensor.open_meteo_irraggiamento_osservato_dal_satellite",
   cloud_forecast: "sensor.open_meteo_nuvolosita",
+  irr_station_raw: "sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato",
+  irr_station_corrected: "sensor.irraggiamento_stazione_corretto",
+  allsky_irradiance: "sensor.allsky_irraggiamento_stimato",
+  allsky_cloud: "sensor.allsky_copertura_equivalente",
   crono_master: "switch.casale_cronotermostato_settimanale",
   program_active: "binary_sensor.caldaia_programma_attivo_ora",
   away: "binary_sensor.caldaia_nessuno_in_casa",

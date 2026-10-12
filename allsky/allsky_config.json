@@ -1,0 +1,9 @@
+{
+  "image_url": "https://192.168.178.189/allsky/images/latest.jpg",
+  "max_age_minutes": 15,
+  "min_sun_elevation": 8,
+  "geometry": {"cx": 999.0, "cy": 750.0, "radius": 665.0, "rotation_deg": 14.0, "ref_width": 2000},
+  "mask": "obst_mask.png",
+  "rbr_veil": [0.72, 0.88],
+  "model_station_scale": {"sun_sat": 0.15, "halo_sat": -0.04, "halo_lum": 0.41, "intercept": 0.02}
+}

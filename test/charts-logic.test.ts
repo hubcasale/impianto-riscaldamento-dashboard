@@ -134,3 +134,11 @@ test("gruppo irraggiamento: tre serie in W/m2 a sinistra e la nuvolosita a destr
   assert.equal(sat?.timeShiftMs, -2 * 3600000);
   assert.ok(allSeries().some((s) => s.id === "gtiForecast"));
 });
+
+test("gruppo allsky: irraggiamento orizzontale a sinistra e copertura a destra", () => {
+  const g = CHART_GROUPS.find((x) => x.id === "allsky");
+  assert.ok(g);
+  assert.deepEqual([...new Set(g.series.filter((s) => s.axis === "l").map((s) => s.unit))], ["W/m²"]);
+  assert.deepEqual([...new Set(g.series.filter((s) => s.axis === "r").map((s) => s.unit))], ["%"]);
+  assert.ok(g.series.filter((s) => s.on).length >= 2);
+});

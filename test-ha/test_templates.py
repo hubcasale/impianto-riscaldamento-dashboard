@@ -468,5 +468,31 @@ check("open-meteo: senza zone.home coordinate non valide (999), mai 0,0", ("lati
 u3 = render(URL, {**st_geo, "input_number.solare_termico_orientamento": "225"}, attrs={("zone.home", "latitude"): 45.0, ("zone.home", "longitude"): 9.0})
 check("open-meteo: orientamento sud-ovest 225 = azimuth 45", ("azimuth=45.0" in u3), True)
 
+# ---------------------------------------------------------------- AllSky
+AS = yaml.safe_load(open("ha-packages/solare_allsky.yaml"))
+def find_in(domain, name, pkg):
+    for item in pkg["template"]:
+        for e in item.get(domain, []):
+            if e["name"] == name: return e
+    raise KeyError(name)
+ATT = {"ok": True, "sole_libero": True, "kt_scala_stazione": 0.535, "ghi_sereno": 644.0}
+def a(key): return {("sensor.allsky_analisi", k): v for k, v in {**ATT, **key}.items()}
+STX = {"input_number.solare_fattore_stazione": "1.6", "sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato": "300"}
+check("allsky: irraggiamento stimato = kt x sereno x fattore (0,535 x 644 x 1,6 = 551)", render(find_in("sensor", "AllSky irraggiamento stimato", AS)["state"], STX, attrs=a({})), "551")
+check("allsky: irraggiamento stimato con il fattore della stazione 1,0", render(find_in("sensor", "AllSky irraggiamento stimato", AS)["state"], {**STX, "input_number.solare_fattore_stazione": "1.0"}, attrs=a({})), "345")
+check("allsky: disponibile solo se lo script risponde ok", render(find_in("sensor", "AllSky irraggiamento stimato", AS)["availability"], STX, attrs=a({"ok": False})), "False")
+check("allsky: sole libero", render(find_in("binary_sensor", "AllSky sole libero", AS)["state"], {}, attrs=a({})), "True")
+check("allsky: sole coperto", render(find_in("binary_sensor", "AllSky sole libero", AS)["state"], {}, attrs=a({"sole_libero": False})), "False")
+check("allsky: stazione corretta 300 x 1,6 = 480", render(find_in("sensor", "Irraggiamento stazione corretto", AS)["state"], STX), "480")
+cmd = AS["command_line"][0]["sensor"]["command"]
+check("allsky: il comando passa le coordinate di zone.home", ("43.5 13.5" in render(cmd, {}, attrs={("zone.home", "latitude"): 43.5, ("zone.home", "longitude"): 13.5})), True)
+vt = AS["command_line"][0]["sensor"]["value_template"]
+class _V(dict):
+    __getattr__ = dict.get
+check("allsky: stato dell'analisi ok", render(vt, {}, extra={"value_json": _V(ok=True, copertura_eq=42.5)}), "ok")
+check("allsky: stato dell'analisi con il motivo", render(vt, {}, extra={"value_json": _V(ok=False, motivo="sole basso")}), "sole basso")
+check("allsky: copertura numerica dalla analisi", render(find_in("sensor", "AllSky copertura equivalente", AS)["state"], {}, attrs=a({"copertura_eq": 42.5})), "42.5")
+check("allsky: copertura non disponibile se l'analisi non e' ok", render(find_in("sensor", "AllSky copertura equivalente", AS)["availability"], {}, attrs=a({"ok": False})), "False")
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

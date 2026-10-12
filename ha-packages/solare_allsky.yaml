@@ -1,0 +1,113 @@
+# Copertura nuvolosa e sole dalla foto dell'allsky (fisheye indi-allsky su Raspberry), ogni 3 minuti di giorno.
+#
+# Lo script allsky/allsky_clouds.py (copiato in /config/allsky/) scarica l'ultima immagine dal web server dell'allsky
+# (indirizzo in allsky_config.json), ignora le zone fisse (edifici, alberi) con una maschera, classifica il cielo in
+# sereno / velato / coperto dal colore e guarda il disco del sole e l'alone intorno: da qui stima la trasmissione
+# dell'irraggiamento rispetto al cielo sereno. Gira come processo separato (command_line), con coordinate prese da zone.home.
+# Di notte, con il sole sotto gli 8 gradi o con l'immagine vecchia di piu' di 15 minuti non da' nessun valore.
+#
+# Taratura (12/10/2026): sulle 399 foto di 8 giorni confrontate con la stazione il modello spiega il 62 % della variabilita'
+# del rapporto irraggiamento reale / cielo sereno (leave-one-day-out, errore tipico 0,11). Il confronto con il satellite
+# (Open-Meteo) mostra che la stazione (BH1750 lux / 120) legge circa il 54 % del satellite: serve il fattore
+# input_number.solare_fattore_stazione (1,6) per portarla a W/m2 realistici. I sensori "corretto" e "stimato" usano
+# il fattore; il sensore originale della stazione, che alimenta il modello del collettore e l'irrigazione, NON si tocca.
+
+input_boolean:
+  solare_allsky_defaults_impostati:
+    name: Solare allsky - valori iniziali impostati
+    icon: mdi:check
+
+input_number:
+  solare_fattore_stazione:
+    name: Solare - fattore di correzione dell'irraggiamento della stazione
+    min: 1
+    max: 3
+    step: 0.01
+    mode: box
+    icon: mdi:ruler
+
+command_line:
+  - sensor:
+      name: AllSky analisi
+      unique_id: allsky_analisi
+      icon: mdi:image-filter-drama
+      command: >-
+        python3 /config/allsky/allsky_clouds.py {{ state_attr('zone.home', 'latitude') }} {{ state_attr('zone.home', 'longitude') }}
+      scan_interval: 180
+      command_timeout: 45
+      value_template: "{{ 'ok' if value_json.ok else value_json.motivo }}"
+      json_attributes:
+        - ok
+        - motivo
+        - copertura_eq
+        - sereno
+        - velato
+        - coperto
+        - sole_libero
+        - sole_saturo
+        - alone_saturo
+        - alone_luminosita
+        - kt_scala_stazione
+        - ghi_sereno
+        - sole_azimut
+        - sole_elevazione
+        - eta_immagine_min
+
+template:
+  - binary_sensor:
+      - name: AllSky sole libero
+        unique_id: allsky_sole_libero
+        icon: mdi:white-balance-sunny
+        availability: "{{ state_attr('sensor.allsky_analisi', 'ok') == true }}"
+        state: "{{ state_attr('sensor.allsky_analisi', 'sole_libero') == true }}"
+
+  - sensor:
+      # copertura equivalente (nuvole spesse piu' un po' di velo), da 0 a 100 %
+      - name: AllSky copertura equivalente
+        unique_id: allsky_copertura_equivalente
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:weather-cloudy
+        availability: "{{ state_attr('sensor.allsky_analisi', 'ok') == true }}"
+        state: "{{ state_attr('sensor.allsky_analisi', 'copertura_eq') | float(0) }}"
+
+      # irraggiamento orizzontale stimato dalla foto: trasmissione (scala della stazione) x cielo sereno x fattore
+      - name: AllSky irraggiamento stimato
+        unique_id: allsky_irraggiamento_stimato
+        unit_of_measurement: W/m²
+        device_class: irradiance
+        state_class: measurement
+        availability: "{{ state_attr('sensor.allsky_analisi', 'ok') == true }}"
+        state: >
+          {% set a = state_attr('sensor.allsky_analisi', 'kt_scala_stazione') | float(0) %}
+          {% set g = state_attr('sensor.allsky_analisi', 'ghi_sereno') | float(0) %}
+          {% set f = states('input_number.solare_fattore_stazione') | float(1.6) %}
+          {{ (a * g * f) | round(0) | int }}
+
+      # irraggiamento della stazione portato alla scala reale (il sensore originale resta com'e')
+      - name: Irraggiamento stazione corretto
+        unique_id: irraggiamento_stazione_corretto
+        unit_of_measurement: W/m²
+        device_class: irradiance
+        state_class: measurement
+        availability: "{{ has_value('sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato') }}"
+        state: >
+          {{ (states('sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato') | float(0)
+              * states('input_number.solare_fattore_stazione') | float(1.6)) | round(0) | int }}
+
+automation:
+  - id: solare_allsky_valori_iniziali
+    alias: Solare - allsky, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.solare_allsky_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_fattore_stazione}
+        data: {value: 1.6}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.solare_allsky_defaults_impostati}

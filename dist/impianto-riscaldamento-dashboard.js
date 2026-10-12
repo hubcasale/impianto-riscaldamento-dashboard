@@ -1512,6 +1512,10 @@ var S3 = {
   gtiForecast: { id: "gtiForecast", entityKey: "gti_forecast", label: "Irraggiamento previsto (Open-Meteo)", unit: "W/m\xB2", color: "#3b82f6", axis: "l", decimals: 0 },
   gtiSatellite: { id: "gtiSatellite", entityKey: "gti_satellite", label: "Irraggiamento osservato (satellite)", unit: "W/m\xB2", color: "#22c55e", axis: "l", decimals: 0, timeShiftMs: -2 * 36e5 },
   cloudForecast: { id: "cloudForecast", entityKey: "cloud_forecast", label: "Nuvolosit\xE0 prevista", unit: "%", color: "#94a3b8", axis: "r", decimals: 0 },
+  stationRaw: { id: "stationRaw", entityKey: "irr_station_raw", label: "Irraggiamento orizzontale (stazione, originale)", unit: "W/m\xB2", color: "#9ca3af", axis: "l", decimals: 0 },
+  stationCorr: { id: "stationCorr", entityKey: "irr_station_corrected", label: "Irraggiamento orizzontale (stazione, corretto)", unit: "W/m\xB2", color: "#f59e0b", axis: "l", decimals: 0 },
+  allskyIrr: { id: "allskyIrr", entityKey: "allsky_irradiance", label: "Irraggiamento orizzontale (stimato dall'allsky)", unit: "W/m\xB2", color: "#8b5cf6", axis: "l", decimals: 0 },
+  allskyCloud: { id: "allskyCloud", entityKey: "allsky_cloud", label: "Copertura nuvolosa (allsky)", unit: "%", color: "#64748b", axis: "r", decimals: 0 },
   collectorW: { id: "collectorW", entityKey: "collector_power", label: "Alimentazione Elios (pompa collettore)", unit: "W", color: "#84cc16", axis: "r", decimals: 0 }
 };
 var on = (s4) => ({ ...s4, on: true });
@@ -1536,6 +1540,11 @@ var CHART_GROUPS = [
     id: "irraggiamento",
     title: "Irraggiamento",
     series: [on(S3.gtiStation), on(S3.gtiForecast), on(S3.gtiSatellite), on(S3.cloudForecast)]
+  },
+  {
+    id: "allsky",
+    title: "AllSky",
+    series: [off(S3.stationRaw), on(S3.stationCorr), on(S3.allskyIrr), on(S3.allskyCloud), off(S3.cloudForecast)]
   },
   {
     id: "solare",
@@ -2563,6 +2572,10 @@ var DEFAULT_ENTITIES = {
   gti_forecast: "sensor.open_meteo_irraggiamento_previsto_sul_piano",
   gti_satellite: "sensor.open_meteo_irraggiamento_osservato_dal_satellite",
   cloud_forecast: "sensor.open_meteo_nuvolosita",
+  irr_station_raw: "sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato",
+  irr_station_corrected: "sensor.irraggiamento_stazione_corretto",
+  allsky_irradiance: "sensor.allsky_irraggiamento_stimato",
+  allsky_cloud: "sensor.allsky_copertura_equivalente",
   crono_master: "switch.casale_cronotermostato_settimanale",
   program_active: "binary_sensor.caldaia_programma_attivo_ora",
   away: "binary_sensor.caldaia_nessuno_in_casa",
@@ -4899,7 +4912,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.18";
+var VERSION = "0.3.19";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

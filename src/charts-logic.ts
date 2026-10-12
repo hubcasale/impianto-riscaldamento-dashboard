@@ -324,6 +324,10 @@ const S = {
   gtiForecast: { id: "gtiForecast", entityKey: "gti_forecast", label: "Irraggiamento previsto (Open-Meteo)", unit: "W/m²", color: "#3b82f6", axis: "l", decimals: 0 },
   gtiSatellite: { id: "gtiSatellite", entityKey: "gti_satellite", label: "Irraggiamento osservato (satellite)", unit: "W/m²", color: "#22c55e", axis: "l", decimals: 0, timeShiftMs: -2 * 3600000 },
   cloudForecast: { id: "cloudForecast", entityKey: "cloud_forecast", label: "Nuvolosità prevista", unit: "%", color: "#94a3b8", axis: "r", decimals: 0 },
+  stationRaw: { id: "stationRaw", entityKey: "irr_station_raw", label: "Irraggiamento orizzontale (stazione, originale)", unit: "W/m²", color: "#9ca3af", axis: "l", decimals: 0 },
+  stationCorr: { id: "stationCorr", entityKey: "irr_station_corrected", label: "Irraggiamento orizzontale (stazione, corretto)", unit: "W/m²", color: "#f59e0b", axis: "l", decimals: 0 },
+  allskyIrr: { id: "allskyIrr", entityKey: "allsky_irradiance", label: "Irraggiamento orizzontale (stimato dall'allsky)", unit: "W/m²", color: "#8b5cf6", axis: "l", decimals: 0 },
+  allskyCloud: { id: "allskyCloud", entityKey: "allsky_cloud", label: "Copertura nuvolosa (allsky)", unit: "%", color: "#64748b", axis: "r", decimals: 0 },
   collectorW: { id: "collectorW", entityKey: "collector_power", label: "Alimentazione Elios (pompa collettore)", unit: "W", color: "#84cc16", axis: "r", decimals: 0 },
 } satisfies Record<string, SeriesDef>;
 
@@ -350,6 +354,11 @@ export const CHART_GROUPS: GroupDef[] = [
     id: "irraggiamento",
     title: "Irraggiamento",
     series: [on(S.gtiStation), on(S.gtiForecast), on(S.gtiSatellite), on(S.cloudForecast)],
+  },
+  {
+    id: "allsky",
+    title: "AllSky",
+    series: [off(S.stationRaw), on(S.stationCorr), on(S.allskyIrr), on(S.allskyCloud), off(S.cloudForecast)],
   },
   {
     id: "solare",

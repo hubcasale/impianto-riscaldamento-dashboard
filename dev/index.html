@@ -143,6 +143,10 @@ set("sensor.solare_termico_irraggiamento_sul_piano", 420, { unit_of_measurement:
 set("sensor.open_meteo_irraggiamento_previsto_sul_piano", 380, { unit_of_measurement: "W/m²" });
 set("sensor.open_meteo_irraggiamento_osservato_dal_satellite", 400, { unit_of_measurement: "W/m²" });
 set("sensor.open_meteo_nuvolosita", 55, { unit_of_measurement: "%" });
+set("sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato", 300, { unit_of_measurement: "W/m²" });
+set("sensor.irraggiamento_stazione_corretto", 480, { unit_of_measurement: "W/m²" });
+set("sensor.allsky_irraggiamento_stimato", 520, { unit_of_measurement: "W/m²" });
+set("sensor.allsky_copertura_equivalente", 35, { unit_of_measurement: "%" });
 // presenza e spegnimento per assenza (?assenza=on per simulare la casa vuota da 25 minuti)
 set("binary_sensor.caldaia_nessuno_in_casa", q.get("assenza") === "on" ? "on" : "off");
 S["binary_sensor.caldaia_nessuno_in_casa"].last_changed = new Date(Date.now() - 25 * 60000).toISOString();
@@ -206,6 +210,10 @@ const hass = {
         else if (id.includes("open_meteo_irraggiamento_previsto")) v = 620 * Math.max(0, Math.sin(day - 1.4));
         else if (id.includes("open_meteo_irraggiamento_osservato")) v = 640 * Math.max(0, Math.sin(day - 1.4 + 0.2));
         else if (id.includes("open_meteo_nuvolosita")) v = 50 + 40 * Math.sin(day * 2);
+        else if (id.includes("irraggiamento_solare_stimato")) v = 380 * Math.max(0, Math.sin(day - 1.4)) * (0.85 + 0.15 * Math.sin(h6 * 20));
+        else if (id.includes("irraggiamento_stazione_corretto")) v = 610 * Math.max(0, Math.sin(day - 1.4)) * (0.85 + 0.15 * Math.sin(h6 * 20));
+        else if (id.includes("allsky_irraggiamento")) v = 600 * Math.max(0, Math.sin(day - 1.4)) * (0.8 + 0.2 * Math.sin(h6 * 14 + 1));
+        else if (id.includes("allsky_copertura")) v = 40 + 35 * Math.sin(day * 3 + 1);
         else if (id.includes("potenza")) v = 0.1 + 1.6 * Math.max(0, Math.sin(day - 1.4));
         else v = 40 + 10 * Math.sin(day);
         arr.push({ s: v.toFixed(1), lu: t / 1000 });
