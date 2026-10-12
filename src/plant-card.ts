@@ -86,6 +86,11 @@ export interface PlantEntities {
   panel_max_today: string;
   /** puffer: lettura della caldaia oppure, senza Internet, stima dalla sonda in ingresso alla serpentina */
   puffer_effective: string;
+  /** irraggiamento sul piano dei collettori: misurato dalla stazione, previsto da Open-Meteo, osservato dal satellite; nuvolosita' prevista */
+  gti_station: string;
+  gti_forecast: string;
+  gti_satellite: string;
+  cloud_forecast: string;
   /** cronotermostato settimanale acceso e programma attivo adesso */
   crono_master: string;
   program_active: string;
@@ -148,6 +153,10 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   panel_max: "sensor.solare_pannello_massima_prevista",
   panel_max_today: "sensor.solare_pannello_massima_oggi",
   puffer_effective: "sensor.puffer_temperatura_effettiva",
+  gti_station: "sensor.solare_termico_irraggiamento_sul_piano",
+  gti_forecast: "sensor.open_meteo_irraggiamento_previsto_sul_piano",
+  gti_satellite: "sensor.open_meteo_irraggiamento_osservato_dal_satellite",
+  cloud_forecast: "sensor.open_meteo_nuvolosita",
   crono_master: "switch.casale_cronotermostato_settimanale",
   program_active: "binary_sensor.caldaia_programma_attivo_ora",
   away: "binary_sensor.caldaia_nessuno_in_casa",

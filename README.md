@@ -172,7 +172,7 @@ Sotto il pulsante di accensione rapida, sul lato sinistro dello schema, c'è il 
 
 ## Pulsante «Grafici»
 
-Sotto «Stato» c'è il pulsante **Grafici**: apre una finestra con lo storico (letto dal recorder di Home Assistant, nessuna libreria esterna) di quattro gruppi di valori: *Temperature* (puffer, boiler alto e basso, acqua della caldaia, collettore), *Caldaia* (acqua, puffer, fumi e potenza), *Pompa di integrazione* (puffer, boiler, serpentina e potenza della pompa) e *Solare* (collettore, serpentine, potenza), più un *Confronto libero* con tutte le serie.
+Sotto «Stato» c'è il pulsante **Grafici**: apre una finestra con lo storico (letto dal recorder di Home Assistant, nessuna libreria esterna) di quattro gruppi di valori: *Temperature* (puffer, boiler alto e basso, acqua della caldaia, collettore), *Caldaia* (acqua, puffer, fumi e potenza), *Pompa di integrazione* (puffer, boiler, serpentina e potenza della pompa) *Irraggiamento* (sul piano dei collettori: stazione, previsione di Open-Meteo, osservato dal satellite, con la nuvolosità prevista a destra; il satellite è spostato indietro di 2 ore perché pubblica in ritardo) e *Solare* (collettore, serpentine, potenza), più un *Confronto libero* con tutte le serie.
 
 - **Periodo:** 6 ore, 24 ore, 3 o 7 giorni.
 - **Sovrapporre:** ogni serie si accende e si spegne dai tasti sopra il grafico; «Confronta con il periodo prima» disegna in tratteggio lo stesso intervallo precedente; «Confronta le forme (0–100 %)» riporta ogni serie al proprio minimo-massimo per sovrapporre grandezze diverse (nel confronto libero è sempre attivo).

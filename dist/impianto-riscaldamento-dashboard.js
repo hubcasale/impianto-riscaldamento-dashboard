@@ -1508,6 +1508,10 @@ var S3 = {
   solarIn: { id: "solarIn", entityKey: "coil_solar_in", label: "Serpentina solare, ingresso", unit: "\xB0C", color: "#f59e0b", axis: "l", decimals: 1 },
   solarOut: { id: "solarOut", entityKey: "coil_solar_out", label: "Serpentina solare, uscita", unit: "\xB0C", color: "#06b6d4", axis: "l", decimals: 1 },
   solarKw: { id: "solarKw", entityKey: "solar_power", label: "Potenza solare", unit: "kW", color: "#22c55e", axis: "r", decimals: 2 },
+  gtiStation: { id: "gtiStation", entityKey: "gti_station", label: "Irraggiamento sul piano (stazione)", unit: "W/m\xB2", color: "#f59e0b", axis: "l", decimals: 0 },
+  gtiForecast: { id: "gtiForecast", entityKey: "gti_forecast", label: "Irraggiamento previsto (Open-Meteo)", unit: "W/m\xB2", color: "#3b82f6", axis: "l", decimals: 0 },
+  gtiSatellite: { id: "gtiSatellite", entityKey: "gti_satellite", label: "Irraggiamento osservato (satellite)", unit: "W/m\xB2", color: "#22c55e", axis: "l", decimals: 0, timeShiftMs: -2 * 36e5 },
+  cloudForecast: { id: "cloudForecast", entityKey: "cloud_forecast", label: "Nuvolosit\xE0 prevista", unit: "%", color: "#94a3b8", axis: "r", decimals: 0 },
   collectorW: { id: "collectorW", entityKey: "collector_power", label: "Alimentazione Elios (pompa collettore)", unit: "W", color: "#84cc16", axis: "r", decimals: 0 }
 };
 var on = (s4) => ({ ...s4, on: true });
@@ -1527,6 +1531,11 @@ var CHART_GROUPS = [
     id: "integrazione",
     title: "Pompa di integrazione",
     series: [on(S3.puffer), on(S3.boilerTop), off(S3.integIn), off(S3.integOut), on(S3.integW)]
+  },
+  {
+    id: "irraggiamento",
+    title: "Irraggiamento",
+    series: [on(S3.gtiStation), on(S3.gtiForecast), on(S3.gtiSatellite), on(S3.cloudForecast)]
   },
   {
     id: "solare",
@@ -1678,8 +1687,10 @@ var ImpiantoChartsDialog = class extends i4 {
     const span = this._t1 - this._t0;
     this._computed = this._available().map((def) => {
       const id = this._entityOf(def);
-      const cur = resample(this._rawCur.get(id) ?? [], this._t0, this._t1, n5);
-      const prev = this._compare ? resample(this._rawPrev.get(id) ?? [], this._t0 - span, this._t0, n5) : null;
+      const shift = def.timeShiftMs ?? 0;
+      const moved = (pts) => shift === 0 ? pts : pts.map((p3) => ({ t: p3.t + shift, v: p3.v }));
+      const cur = resample(moved(this._rawCur.get(id) ?? []), this._t0, this._t1, n5);
+      const prev = this._compare ? resample(moved(this._rawPrev.get(id) ?? []), this._t0 - span, this._t0, n5) : null;
       return { def, cur, prev, stats: seriesStats(cur) };
     });
   }
@@ -2548,6 +2559,10 @@ var DEFAULT_ENTITIES = {
   panel_max: "sensor.solare_pannello_massima_prevista",
   panel_max_today: "sensor.solare_pannello_massima_oggi",
   puffer_effective: "sensor.puffer_temperatura_effettiva",
+  gti_station: "sensor.solare_termico_irraggiamento_sul_piano",
+  gti_forecast: "sensor.open_meteo_irraggiamento_previsto_sul_piano",
+  gti_satellite: "sensor.open_meteo_irraggiamento_osservato_dal_satellite",
+  cloud_forecast: "sensor.open_meteo_nuvolosita",
   crono_master: "switch.casale_cronotermostato_settimanale",
   program_active: "binary_sensor.caldaia_programma_attivo_ora",
   away: "binary_sensor.caldaia_nessuno_in_casa",
@@ -4884,7 +4899,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.17";
+var VERSION = "0.3.18";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

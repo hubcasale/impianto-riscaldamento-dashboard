@@ -158,8 +158,10 @@ export class ImpiantoChartsDialog extends LitElement {
     const span = this._t1 - this._t0;
     this._computed = this._available().map((def) => {
       const id = this._entityOf(def) as string;
-      const cur = resample(this._rawCur.get(id) ?? [], this._t0, this._t1, n);
-      const prev = this._compare ? resample(this._rawPrev.get(id) ?? [], this._t0 - span, this._t0, n) : null;
+      const shift = def.timeShiftMs ?? 0;
+      const moved = (pts: Pt[]) => (shift === 0 ? pts : pts.map((p) => ({ t: p.t + shift, v: p.v })));
+      const cur = resample(moved(this._rawCur.get(id) ?? []), this._t0, this._t1, n);
+      const prev = this._compare ? resample(moved(this._rawPrev.get(id) ?? []), this._t0 - span, this._t0, n) : null;
       return { def, cur, prev, stats: seriesStats(cur) };
     });
   }

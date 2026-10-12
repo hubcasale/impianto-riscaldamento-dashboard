@@ -124,3 +124,13 @@ test("gruppi: serie con scale sensate e almeno due accese", () => {
   }
   assert.ok(allSeries().length >= 10);
 });
+
+test("gruppo irraggiamento: tre serie in W/m2 a sinistra e la nuvolosita a destra, satellite spostato di 2 ore", () => {
+  const g = CHART_GROUPS.find((x) => x.id === "irraggiamento");
+  assert.ok(g);
+  assert.deepEqual(g.series.filter((s) => s.axis === "l").map((s) => s.unit), ["W/m²", "W/m²", "W/m²"]);
+  assert.deepEqual(g.series.filter((s) => s.axis === "r").map((s) => s.unit), ["%"]);
+  const sat = g.series.find((s) => s.id === "gtiSatellite");
+  assert.equal(sat?.timeShiftMs, -2 * 3600000);
+  assert.ok(allSeries().some((s) => s.id === "gtiForecast"));
+});

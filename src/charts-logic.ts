@@ -294,6 +294,8 @@ export interface SeriesDef {
   decimals: number;
   /** acceso all'apertura del grafico */
   on?: boolean;
+  /** i valori registrati all'istante t appartengono a t + timeShiftMs (il satellite pubblica con 2 ore di ritardo) */
+  timeShiftMs?: number;
 }
 
 export interface GroupDef {
@@ -318,6 +320,10 @@ const S = {
   solarIn: { id: "solarIn", entityKey: "coil_solar_in", label: "Serpentina solare, ingresso", unit: "°C", color: "#f59e0b", axis: "l", decimals: 1 },
   solarOut: { id: "solarOut", entityKey: "coil_solar_out", label: "Serpentina solare, uscita", unit: "°C", color: "#06b6d4", axis: "l", decimals: 1 },
   solarKw: { id: "solarKw", entityKey: "solar_power", label: "Potenza solare", unit: "kW", color: "#22c55e", axis: "r", decimals: 2 },
+  gtiStation: { id: "gtiStation", entityKey: "gti_station", label: "Irraggiamento sul piano (stazione)", unit: "W/m²", color: "#f59e0b", axis: "l", decimals: 0 },
+  gtiForecast: { id: "gtiForecast", entityKey: "gti_forecast", label: "Irraggiamento previsto (Open-Meteo)", unit: "W/m²", color: "#3b82f6", axis: "l", decimals: 0 },
+  gtiSatellite: { id: "gtiSatellite", entityKey: "gti_satellite", label: "Irraggiamento osservato (satellite)", unit: "W/m²", color: "#22c55e", axis: "l", decimals: 0, timeShiftMs: -2 * 3600000 },
+  cloudForecast: { id: "cloudForecast", entityKey: "cloud_forecast", label: "Nuvolosità prevista", unit: "%", color: "#94a3b8", axis: "r", decimals: 0 },
   collectorW: { id: "collectorW", entityKey: "collector_power", label: "Alimentazione Elios (pompa collettore)", unit: "W", color: "#84cc16", axis: "r", decimals: 0 },
 } satisfies Record<string, SeriesDef>;
 
@@ -339,6 +345,11 @@ export const CHART_GROUPS: GroupDef[] = [
     id: "integrazione",
     title: "Pompa di integrazione",
     series: [on(S.puffer), on(S.boilerTop), off(S.integIn), off(S.integOut), on(S.integW)],
+  },
+  {
+    id: "irraggiamento",
+    title: "Irraggiamento",
+    series: [on(S.gtiStation), on(S.gtiForecast), on(S.gtiSatellite), on(S.cloudForecast)],
   },
   {
     id: "solare",
