@@ -156,65 +156,20 @@ check("spegni: scaduta la durata massima (2 h)", render(cond, {**sp_base, "senso
 check("spegni: poco prima delle 2 h", render(cond, {**sp_base, "sensor.casale_temperatura_boiler": "64"}, a_(119), now=NOW), "False")
 check("spegni: puffer non disponibile", render(cond, {**sp_base, "sensor.casale_temperatura_boiler": "unavailable"}, a_(40), now=NOW), "False")
 
-# ---------------------------------------------------------------- correzione delle sonde del boiler (modello di accoppiamento)
-alto_t = find("sensor", "Boiler solare - alto stimato", BOILER)
-basso_t = find("sensor", "Boiler solare - basso stimato", BOILER)
-par = {"input_number.boiler_solare_t_ambiente": "16", "input_number.boiler_solare_k_alto": "0.766", "input_number.boiler_solare_k_basso": "0.73",
-       "input_number.boiler_solare_delta_alto": "0", "input_number.boiler_solare_delta_basso": "0"}
-def vicino(label, tpl, grezza_entity, grezza, reale, tol=0.4):
-    global fails
-    got = float(render(tpl["state"], {**par, grezza_entity: str(grezza)}))
-    ok = abs(got - reale) <= tol
-    fails += 0 if ok else 1
-    print(("ok   " if ok else "FAIL ") + f"{label}: grezza {grezza} -> {got} (reale {reale})")
-for raw, true in [(45.1, 54.0), (47.2, 56.8), (49.5, 59.6)]:
-    vicino("alto", alto_t, "sensor.solare_termico_boiler_alto", raw, true)
-for raw, true in [(21.4, 23.4), (27.8, 32.2)]:
-    vicino("basso", basso_t, "sensor.garage_solare_termico_boiler_basso", raw, true)
+# ---------------------------------------------------------------- correzione fissa delle sonde del boiler (lettura grezza + delta)
+alto_t = find("sensor", "Boiler solare - sonda alta (S3 corretta)", BOILER)
+basso_t = find("sensor", "Boiler solare - sonda bassa (S2 corretta)", BOILER)
+par = {"input_number.boiler_solare_delta_alto": "4", "input_number.boiler_solare_delta_basso": "3"}
+check("alto: grezza 49,5 + 4 = 53,5", render(alto_t["state"], {**par, "sensor.solare_termico_boiler_alto": "49.5"}), "53.5")
+check("basso: grezza 21,4 + 3 = 24,4", render(basso_t["state"], {**par, "sensor.garage_solare_termico_boiler_basso": "21.4"}), "24.4")
+check("alto: delta modificato", render(alto_t["state"], {**par, "sensor.solare_termico_boiler_alto": "49.5", "input_number.boiler_solare_delta_alto": "1"}), "50.5")
+check("alto: delta mancante vale 0", render(alto_t["state"], {"sensor.solare_termico_boiler_alto": "49.5"}), "49.5")
 check("alto: sonda scollegata (-30,7) non disponibile", render(alto_t["availability"], {**par, "sensor.solare_termico_boiler_alto": "-30.7"}), "False")
 check("basso: sonda scollegata (-30,7) non disponibile", render(basso_t["availability"], {**par, "sensor.garage_solare_termico_boiler_basso": "-30.7"}), "False")
 check("alto: sonda normale disponibile", render(alto_t["availability"], {**par, "sensor.solare_termico_boiler_alto": "40"}), "True")
-check("delta di ritocco si somma", str(float(render(alto_t["state"], {**par, "sensor.solare_termico_boiler_alto": "49.5", "input_number.boiler_solare_delta_alto": "1"}))), "60.7")
-
-# ---------------------------------------------------------------- curva di adattamento (regressione lineare)
-curva_alto = find("sensor", "Boiler solare - curva sonda alta", BOILER)
-curva_basso = find("sensor", "Boiler solare - curva sonda bassa", BOILER)
-def curva(tpl, punti):
-    st = {**par, "input_text.boiler_cal_punti_alto": punti, "input_text.boiler_cal_punti_basso": punti}
-    return (render(tpl["state"], st), float(render(tpl["attributes"]["a"], st)), float(render(tpl["attributes"]["b"], st)), render(tpl["attributes"]["punti"], st))
-st_, a_, b_, n_ = curva(curva_alto, "45.1:54.0,47.2:56.8,49.5:59.6")
-check("curva: 3 punti -> regressione", st_, "regressione")
-check("curva: pendenza attorno a 1,27", f"{a_:.2f}", "1.27")
-check("curva: intercetta attorno a -3,3", f"{b_:.1f}", "-3.3")
-check("curva: passa per i punti (49,5 -> 59,6)", f"{a_ * 49.5 + b_:.1f}", "59.6")
-st_, a_, b_, n_ = curva(curva_alto, "45.1:54.0,47.2:56.8")
-check("curva: 2 punti -> modello", st_, "modello")
-check("curva: 2 punti, pendenza del modello (1/0,766)", str(abs(a_ - 1 / 0.766) < 0.001), "True")
-st_, a_, b_, n_ = curva(curva_alto, "45.0:54.0,45.5:54.5,46.0:55.2")
-check("curva: punti troppo vicini -> modello", st_, "modello")
-st_, a_, b_, n_ = curva(curva_alto, "40:49,50:61,60:73")
-check("curva: retta esatta con punti distanti", f"{a_:.2f}/{b_:.1f}", "1.20/1.0")
-st_, a_, b_, n_ = curva(curva_alto, "40:40,50:60,60:80")
-check("curva: pendenza fuori limiti -> modello", st_, "modello")
-st_, a_, b_, n_ = curva(curva_alto, "abc,45.1:54.0,:,47.2:56.8,49.5:59.6")
-check("curva: ignora voci non valide", (st_, n_), ("regressione", "5"))
-check("curva: nessun punto -> modello", curva(curva_alto, "")[0], "modello")
-
-def stimato_con_curva(tpl, grezza_entity, grezza, a, b):
-    sid = "sensor.boiler_solare_curva_sonda_alta" if "alto" in grezza_entity or "boiler_alto" in grezza_entity else "sensor.boiler_solare_curva_sonda_bassa"
-    return float(render(tpl["state"], {**par, grezza_entity: str(grezza)}, {(sid, "a"): a, (sid, "b"): b}))
-check("stimata usa la retta della curva", f"{stimato_con_curva(alto_t, 'sensor.solare_termico_boiler_alto', 60.0, 1.2, 1.0):.1f}", "73.0")
-
-# script di registrazione
-reg = BOILER["script"]["boiler_cal_registra_alto"]["sequence"][1]["data"]["value"]
-check("registra: aggiunge in coda", render(reg, {"input_text.boiler_cal_punti_alto": "45.1:54.0", "sensor.solare_termico_boiler_alto": "49.5", "input_number.boiler_cal_s3": "59.6"}), "45.1:54.0,49.5:59.6")
-check("registra: primo punto", render(reg, {"input_text.boiler_cal_punti_alto": "", "sensor.solare_termico_boiler_alto": "49.5", "input_number.boiler_cal_s3": "59.6"}), "49.5:59.6")
-venti = ",".join(f"{40 + i}:{50 + i}" for i in range(15))
-r15 = render(reg, {"input_text.boiler_cal_punti_alto": venti, "sensor.solare_termico_boiler_alto": "70", "input_number.boiler_cal_s3": "85"}).split(",")
-check("registra: tiene solo gli ultimi 15", (len(r15), r15[-1], r15[0]), (15, "70.0:85.0", "41:51"))
-ann = BOILER["script"]["boiler_cal_annulla_alto"]["sequence"][0]["data"]["value"]
-check("annulla: toglie l'ultimo", render(ann, {"input_text.boiler_cal_punti_alto": "1:2,3:4,5:6"}), "1:2,3:4")
-check("annulla: con un solo punto svuota", render(ann, {"input_text.boiler_cal_punti_alto": "1:2"}), "")
+check("alto: sonda non disponibile", render(alto_t["availability"], {**par, "sensor.solare_termico_boiler_alto": "unavailable"}), "False")
+check("pacchetto boiler senza curva, scritture a mano e modello", all(k not in BOILER for k in ("script", "input_text")), True)
+check("pacchetto boiler: un solo automatismo per i valori iniziali", len(BOILER["automation"]), 1)
 
 # ---------------------------------------------------------------- pompe della centralina solare dalla potenza totale
 POMPE = yaml.safe_load(open("ha-packages/caldaia_pompe_centralina.yaml"))

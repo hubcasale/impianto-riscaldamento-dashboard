@@ -34,13 +34,10 @@ del sistema, quali scelte sono state fatte e perché, e che cosa resta da verifi
 | Riaccensione da ECO STOP | Il 4/10 alle 17:13 la Polygon è ripartita da ECO STOP con acqua a 50 °C (= set acqua 65 − isteresi 15), pur con il boiler solare a 56 °C: decide solo in base alla sua acqua. |
 | Raffreddamento | Il puffer da fermo perde circa 0,13 °C/min. Riaccensione di Comfort Clima osservata a circa 41-45 °C con set 45. |
 | Circolatore Polygon | In ECO STOP fa impulsi di circa 1 minuto ogni 10-11 minuti; da OFF resta spento. Il registro della pompa è di sola lettura. |
-| Sonde ESP32 del boiler | Leggono più basso di S3/S2 dell'Elios per contatto termico scarso: sentono in parte l'aria del garage. Correzione con modello di accoppiamento `stimata = T_ambiente + (grezza - T_ambiente) / k`, con **T_ambiente 16 °C**, **k alto 0,766**, **k basso 0,73** (5 letture di confronto, errore sotto 0,1 °C su quei punti). Il collettore stimato dal modello solare è invece già esatto (44,7 contro 44,8). |
+| Sonde ESP32 del boiler | Leggono più basso di S3/S2 dell'Elios (contatto termico scarso). Dal 7/10/2026 con le sonde nuove la correzione è fissa: **lettura grezza + delta (S3 +4 °C, S2 +3 °C)**. Il vecchio modello di accoppiamento (`T_ambiente + (grezza − T_ambiente)/k`) e la curva di taratura a punti sono stati tolti il 13/10/2026 (non servivano più). Il collettore stimato dal modello solare è invece già esatto (44,7 contro 44,8). |
 | Polling cloud | Home Assistant legge la caldaia ogni **60 s** (opzione `update_interval`), perciò vede una partenza con fino a 60 s di ritardo. |
 
-**Curva di taratura.** Per ogni sonda del boiler si registrano coppie (valore grezzo ESP32, lettura S3/S2 della centralina).
-Con almeno 3 punti con deviazione standard di almeno 1,5 °C sulla grezza, il sistema calcola da solo la retta
-`reale = a · grezza + b` (minimi quadrati, ultimi 15 punti) e la usa; con meno punti usa il modello di accoppiamento.
-Punti iniziali (4/10/2026): alta `45.1:54.0, 47.2:56.8, 49.5:59.6` (a = 1,272, b = −3,32); bassa `21.4:23.4, 27.8:32.2`.
+**Correzione delle sonde (13/10/2026).** Niente più curva di taratura né modello di accoppiamento: `sensor.boiler_solare_alto_stimato` e `..._basso_stimato` (nomi visibili «sonda alta (S3 corretta)» e «sonda bassa (S2 corretta)», identificativi invariati) valgono lettura grezza + `input_number.boiler_solare_delta_alto` / `..._delta_basso` (4 e 3). Per ritoccarli basta cambiare i due delta.
 
 ## 3. Come funziona il sistema (vedi diagramma)
 
@@ -108,9 +105,7 @@ flowchart TD
 | Boiler alto / basso, grezzi (ESP32) | `sensor.solare_termico_boiler_alto`, `sensor.garage_solare_termico_boiler_basso` |
 | Boiler alto / basso, corretti (S3 / S2) | `sensor.boiler_solare_alto_stimato`, `sensor.boiler_solare_basso_stimato` |
 | Media, stratificazione, energia, acqua equivalente | `sensor.boiler_solare_temperatura_media`, `..._stratificazione`, `..._energia_accumulata`, `..._acqua_calda_equivalente` |
-| Sonde nuove (7/10/2026) | Sonde ESP32 più piccole su S3 e S2: k = 1, correzione fissa +4 °C (S3 della centralina sopra la sonda alta) e +3 °C (S2 sopra la bassa), punti di taratura azzerati (automazione v5 in `boiler_solare.yaml`). Letture di conferma: alto 50,1 → 54,1 °C, basso 20,4 → 23,4 °C. Per affinare, registrare nuovi punti con la scheda di taratura a temperature diverse. |
-| Curva di taratura (si adatta da sola) | `sensor.boiler_solare_curva_sonda_alta` / `..._bassa` (attributi `a`, `b`, `punti`), `input_text.boiler_cal_punti_alto` / `..._basso`, `input_number.boiler_cal_s3` / `..._s2`, script `boiler_cal_registra_*` e `boiler_cal_annulla_*` (scheda: `examples/taratura.yaml`) |
-| Modello di partenza (usato con meno di 3 punti) | `input_number.boiler_solare_t_ambiente` (16), `..._k_alto` (0,766), `..._k_basso` (0,73); `..._delta_alto` / `..._delta_basso` (0) per ritocchi fini |
+| Correzione fissa delle sonde (dal 7/10/2026) | `input_number.boiler_solare_delta_alto` (+4 °C) e `..._delta_basso` (+3 °C): alto 50,1 → 54,1 °C, basso 20,4 → 23,4 °C alla conferma. |
 | Stato e puffer della Polygon | `sensor.casale_stato`, `sensor.casale_temperatura_boiler` (= puffer da 50 L), `sensor.casale_temperatura_acqua` |
 | Accensione / spegnimento | `climate.casale_acqua` (heat / off) |
 | Bluetooth locale della Polygon (8/10/2026) | Integrazione Micronova in modo `connection_bluetooth` con lingua **ENG** (con ITA gli stati arrivano come SPENTO/LAVORO/AVVIO e le regole in inglese non scattano). Modulo della stufa `T009_BFDA9C` (34:86:5D:BF:DA:9E). Proxy: ESP32-C3 SuperMini `ble-proxy-stufa` (192.168.178.29, config `esphome/ble-proxy-stufa.yaml`), segnale −62/−69 dBm; il proxy sull'ESP32 del solare e' stato tolto (segnale peggiore, errore GATT 133). Nessun ripiego automatico sul cloud: se il Bluetooth cade le entita' della caldaia diventano non disponibili e subentra solo la stima del puffer dalla sonda. Aggiornamento ogni 60 s: connessione di 8-10 s e disconnessione (`reason=0x16`, normale). Tornare al cloud: opzioni integrazione, Modalita' di connessione. |
