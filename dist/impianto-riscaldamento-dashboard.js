@@ -2481,6 +2481,24 @@ function solarLine(i5) {
     return { icon: "mdi:weather-sunny-off", text: `Il solare \xE8 fermo (collettore a ${fmt(i5.collector)} \xB0C).`, tone: "info" };
   return null;
 }
+function sunLine(i5) {
+  if (i5.sunElevation !== null && i5.sunElevation > 0 && i5.sunAboveHorizon === false) {
+    const h3 = i5.horizonElev !== null ? ` (da quella parte il terreno arriva a ${fmt(i5.horizonElev)}\xB0)` : "";
+    return { icon: "mdi:image-filter-hdr", text: `Il sole \xE8 dietro le colline${h3}: niente luce diretta sul collettore.`, tone: "info" };
+  }
+  if (i5.allskyOk !== true || i5.sunFree === null || i5.allskyCloud === null) return null;
+  const c4 = `${fmt(i5.allskyCloud)} %`;
+  if (i5.sunFree && i5.allskyCloud >= 50)
+    return {
+      icon: "mdi:weather-partly-cloudy",
+      text: `Cielo molto nuvoloso (${c4}) ma il sole \xE8 libero: il collettore lavora con luce diretta. La temperatura esterna pu\xF2 calare lo stesso.`,
+      tone: "ok"
+    };
+  if (i5.sunFree) return { icon: "mdi:white-balance-sunny", text: `Il sole \xE8 libero (nuvolosit\xE0 ${c4}).`, tone: "ok" };
+  if (i5.allskyCloud < 30)
+    return { icon: "mdi:weather-sunny-off", text: `Poche nuvole (${c4}), ma una copre il sole: il collettore rende meno.`, tone: "warn" };
+  return { icon: "mdi:weather-cloudy", text: `Il sole \xE8 coperto (nuvolosit\xE0 ${c4}): il collettore riceve solo luce diffusa.`, tone: "info" };
+}
 function awayLine(i5) {
   if (i5.guests) return { icon: "mdi:account-multiple", text: "Modalit\xE0 ospiti: la caldaia non si spegne per assenza.", tone: "info" };
   if (i5.nobodyHome !== true) return null;
@@ -2506,7 +2524,7 @@ function summarize(i5) {
   if (i5.pelletEmpty) lines.push({ icon: "mdi:grain", text: "Pellet esaurito: ricarica il serbatoio.", tone: "bad" });
   else if (i5.pelletReserve) lines.push({ icon: "mdi:grain", text: "Il pellet sta per finire.", tone: "warn" });
   lines.push(stoveLine(i5));
-  for (const l3 of [whyOffLine(i5), pumpLine(i5), solarLine(i5), awayLine(i5)]) if (l3) lines.push(l3);
+  for (const l3 of [whyOffLine(i5), pumpLine(i5), solarLine(i5), sunLine(i5), awayLine(i5)]) if (l3) lines.push(l3);
   if (i5.etaMinutes !== null) {
     lines.push(
       i5.etaMinutes > 0 ? { icon: "mdi:water-boiler", text: `L'acqua calda sar\xE0 pronta tra circa ${fmt(i5.etaMinutes)} min.`, tone: "info" } : { icon: "mdi:water-boiler", text: "L'acqua calda \xE8 gi\xE0 a temperatura d'uso.", tone: "ok" }
@@ -2576,6 +2594,11 @@ var DEFAULT_ENTITIES = {
   irr_station_corrected: "sensor.irraggiamento_stazione_corretto",
   allsky_irradiance: "sensor.allsky_irraggiamento_stimato",
   allsky_cloud: "sensor.allsky_copertura_equivalente",
+  allsky_sun_free: "binary_sensor.allsky_sole_libero",
+  allsky_analysis: "sensor.allsky_analisi",
+  sun_above_horizon: "binary_sensor.sole_sopra_l_orizzonte",
+  horizon_elevation: "sensor.sole_elevazione_orizzonte",
+  sun: "sun.sun",
   crono_master: "switch.casale_cronotermostato_settimanale",
   program_active: "binary_sensor.caldaia_programma_attivo_ora",
   away: "binary_sensor.caldaia_nessuno_in_casa",
@@ -3097,7 +3120,13 @@ var ImpiantoOverviewCard = class extends i4 {
       guests: this._yes(e5.away_guests),
       awayMinutes: this._n(e5.away_minutes),
       pelletEmpty: this._yes(e5.pellet_empty),
-      pelletReserve: this._yes(e5.pellet_reserve)
+      pelletReserve: this._yes(e5.pellet_reserve),
+      allskyOk: this.hass.states[e5.allsky_analysis]?.attributes?.ok === true ? true : this.hass.states[e5.allsky_analysis] ? false : null,
+      sunFree: this._yes(e5.allsky_sun_free),
+      allskyCloud: this._n(e5.allsky_cloud),
+      sunAboveHorizon: this._yes(e5.sun_above_horizon),
+      horizonElev: this._n(e5.horizon_elevation),
+      sunElevation: toNumber(String(this.hass.states[e5.sun]?.attributes?.elevation ?? ""))
     });
   }
   /** Apre la finestra "Grafici" (storico dei valori principali). */
@@ -4912,7 +4941,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.3.19";
+var VERSION = "0.3.20";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

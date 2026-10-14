@@ -1,0 +1,73 @@
+# Orizzonte reale visto dall'allsky: dove il terreno (colline, alberi, edifici) nasconde il sole.
+#
+# Il profilo e' l'elevazione minima con cielo libero ogni 3 gradi di azimut (0 = nord, 90 = est), ricavato dalla maschera degli
+# ostacoli dell'allsky (allsky/horizon_profile.json). Nelle direzioni sud-ovest (210-250 gradi) arriva a 7-11 gradi: in autunno e
+# in inverno il sole sparisce 25-60 minuti prima del tramonto astronomico, proprio quando il collettore a ovest rende di piu'.
+#
+#  - sensor.sole_orizzonte_profilo: il profilo (attributo "profilo", 120 valori), usato dai calcoli della previsione;
+#  - binary_sensor.sole_sopra_l_orizzonte: acceso quando il sole e' sopra il terreno, quindi con luce diretta possibile;
+#  - sensor.sole_elevazione_orizzonte: elevazione del terreno nella direzione del sole adesso;
+#  - input_boolean.solare_orizzonte_attivo: spento, la previsione del pannello e l'energia prevista ignorano il terreno.
+
+input_boolean:
+  solare_orizzonte_attivo:
+    name: Solare - tieni conto dell'orizzonte nelle previsioni
+    icon: mdi:image-filter-hdr
+  solare_orizzonte_defaults_impostati:
+    name: Solare - orizzonte, valori iniziali impostati
+    icon: mdi:check
+
+template:
+  - sensor:
+      - name: Sole orizzonte profilo
+        unique_id: sole_orizzonte_profilo
+        icon: mdi:image-filter-hdr
+        state: "120"
+        attributes:
+          passo_gradi: 3
+          profilo: >
+            {% set p = [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+            0, 0, 0, 0, 7.5, 0, 0, 0, 0.5, 0.5, 1.5, 2,
+            2, 2.5, 3, 3.5, 3.5, 3.5, 3.5, 3.5, 3.5, 3.5, 3, 3,
+            2.5, 2.5, 2, 2, 3, 2.5, 2.5, 12, 1, 0, 0, 0,
+            0, 2, 2.5, 3.5, 3.5, 5.5, 5, 4.5, 4, 4, 3.5, 3,
+            3, 3.5, 2.5, 3, 3, 3.5, 2.5, 5.5, 9, 11, 11, 11,
+            10.5, 10, 8, 7.5, 6.5, 3, 2, 7, 9.5, 11, 10.5, 10,
+            7.5, 5, 5, 5, 2.5, 1, 1, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ] %}{{ p }}
+
+      - name: Sole elevazione orizzonte
+        unique_id: sole_elevazione_orizzonte
+        unit_of_measurement: °
+        icon: mdi:angle-acute
+        availability: >
+          {{ state_attr('sensor.sole_orizzonte_profilo', 'profilo') is not none and is_number(state_attr('sun.sun', 'azimuth')) }}
+        state: >
+          {% set p = state_attr('sensor.sole_orizzonte_profilo', 'profilo') %}
+          {{ p[((state_attr('sun.sun', 'azimuth') | float(0) / 3) | round(0) | int) % 120] }}
+
+  - binary_sensor:
+      - name: Sole sopra l'orizzonte
+        unique_id: sole_sopra_orizzonte
+        icon: mdi:weather-sunset
+        availability: "{{ is_number(states('sensor.sole_elevazione_orizzonte')) and is_number(state_attr('sun.sun', 'elevation')) }}"
+        state: "{{ state_attr('sun.sun', 'elevation') | float(-90) > states('sensor.sole_elevazione_orizzonte') | float(0) }}"
+
+automation:
+  - id: solare_orizzonte_valori_iniziali
+    alias: Solare - orizzonte, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.solare_orizzonte_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.solare_orizzonte_attivo}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.solare_orizzonte_defaults_impostati}

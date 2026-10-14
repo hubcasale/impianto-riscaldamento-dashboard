@@ -1,5 +1,5 @@
 import math
-def gclear(h, noon, lat, N, tilt, orient, fattore=1.0):
+def gclear(h, noon, lat, N, tilt, orient, fattore=1.0, prof=None):
     rad=math.pi/180
     dec=23.45*math.sin(2*math.pi*(284+N)/365)*rad
     phi=lat*rad; beta=tilt*rad; gam=(orient-180)*rad
@@ -10,9 +10,12 @@ def gclear(h, noon, lat, N, tilt, orient, fattore=1.0):
     ct=(math.sin(dec)*math.sin(phi)*math.cos(beta)-math.sin(dec)*math.cos(phi)*math.sin(beta)*math.cos(gam)
         +math.cos(dec)*math.cos(phi)*math.cos(beta)*math.cos(w)+math.cos(dec)*math.sin(phi)*math.sin(beta)*math.cos(gam)*math.cos(w)
         +math.cos(dec)*math.sin(beta)*math.sin(gam)*math.sin(w))
+    if prof:
+        azs=(math.degrees(math.atan2(math.sin(w),math.cos(w)*math.sin(phi)-math.tan(dec)*math.cos(phi)))+180)%360
+        if math.degrees(math.asin(se))<prof[int(round(azs/3.0))%120]: ct=0
     return (dni*max(ct,0)+0.1*dni*(1+math.cos(beta))/2)*fattore
-def simulate(ore, now_h, t0, noon, lat, N, tilt=35, orient=180, k=0.07, tau=150, t_ext_now=None, g_obs=None, fattore=1.0):
-    gcn=gclear(now_h,noon,lat,N,tilt,orient,fattore)
+def simulate(ore, now_h, t0, noon, lat, N, tilt=35, orient=180, k=0.07, tau=150, t_ext_now=None, g_obs=None, fattore=1.0, prof=None):
+    gcn=gclear(now_h,noon,lat,N,tilt,orient,fattore,prof)
     kt_obs=min(1.1,max(0,g_obs/gcn)) if (g_obs is not None and gcn>150) else None
     bias=0
     if t_ext_now is not None:
@@ -21,7 +24,7 @@ def simulate(ore, now_h, t0, noon, lat, N, tilt=35, orient=180, k=0.07, tau=150,
     for o in ore:
         if o['h']<=now_h: continue
         dt=o['h']-prev; prev=o['h']
-        g=gclear(o['h'],noon,lat,N,tilt,orient,fattore)
+        g=gclear(o['h'],noon,lat,N,tilt,orient,fattore,prof)
         ktf=1-0.75*(o['n']/100)**3.4
         if kt_obs is not None:
             wgt=math.exp(-(o['h']-now_h)/2); kt=ktf+(kt_obs-ktf)*wgt

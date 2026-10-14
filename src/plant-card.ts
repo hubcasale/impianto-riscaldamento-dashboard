@@ -96,6 +96,12 @@ export interface PlantEntities {
   irr_station_corrected: string;
   allsky_irradiance: string;
   allsky_cloud: string;
+  /** sole: libero dalle nuvole (allsky), analisi dell'allsky, sopra il terreno, elevazione del terreno e posizione del sole */
+  allsky_sun_free: string;
+  allsky_analysis: string;
+  sun_above_horizon: string;
+  horizon_elevation: string;
+  sun: string;
   /** cronotermostato settimanale acceso e programma attivo adesso */
   crono_master: string;
   program_active: string;
@@ -166,6 +172,11 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   irr_station_corrected: "sensor.irraggiamento_stazione_corretto",
   allsky_irradiance: "sensor.allsky_irraggiamento_stimato",
   allsky_cloud: "sensor.allsky_copertura_equivalente",
+  allsky_sun_free: "binary_sensor.allsky_sole_libero",
+  allsky_analysis: "sensor.allsky_analisi",
+  sun_above_horizon: "binary_sensor.sole_sopra_l_orizzonte",
+  horizon_elevation: "sensor.sole_elevazione_orizzonte",
+  sun: "sun.sun",
   crono_master: "switch.casale_cronotermostato_settimanale",
   program_active: "binary_sensor.caldaia_programma_attivo_ora",
   away: "binary_sensor.caldaia_nessuno_in_casa",
@@ -785,6 +796,12 @@ export class ImpiantoOverviewCard extends LitElement {
       awayMinutes: this._n(e.away_minutes),
       pelletEmpty: this._yes(e.pellet_empty),
       pelletReserve: this._yes(e.pellet_reserve),
+      allskyOk: this.hass.states[e.allsky_analysis]?.attributes?.ok === true ? true : this.hass.states[e.allsky_analysis] ? false : null,
+      sunFree: this._yes(e.allsky_sun_free),
+      allskyCloud: this._n(e.allsky_cloud),
+      sunAboveHorizon: this._yes(e.sun_above_horizon),
+      horizonElev: this._n(e.horizon_elevation),
+      sunElevation: toNumber(String(this.hass.states[e.sun]?.attributes?.elevation ?? "")),
     });
   }
 

@@ -135,6 +135,69 @@ template:
           {% for i in range(h.time | length) %}{% if h.time[i][:10] == d %}{% set ns.s = ns.s + ((h.global_tilted_irradiance[i] or 0) | float(0)) %}{% endif %}{% endfor %}
           {{ (ns.s / 1000) | round(2) }}
 
+      # ---- previsione con l'orizzonte reale: dove il terreno nasconde il sole si toglie la quota diretta (direct/shortwave) di quell'ora
+      - name: Open-Meteo energia prevista oggi con orizzonte
+        unique_id: open_meteo_energia_prevista_oggi_orizzonte
+        unit_of_measurement: kWh/m²
+        state_class: measurement
+        icon: mdi:image-filter-hdr
+        availability: "{{ state_attr('sensor.open_meteo_previsione', 'hourly') is mapping }}"
+        state: >
+          {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+          {% set prof = state_attr('sensor.sole_orizzonte_profilo', 'profilo') if is_state('input_boolean.solare_orizzonte_attivo', 'on') else none %}
+          {% set giorno = now().strftime('%Y-%m-%d') %}
+          {% set noon = state_attr('sensor.solare_previsione_oraria', 'mezzogiorno') | float(13.1) %}
+          {% set lat = state_attr('zone.home', 'latitude') | float(43.1) %}
+          {% set rad = pi / 180 %}
+          {% set N = (now() + timedelta(days=0)).timetuple().tm_yday %}
+          {% set dec = 23.45 * sin(2 * pi * (284 + N) / 365) * rad %}
+          {% set phi = lat * rad %}
+          {% set ns = namespace(s=0) %}
+          {% for i in range(h.time | length) if h.time[i][:10] == giorno %}
+            {% set gti = (h.global_tilted_irradiance[i] or 0) | float(0) %}
+            {% set hh = h.time[i][11:13] | int - 0.5 %}
+            {% set w = (hh - noon) * 15 * rad %}
+            {% set se = sin(phi) * sin(dec) + cos(phi) * cos(dec) * cos(w) %}
+            {% set sw = (h.shortwave_radiation[i] or 0) | float(0) %}
+            {% set dr = (h.direct_radiation[i] or 0) | float(0) %}
+            {% set quota = ([[dr / sw, 0] | max, 1] | min) if sw > 5 else 0 %}
+            {% set azs = (atan2(sin(w), cos(w) * sin(phi) - tan(dec) * cos(phi)) / rad + 180) % 360 %}
+            {% set nascosto = prof and se > 0 and (asin(se) / rad) < prof[((azs / 3) | round(0) | int) % 120] %}
+            {% set ns.s = ns.s + (gti * (1 - quota) if nascosto else gti) %}
+          {% endfor %}
+          {{ (ns.s / 1000) | round(2) }}
+
+      - name: Open-Meteo energia prevista domani con orizzonte
+        unique_id: open_meteo_energia_prevista_domani_orizzonte
+        unit_of_measurement: kWh/m²
+        state_class: measurement
+        icon: mdi:image-filter-hdr
+        availability: "{{ state_attr('sensor.open_meteo_previsione', 'hourly') is mapping }}"
+        state: >
+          {% set h = state_attr('sensor.open_meteo_previsione', 'hourly') %}
+          {% set prof = state_attr('sensor.sole_orizzonte_profilo', 'profilo') if is_state('input_boolean.solare_orizzonte_attivo', 'on') else none %}
+          {% set giorno = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
+          {% set noon = state_attr('sensor.solare_previsione_oraria', 'mezzogiorno') | float(13.1) %}
+          {% set lat = state_attr('zone.home', 'latitude') | float(43.1) %}
+          {% set rad = pi / 180 %}
+          {% set N = (now() + timedelta(days=1)).timetuple().tm_yday %}
+          {% set dec = 23.45 * sin(2 * pi * (284 + N) / 365) * rad %}
+          {% set phi = lat * rad %}
+          {% set ns = namespace(s=0) %}
+          {% for i in range(h.time | length) if h.time[i][:10] == giorno %}
+            {% set gti = (h.global_tilted_irradiance[i] or 0) | float(0) %}
+            {% set hh = h.time[i][11:13] | int - 0.5 %}
+            {% set w = (hh - noon) * 15 * rad %}
+            {% set se = sin(phi) * sin(dec) + cos(phi) * cos(dec) * cos(w) %}
+            {% set sw = (h.shortwave_radiation[i] or 0) | float(0) %}
+            {% set dr = (h.direct_radiation[i] or 0) | float(0) %}
+            {% set quota = ([[dr / sw, 0] | max, 1] | min) if sw > 5 else 0 %}
+            {% set azs = (atan2(sin(w), cos(w) * sin(phi) - tan(dec) * cos(phi)) / rad + 180) % 360 %}
+            {% set nascosto = prof and se > 0 and (asin(se) / rad) < prof[((azs / 3) | round(0) | int) % 120] %}
+            {% set ns.s = ns.s + (gti * (1 - quota) if nascosto else gti) %}
+          {% endfor %}
+          {{ (ns.s / 1000) | round(2) }}
+
       # ---- satellite: ultima ora osservata ed energia osservata oggi --------------------------------------------------
       - name: Open-Meteo irraggiamento osservato dal satellite
         unique_id: open_meteo_gti_satellite

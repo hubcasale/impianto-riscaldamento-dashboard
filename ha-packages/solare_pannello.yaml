@@ -143,6 +143,8 @@ template:
           {% set rad = pi / 180 %}
           {% set dec = 23.45 * sin(2 * pi * (284 + N) / 365) * rad %}
           {% set phi = lat * rad %}{% set beta = tilt * rad %}{% set gam = (orient - 180) * rad %}
+          {# orizzonte reale (allsky): dove il terreno nasconde il sole il contributo diretto e' zero, resta il diffuso #}
+          {% set prof = state_attr('sensor.sole_orizzonte_profilo', 'profilo') if is_state('input_boolean.solare_orizzonte_attivo', 'on') else none %}
           {% macro gcl(h) -%}
             {%- set w = (h - noon) * 15 * rad -%}
             {%- set se = sin(phi) * sin(dec) + cos(phi) * cos(dec) * cos(w) -%}
@@ -151,6 +153,10 @@ template:
               {%- set ct = sin(dec) * sin(phi) * cos(beta) - sin(dec) * cos(phi) * sin(beta) * cos(gam)
                            + cos(dec) * cos(phi) * cos(beta) * cos(w) + cos(dec) * sin(phi) * sin(beta) * cos(gam) * cos(w)
                            + cos(dec) * sin(beta) * sin(gam) * sin(w) -%}
+              {%- if prof -%}
+                {%- set azs = (atan2(sin(w), cos(w) * sin(phi) - tan(dec) * cos(phi)) / rad + 180) % 360 -%}
+                {%- set ct = 0 if (asin(se) / rad) < prof[((azs / 3) | round(0) | int) % 120] else ct -%}
+              {%- endif -%}
               {{- ((dni * ([ct, 0] | max) + 0.1 * dni * (1 + cos(beta)) / 2) * fs) | round(2) -}}
             {%- else -%}0{%- endif -%}
           {%- endmacro %}

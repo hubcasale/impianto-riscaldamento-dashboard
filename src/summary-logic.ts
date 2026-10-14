@@ -46,6 +46,18 @@ export interface SummaryInput {
   awayMinutes: number | null;
   pelletEmpty: boolean | null;
   pelletReserve: boolean | null;
+  /** foto dell'allsky analizzata (null = non disponibile, per esempio di notte) */
+  allskyOk: boolean | null;
+  /** il disco del sole e' libero dalle nuvole (dalla foto) */
+  sunFree: boolean | null;
+  /** copertura nuvolosa equivalente in % (dalla foto) */
+  allskyCloud: number | null;
+  /** il sole e' sopra il terreno (colline, alberi) e puo' dare luce diretta */
+  sunAboveHorizon: boolean | null;
+  /** elevazione del terreno nella direzione del sole, gradi */
+  horizonElev: number | null;
+  /** elevazione del sole, gradi */
+  sunElevation: number | null;
 }
 
 const OFF_STATES = ["OFF", "SPENTO", "STOP", "ARRESTO", "UNKNOWN", "UNAVAILABLE", ""];
@@ -126,6 +138,26 @@ function solarLine(i: SummaryInput): SummaryLine | null {
   return null;
 }
 
+/** Il sole e le nuvole: dietro il terreno, libero con cielo nuvoloso, coperto o libero con cielo sereno. */
+function sunLine(i: SummaryInput): SummaryLine | null {
+  if (i.sunElevation !== null && i.sunElevation > 0 && i.sunAboveHorizon === false) {
+    const h = i.horizonElev !== null ? ` (da quella parte il terreno arriva a ${fmt(i.horizonElev)}°)` : "";
+    return { icon: "mdi:image-filter-hdr", text: `Il sole è dietro le colline${h}: niente luce diretta sul collettore.`, tone: "info" };
+  }
+  if (i.allskyOk !== true || i.sunFree === null || i.allskyCloud === null) return null;
+  const c = `${fmt(i.allskyCloud)} %`;
+  if (i.sunFree && i.allskyCloud >= 50)
+    return {
+      icon: "mdi:weather-partly-cloudy",
+      text: `Cielo molto nuvoloso (${c}) ma il sole è libero: il collettore lavora con luce diretta. La temperatura esterna può calare lo stesso.`,
+      tone: "ok",
+    };
+  if (i.sunFree) return { icon: "mdi:white-balance-sunny", text: `Il sole è libero (nuvolosità ${c}).`, tone: "ok" };
+  if (i.allskyCloud < 30)
+    return { icon: "mdi:weather-sunny-off", text: `Poche nuvole (${c}), ma una copre il sole: il collettore rende meno.`, tone: "warn" };
+  return { icon: "mdi:weather-cloudy", text: `Il sole è coperto (nuvolosità ${c}): il collettore riceve solo luce diffusa.`, tone: "info" };
+}
+
 function awayLine(i: SummaryInput): SummaryLine | null {
   if (i.guests) return { icon: "mdi:account-multiple", text: "Modalità ospiti: la caldaia non si spegne per assenza.", tone: "info" };
   if (i.nobodyHome !== true) return null;
@@ -154,7 +186,7 @@ export function summarize(i: SummaryInput): SummaryLine[] {
   else if (i.pelletReserve) lines.push({ icon: "mdi:grain", text: "Il pellet sta per finire.", tone: "warn" });
 
   lines.push(stoveLine(i));
-  for (const l of [whyOffLine(i), pumpLine(i), solarLine(i), awayLine(i)]) if (l) lines.push(l);
+  for (const l of [whyOffLine(i), pumpLine(i), solarLine(i), sunLine(i), awayLine(i)]) if (l) lines.push(l);
 
   if (i.etaMinutes !== null) {
     lines.push(

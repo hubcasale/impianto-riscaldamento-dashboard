@@ -27,6 +27,12 @@ const base: SummaryInput = {
   awayMinutes: 60,
   pelletEmpty: false,
   pelletReserve: false,
+  allskyOk: true,
+  sunFree: true,
+  allskyCloud: 20,
+  sunAboveHorizon: true,
+  horizonElev: 3,
+  sunElevation: 35,
 };
 const texts = (i: Partial<SummaryInput>) => summarize({ ...base, ...i }).map((l) => l.text);
 const joined = (i: Partial<SummaryInput>) => texts(i).join(" | ");
@@ -105,4 +111,34 @@ test("riepilogo: acqua calda", () => {
   assert.match(joined({ etaMinutes: 35 }), /pronta tra circa 35 min/);
   assert.match(joined({ etaMinutes: 0 }), /già a temperatura d'uso/);
   assert.doesNotMatch(joined({ etaMinutes: null }), /acqua calda/i);
+});
+
+test("riepilogo sole: molte nuvole ma il sole e' libero, il collettore lavora", () => {
+  const t = joined({ allskyCloud: 80, sunFree: true });
+  assert.match(t, /molto nuvoloso \(80 %\) ma il sole è libero.*collettore lavora/);
+  assert.match(t, /temperatura esterna può calare/);
+});
+
+test("riepilogo sole: sole libero con poche nuvole", () => {
+  assert.match(joined({ allskyCloud: 15, sunFree: true }), /Il sole è libero \(nuvolosità 15 %\)/);
+});
+
+test("riepilogo sole: poche nuvole ma una copre il sole", () => {
+  assert.match(joined({ allskyCloud: 20, sunFree: false }), /Poche nuvole \(20 %\), ma una copre il sole/);
+});
+
+test("riepilogo sole: coperto, solo luce diffusa", () => {
+  assert.match(joined({ allskyCloud: 90, sunFree: false }), /sole è coperto.*luce diffusa/);
+});
+
+test("riepilogo sole: dietro le colline", () => {
+  const t = joined({ sunAboveHorizon: false, sunElevation: 6, horizonElev: 9.5 });
+  assert.match(t, /dietro le colline \(da quella parte il terreno arriva a 10°\).*niente luce diretta/);
+  assert.doesNotMatch(t, /sole è libero/);
+});
+
+test("riepilogo sole: di notte o senza foto non dice niente sul sole", () => {
+  assert.doesNotMatch(joined({ allskyOk: false }), /sole è (libero|coperto)|Poche nuvole|molto nuvoloso/);
+  assert.doesNotMatch(joined({ allskyOk: null, sunFree: null }), /sole è (libero|coperto)/);
+  assert.doesNotMatch(joined({ sunElevation: -5, sunAboveHorizon: false, allskyOk: false }), /colline/);
 });

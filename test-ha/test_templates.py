@@ -40,7 +40,7 @@ def make_env(states, attrs, now, changed=None):
     import math
     env.filters['as_datetime'] = lambda v, d=None: dt.datetime.fromisoformat(v) if isinstance(v, str) else d
     env.filters['as_local'] = lambda v: v
-    env.globals.update(sin=math.sin, cos=math.cos, tan=math.tan, sqrt=math.sqrt, pi=math.pi, e=math.e)
+    env.globals.update(sin=math.sin, cos=math.cos, tan=math.tan, sqrt=math.sqrt, pi=math.pi, e=math.e, asin=math.asin, acos=math.acos, atan=math.atan, atan2=math.atan2)
     class _Dom:
         def __init__(self, dom): self._d = dom
         def __getattr__(self, name):
@@ -448,6 +448,81 @@ check("allsky: stato dell'analisi ok", render(vt, {}, extra={"value_json": _V(ok
 check("allsky: stato dell'analisi con il motivo", render(vt, {}, extra={"value_json": _V(ok=False, motivo="sole basso")}), "sole basso")
 check("allsky: copertura numerica dalla analisi", render(find_in("sensor", "AllSky copertura equivalente", AS)["state"], {}, attrs=a({"copertura_eq": 42.5})), "42.5")
 check("allsky: copertura non disponibile se l'analisi non e' ok", render(find_in("sensor", "AllSky copertura equivalente", AS)["availability"], {}, attrs=a({"ok": False})), "False")
+
+# ---- orizzonte reale: la previsione del pannello ignora il contributo diretto quando il terreno nasconde il sole
+import json as _json
+PROF = _json.load(open("allsky/horizon_profile.json"))["elevazione_orizzonte"]
+ORZ = yaml.safe_load(open("ha-packages/solare_orizzonte.yaml"))
+check("orizzonte: il profilo del pacchetto coincide con il file", [float(x) for x in eval(render(ORZ["template"][0]["sensor"][0]["attributes"]["profilo"], {}))] == [float(x) for x in PROF], True)
+def massima_orz(n, attivo=True, now_h=7.5, t0=17.0, oss=17.0, profilo=PROF):
+    ore = [{"h": h, "oggi": True, "t": (16 + 10 * _m.sin(_m.pi * (h - 7) / 12)) if 7 < h < 19 else 16, "u": 60.0, "n": n} for h in range(7, 20)]
+    stati = {"sensor.solare_termico_t_collettore_stimata": str(t0), "sensor.solare_pannello_massima_oggi": str(oss),
+             "sensor.solare_termico_irraggiamento_sul_piano": "0", "sensor.temperatura_esterna_2_decimali": "17",
+             "input_number.solare_termico_inclinazione": "22", "input_number.solare_termico_orientamento": "270",
+             "input_number.solare_termico_k": "0.07", "input_number.solare_termico_tau": "150", "input_number.solare_pannello_fattore_sereno": "1",
+             "input_boolean.solare_orizzonte_attivo": "on" if attivo else "off"}
+    attrs = {("sensor.solare_previsione_oraria", "ore"): ore, ("sensor.solare_previsione_oraria", "mezzogiorno"): 13.1, ("zone.home", "latitude"): 43.11,
+             ("sensor.sole_orizzonte_profilo", "profilo"): profilo}
+    now_ = dt.datetime(2026, 10, 14, int(now_h), int(round((now_h % 1) * 60)))
+    got = float(render(max_tpl, stati, attrs, now_))
+    exp, _, _, _ = _sim(ore, now_h, t0, 13.1, 43.11, 287, tilt=22, orient=270, t_ext_now=17.0, prof=profilo if attivo else None)
+    return got, max(exp, oss)
+for nome, n in (("sereno", 5), ("variabile", 50)):
+    got, exp = massima_orz(n)
+    check(f"orizzonte: massima prevista {nome} come il modello Python con il terreno (+-0,6)", abs(got - exp) <= 0.6, True)
+con, _ = massima_orz(5, attivo=True)
+senza, _ = massima_orz(5, attivo=False)
+check("orizzonte: spento, la massima e' uguale o piu' alta (il terreno toglie sole)", senza >= con, True)
+muro = [90.0] * 120   # terreno altissimo: nessun contributo diretto, solo il diffuso
+c2, _ = massima_orz(5, attivo=True, profilo=muro)
+check("orizzonte: con il sole sempre nascosto la massima crolla", c2 < con - 5, True)
+check("orizzonte: interruttore spento ignora il profilo", abs(massima_orz(5, attivo=False, profilo=muro)[0] - senza) < 0.01, True)
+
+# ---- energia prevista con l'orizzonte (Open-Meteo)
+def en_orz(nome, now, profilo, attivo=True, giorno_off=0):
+    stati = {"input_boolean.solare_orizzonte_attivo": "on" if attivo else "off"}
+    at = {("sensor.open_meteo_previsione", "hourly"): FC, ("sensor.sole_orizzonte_profilo", "profilo"): profilo,
+          ("sensor.solare_previsione_oraria", "mezzogiorno"): 13.1, ("zone.home", "latitude"): 43.11}
+    return float(render(find("sensor", nome, OM)["state"], stati, attrs=at, now=now))
+def rif_orz(giorno, now, profilo):
+    rad = _m.pi / 180; N = now.timetuple().tm_yday + (1 if giorno != now.strftime("%Y-%m-%d") else 0)
+    dec = 23.45 * _m.sin(2 * _m.pi * (284 + N) / 365) * rad; phi = 43.11 * rad; tot = 0.0
+    for t, g, sw, dr in zip(FC["time"], FC["global_tilted_irradiance"], FC["shortwave_radiation"], FC["direct_radiation"]):
+        if not t.startswith(giorno): continue
+        g = g or 0; w = (int(t[11:13]) - 0.5 - 13.1) * 15 * rad
+        se = _m.sin(phi) * _m.sin(dec) + _m.cos(phi) * _m.cos(dec) * _m.cos(w)
+        quota = min(max((dr or 0) / sw, 0), 1) if (sw or 0) > 5 else 0
+        azs = (_m.degrees(_m.atan2(_m.sin(w), _m.cos(w) * _m.sin(phi) - _m.tan(dec) * _m.cos(phi))) + 180) % 360
+        nasc = profilo and se > 0 and _m.degrees(_m.asin(se)) < profilo[int(round(azs / 3.0)) % 120]
+        tot += g * (1 - quota) if nasc else g
+    return round(tot / 1000, 2)
+TT = dt.datetime(2026, 10, 12, 12, 40)
+raw_oggi = float(om("Open-Meteo energia prevista oggi", TT))
+check("orizzonte: energia prevista oggi, come il calcolo di riferimento", en_orz("Open-Meteo energia prevista oggi con orizzonte", TT, PROF), rif_orz("2026-10-12", TT, PROF))
+check("orizzonte: energia prevista domani, come il calcolo di riferimento", en_orz("Open-Meteo energia prevista domani con orizzonte", TT, PROF), rif_orz("2026-10-13", TT, PROF))
+check("orizzonte: con il terreno l'energia e' uguale o minore", en_orz("Open-Meteo energia prevista oggi con orizzonte", TT, PROF) <= raw_oggi, True)
+check("orizzonte: interruttore spento, energia uguale a quella senza terreno", en_orz("Open-Meteo energia prevista oggi con orizzonte", TT, PROF, attivo=False), raw_oggi)
+check("orizzonte: terreno altissimo, resta solo il diffuso (energia molto minore)", en_orz("Open-Meteo energia prevista oggi con orizzonte", TT, [90.0] * 120) < raw_oggi * 0.8, True)
+check("orizzonte: senza profilo non toglie niente", en_orz("Open-Meteo energia prevista oggi con orizzonte", TT, None), raw_oggi)
+
+# ---- sensori dell'orizzonte (sole.sun)
+def orz_sensor(dom, nome):
+    for item in ORZ["template"]:
+        for e_ in item.get(dom, []):
+            if e_["name"] == nome: return e_
+    raise KeyError(nome)
+el_t = orz_sensor("sensor", "Sole elevazione orizzonte")["state"]
+so_t = orz_sensor("binary_sensor", "Sole sopra l'orizzonte")["state"]
+def sun_at(az, el, hor):
+    at = {("sensor.sole_orizzonte_profilo", "profilo"): PROF, ("sun.sun", "azimuth"): az, ("sun.sun", "elevation"): el}
+    stati = {"sensor.sole_elevazione_orizzonte": str(hor)}
+    return render(el_t, {}, attrs=at), render(so_t, stati, attrs=at)
+e1, b1 = sun_at(240.0, 20.0, 9.5)
+check("orizzonte: elevazione del terreno verso 240 gradi", float(e1), PROF[80])
+check("orizzonte: sole a 20 gradi verso sud-ovest e' visibile", b1, "True")
+check("orizzonte: sole a 5 gradi verso 240 gradi e' dietro il terreno", sun_at(240.0, 5.0, PROF[80])[1], "False")
+check("orizzonte: sole a 2 gradi a nord e' visibile (orizzonte libero)", sun_at(0.0, 2.0, 0)[1], "True")
+check("orizzonte: azimut 359 usa l'ultimo punto del profilo (non esce dall'elenco)", float(sun_at(359.0, 10.0, 0)[0]), PROF[0])
 
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)
