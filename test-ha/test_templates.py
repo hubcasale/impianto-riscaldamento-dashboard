@@ -524,5 +524,45 @@ check("orizzonte: sole a 5 gradi verso 240 gradi e' dietro il terreno", sun_at(2
 check("orizzonte: sole a 2 gradi a nord e' visibile (orizzonte libero)", sun_at(0.0, 2.0, 0)[1], "True")
 check("orizzonte: azimut 359 usa l'ultimo punto del profilo (non esce dall'elenco)", float(sun_at(359.0, 10.0, 0)[0]), PROF[0])
 
+# ---------------------------------------------------------------- collettore stimato: curva a piena precisione (non ferma a gradini)
+ST = yaml.safe_load(open("ha-packages/solare_termico.yaml"))
+TR = next(t for t in ST["template"] if "triggers" in t)
+ST_SENS = {e_["name"]: e_ for e_ in TR["sensor"]}
+STIMA = ST_SENS["Solare termico T collettore stimata"]
+
+
+def passo_collettore(stato_prec, attr_prec, ta=13.0, g=0.0, tss_forzata=None):
+    """Un minuto del modello: valuta le variabili del trigger in ordine, come fa Home Assistant."""
+    stati = {"sensor.temperatura_esterna_2_decimali": str(ta),
+             "sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato": str(g),
+             "sensor.umidita_esterna": "40", "sensor.anemometro": "0",
+             "input_number.solare_termico_k": "0.078", "input_number.solare_termico_tau": "120",
+             "input_number.solare_termico_t_taratura": "0", "input_number.solare_termico_inclinazione": "22",
+             "input_number.solare_termico_orientamento": "270", "input_number.solare_termico_offset_fluido": "5",
+             "input_number.solare_termico_area": "3.66", "input_number.solare_termico_eta0": "0.74",
+             "input_number.solare_termico_a1": "3.82", "input_number.solare_termico_a2": "0.013",
+             "input_number.solare_termico_coeff_vento": "0.4", "input_number.solare_termico_soglia_irraggiamento": "100",
+             "sensor.solare_termico_t_collettore_stimata": stato_prec}
+    attrs = {("sun.sun", "elevation"): 0.0, ("sun.sun", "azimuth"): 180.0,
+             ("sensor.solare_termico_t_collettore_stimata", "t_interna"): attr_prec}
+    ctx = {}
+    for nome, tpl in TR["variables"].items():
+        r = render(tpl, stati, attrs=attrs, extra=ctx)
+        try:
+            ctx[nome] = float(r)
+        except ValueError:
+            ctx[nome] = None if r in ("None", "") else r
+    return ctx
+
+
+# di notte (nessun sole) il sensore deve scendere verso la temperatura esterna con la sua inerzia, senza fermarsi
+stato, attr = "20.0", "20.0"
+for _ in range(240):
+    c = passo_collettore(stato, attr)
+    stato, attr = f"{c['tc']:.1f}", f"{c['tc']:.4f}"
+atteso = 13 + (20 - 13) * 2.718281828 ** (-240 / 120)
+check("collettore: dopo 4 ore al buio scende come l'esponenziale con tau 120 (non resta fermo a 20)", round(float(attr), 1), round(atteso, 1))
+check("collettore: lo stato mostrato e' il valore interno arrotondato a 0,1", STIMA["state"].strip(), "{{ tc | float | round(1) }}")
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

@@ -1,0 +1,308 @@
+# Stima dell'apporto di calore del solare termico SENZA sensori sul circuito:
+# usa solo temperatura esterna, umidita', vento e irraggiamento (sensore ESPHome diretto).
+#
+# Modello (aggiornato ogni minuto):
+#  1) G_piano  = irraggiamento orizzontale riportato sul piano dei collettori (inclinazione/orientamento
+#                + posizione del sole da sun.sun, scomposizione diretta/diffusa di Erbs).
+#  2) T_regime = T_ext + k x G_piano x (1 - UR/600)                (temperatura che il circuito raggiungerebbe a regime)
+#  3) T collettore stimata segue T_regime con inerzia termica (costante di tempo tau): il circuito conserva
+#     calore, quindi nel pomeriggio resta caldo anche se l'irraggiamento cala.
+#     Calibrata (15/10/2026, geometria ovest 22 gradi, calcolo a piena precisione) su quattro letture reali del collettore:
+#     2 ottobre 52,6 C alle 13:40, 54 C alle 16:20, 44,8 C alle 17:26 e 15 ottobre 44,2 C alle 13:20: k 0,078 e tau 120 min
+#     (errore tipico 1,4 K). Prima k 0,07 e tau 150 min, con la curva falsata dall'arrotondamento a 0,1.
+#  4) T media fluido = T collettore stimata - offset fluido
+#  5) rendimento     = eta0 - (a1 + b x vento_m/s) x dT / G_piano - a2 x dT^2 / G_piano     (dT = T media fluido - T_ext)
+#  6) potenza utile (kW) = area x G_piano x rendimento / 1000      (0 sotto la soglia di irraggiamento)
+#
+# Collettori: 2 x Ariston Kairos CF 2.0-1 (apertura 1,83 m2 cad., eta0 0,74, k1 3,82, k2 0,013).
+# Inclinazione e orientamento reali: 22 gradi, ovest (270); si impostano sulle entita' "Solare termico - ...".
+
+input_boolean:
+  solare_termico_defaults_impostati:
+    name: Solare termico - valori iniziali impostati
+    icon: mdi:check
+  solare_termico_defaults_v2_impostati:
+    name: Solare termico - valori iniziali v2 impostati
+    icon: mdi:check
+
+input_number:
+  solare_termico_area:
+    name: Solare termico - area collettori
+    min: 0.5
+    max: 50
+    step: 0.1
+    unit_of_measurement: m²
+    mode: box
+  solare_termico_eta0:
+    name: Solare termico - rendimento ottico (eta0)
+    min: 0.5
+    max: 0.9
+    step: 0.01
+    mode: box
+  solare_termico_a1:
+    name: Solare termico - perdite a1
+    min: 0.5
+    max: 10
+    step: 0.1
+    unit_of_measurement: W/m²K
+    mode: box
+  solare_termico_a2:
+    name: Solare termico - perdite a2
+    min: 0
+    max: 0.1
+    step: 0.001
+    unit_of_measurement: W/m²K²
+    mode: box
+  solare_termico_coeff_vento:
+    name: Solare termico - perdite extra per vento
+    min: 0
+    max: 3
+    step: 0.1
+    unit_of_measurement: W/m²K per m/s
+    mode: box
+  solare_termico_offset_fluido:
+    name: Solare termico - T collettore meno T media fluido
+    min: 0
+    max: 20
+    step: 0.5
+    unit_of_measurement: K
+    mode: box
+  solare_termico_soglia_irraggiamento:
+    name: Solare termico - irraggiamento minimo per la pompa
+    min: 0
+    max: 400
+    step: 10
+    unit_of_measurement: W/m²
+    mode: box
+  solare_termico_tau:
+    name: Solare termico - inerzia termica del circuito
+    min: 1
+    max: 360
+    step: 5
+    unit_of_measurement: min
+    mode: box
+  solare_termico_k:
+    name: Solare termico - riscaldamento a regime per W/m²
+    min: 0.01
+    max: 0.3
+    step: 0.001
+    unit_of_measurement: K·m²/W
+    mode: box
+  solare_termico_inclinazione:
+    name: Solare termico - inclinazione collettori
+    min: 0
+    max: 90
+    step: 1
+    unit_of_measurement: °
+    mode: box
+  solare_termico_t_taratura:
+    name: Solare termico - taratura con temperatura reale collettore (0 = nessuna)
+    min: 0
+    max: 150
+    step: 0.1
+    unit_of_measurement: °C
+    mode: box
+  solare_termico_orientamento:
+    name: Solare termico - orientamento collettori (180 = sud)
+    min: 0
+    max: 360
+    step: 1
+    unit_of_measurement: °
+    mode: box
+
+template:
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+    variables:
+      ta: "{{ states('sensor.temperatura_esterna_2_decimali') | float(0) }}"
+      g: "{{ states('sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato') | float(0) }}"
+      rh: "{{ states('sensor.umidita_esterna') | float(40) }}"
+      wind: "{{ (states('sensor.anemometro') | float(0)) / 3.6 }}"
+      el: "{{ state_attr('sun.sun', 'elevation') | float(0) }}"
+      az: "{{ state_attr('sun.sun', 'azimuth') | float(180) }}"
+      tilt: "{{ states('input_number.solare_termico_inclinazione') | float(35) }}"
+      azc: "{{ states('input_number.solare_termico_orientamento') | float(180) }}"
+      g_poa: >
+        {% if el <= 2 or g <= 0 %}
+          0
+        {% else %}
+          {% set r = pi / 180 %}
+          {% set doy = now().strftime('%j') | int %}
+          {% set g0 = 1361 * (1 + 0.033 * cos(2 * pi * doy / 365)) * sin(el * r) %}
+          {% set kt = [g / g0, 1] | min %}
+          {% set kd = (1 - 0.09 * kt) if kt <= 0.22 else ((0.9511 - 0.1604 * kt + 4.388 * kt ** 2 - 16.638 * kt ** 3 + 12.336 * kt ** 4) if kt <= 0.8 else 0.165) %}
+          {% set gd = kd * g %}
+          {% set gb = g - gd %}
+          {% set b = tilt * r %}
+          {% set cosi = [sin(el * r) * cos(b) + cos(el * r) * sin(b) * cos((az - azc) * r), 0] | max %}
+          {{ (gb * ([cosi / sin(el * r), 4] | min) + gd * (1 + cos(b)) / 2 + g * 0.2 * (1 - cos(b)) / 2) | round(1) }}
+        {% endif %}
+      tss: "{{ ta + states('input_number.solare_termico_k') | float(0.07) * g_poa | float(0) * (1 - rh / 600) }}"
+      taratura: "{{ states('input_number.solare_termico_t_taratura') | float(0) }}"
+      # si riparte dal valore interno a piena precisione (attributo t_interna): lo stato e' arrotondato a 0,1 e ad ogni
+      # minuto l'incremento (sotto 0,05 K quando si e' a meno di 7 K dal regime) andava perso, con la curva ferma o a gradini
+      prev: >
+        {% if taratura > 0 %}{{ taratura }}
+        {% else %}{{ state_attr('sensor.solare_termico_t_collettore_stimata', 't_interna') | float(states('sensor.solare_termico_t_collettore_stimata') | float(none)) }}{% endif %}
+      tau: "{{ states('input_number.solare_termico_tau') | float(150) }}"
+      tc: >
+        {% if prev is none %}
+          {{ tss }}
+        {% else %}
+          {{ prev + (tss - prev) * (1 - 2.718281828 ** (-1 / tau)) }}
+        {% endif %}
+      area: "{{ states('input_number.solare_termico_area') | float(3.66) }}"
+      eta0: "{{ states('input_number.solare_termico_eta0') | float(0.74) }}"
+      a1: "{{ states('input_number.solare_termico_a1') | float(3.82) + states('input_number.solare_termico_coeff_vento') | float(0.4) * wind }}"
+      a2: "{{ states('input_number.solare_termico_a2') | float(0.013) }}"
+      offset_f: "{{ states('input_number.solare_termico_offset_fluido') | float(5) }}"
+      soglia: "{{ states('input_number.solare_termico_soglia_irraggiamento') | float(100) }}"
+      dt: "{{ [tc | float - offset_f - ta, 0] | max }}"
+      gp: "{{ g_poa | float(0) }}"
+      eta: >
+        {% if gp <= 0 %}0{% else %}{{ [[eta0 - a1 * dt / gp - a2 * dt * dt / gp, 0] | max, eta0] | min }}{% endif %}
+      potenza: "{{ (area * gp * eta / 1000) if gp >= soglia else 0 }}"
+    sensor:
+      - name: Solare termico T collettore stimata
+        unique_id: solare_termico_t_collettore_stimata
+        unit_of_measurement: °C
+        device_class: temperature
+        state_class: measurement
+        availability: >
+          {{ has_value('sensor.temperatura_esterna_2_decimali')
+             and has_value('sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato')
+             and has_value('sun.sun') }}
+        state: "{{ tc | float | round(1) }}"
+        attributes:
+          t_regime: "{{ tss | float | round(1) }}"
+          t_interna: "{{ tc | float | round(4) }}"
+
+      - name: Solare termico irraggiamento sul piano
+        unique_id: solare_termico_irraggiamento_piano
+        unit_of_measurement: W/m²
+        device_class: irradiance
+        state_class: measurement
+        availability: >
+          {{ has_value('sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato')
+             and has_value('sun.sun') }}
+        state: "{{ gp | round(0) }}"
+
+      - name: Solare termico potenza
+        unique_id: solare_termico_potenza
+        unit_of_measurement: kW
+        device_class: power
+        state_class: measurement
+        availability: >
+          {{ has_value('sensor.temperatura_esterna_2_decimali')
+             and has_value('sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato')
+             and has_value('sun.sun') }}
+        state: "{{ potenza | float | round(3) }}"
+
+      - name: Solare termico rendimento
+        unique_id: solare_termico_rendimento
+        unit_of_measurement: "%"
+        state_class: measurement
+        availability: >
+          {{ has_value('sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato')
+             and has_value('sun.sun') }}
+        state: "{{ (eta * 100) | round(0) if gp >= soglia else 0 }}"
+
+sensor:
+  - platform: integration
+    source: sensor.solare_termico_potenza
+    name: Solare termico energia
+    unique_id: solare_termico_energia
+    unit_time: h
+    method: trapezoidal
+    round: 3
+
+utility_meter:
+  solare_termico_energia_giornaliera:
+    source: sensor.solare_termico_energia
+    name: Solare termico energia giornaliera
+    cycle: daily
+  solare_termico_energia_mensile:
+    source: sensor.solare_termico_energia
+    name: Solare termico energia mensile
+    cycle: monthly
+
+automation:
+  - id: solare_termico_valori_iniziali
+    alias: Solare termico - valori iniziali
+    description: Imposta una sola volta i valori di partenza dei parametri (poi restano quelli scelti da te).
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.solare_termico_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_area}
+        data: {value: 3.66}
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_eta0}
+        data: {value: 0.74}
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_a1}
+        data: {value: 3.82}
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_a2}
+        data: {value: 0.013}
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_coeff_vento}
+        data: {value: 0.4}
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_offset_fluido}
+        data: {value: 5}
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_soglia_irraggiamento}
+        data: {value: 100}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.solare_termico_defaults_impostati}
+
+  - id: solare_termico_valori_iniziali_v2
+    alias: Solare termico - valori iniziali v2
+    description: Parametri aggiunti con il modello a inerzia termica e piano inclinato (una sola volta).
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.solare_termico_defaults_v2_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_tau}
+        data: {value: 120}
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_k}
+        data: {value: 0.078}
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_inclinazione}
+        data: {value: 22}
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_orientamento}
+        data: {value: 270}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.solare_termico_defaults_v2_impostati}
+
+  - id: solare_termico_taratura_reset
+    alias: Solare termico - azzera taratura dopo l'applicazione
+    description: Inserendo la temperatura reale del collettore il modello riparte da quel valore; dopo due minuti il campo torna a 0 (anche se era rimasto impostato al riavvio).
+    triggers:
+      - trigger: state
+        entity_id: input_number.solare_termico_t_taratura
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: numeric_state
+        entity_id: input_number.solare_termico_t_taratura
+        above: 0
+    actions:
+      - delay: "00:02:00"
+      - action: input_number.set_value
+        target: {entity_id: input_number.solare_termico_t_taratura}
+        data: {value: 0}
