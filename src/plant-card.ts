@@ -5,6 +5,8 @@ import type { ImpiantoSettingsDialog } from "./settings-dialog";
 import "./settings-dialog";
 import type { ImpiantoInfoDialog } from "./info-dialog";
 import "./info-dialog";
+import type { DetailGroup, ImpiantoDetailsDialog } from "./details-dialog";
+import "./details-dialog";
 import type { ImpiantoChartsDialog } from "./charts-dialog";
 import "./charts-dialog";
 import { summarize, type SummaryLine } from "./summary-logic";
@@ -200,6 +202,8 @@ export interface PlantCardConfig {
   charts?: boolean;
   /** "auto" (predefinito): compatta sugli schermi bassi (tablet); true/false per forzare */
   compact?: boolean | "auto";
+  /** false per nascondere il termostato ambiente (compare se è installata l'integrazione termostato_riscaldamento); entry_id se hai più termostati */
+  thermostat?: boolean | { entry_id?: string; title?: string };
   entities?: Partial<PlantEntities>;
   model?: {
     /** litri del boiler solare (utili: 190 per un Bolly 2 da 200 L) */
@@ -256,6 +260,9 @@ export class ImpiantoOverviewCard extends LitElement {
   private _dialog?: ImpiantoSettingsDialog;
   private _info?: ImpiantoInfoDialog;
   private _charts?: ImpiantoChartsDialog;
+  private _details?: ImpiantoDetailsDialog;
+  private _thermo?: HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
+  private _thermoKey = "";
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -269,6 +276,8 @@ export class ImpiantoOverviewCard extends LitElement {
     });
     this._ro.observe(this);
     window.addEventListener("resize", this._onResize);
+    // il termostato arriva da un'altra integrazione: se il suo file si carica dopo la scheda, ridisegna
+    void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
   }
 
   /** Compatta se richiesto, oppure (auto) quando c'è spazio in larghezza ma lo schermo è basso. */
@@ -295,6 +304,8 @@ export class ImpiantoOverviewCard extends LitElement {
     if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
     if (changed.has("hass") && this._info) this._info.lines = this._summaryLines();
     if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
+    if (changed.has("hass") && this._details) this._details.groups = this._detailGroups();
+    if (changed.has("hass") && this._thermo) this._thermo.hass = this.hass;
   }
 
   disconnectedCallback(): void {
@@ -305,6 +316,8 @@ export class ImpiantoOverviewCard extends LitElement {
     this._info = undefined;
     this._charts?.remove();
     this._charts = undefined;
+    this._details?.remove();
+    this._details = undefined;
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
@@ -640,10 +653,6 @@ export class ImpiantoOverviewCard extends LitElement {
     `;
   }
 
-  private _legendFlame(k: number) {
-    return html`<svg viewBox="-30 -40 60 60" class="lg"><g transform="scale(${k})"><path d=${FLAME_PATH} fill="url(#fiamma)" /><path d=${FLAME_PATH} fill="#fde047" transform="translate(0,6) scale(0.52)" /></g></svg>`;
-  }
-
   private _tile(label: string, value: string, color?: string) {
     return html`<div class="tile"><span class="tl">${label}</span><span class="tv" style=${color ? `color:${color}` : ""}>${value}</span></div>`;
   }
@@ -672,23 +681,6 @@ export class ImpiantoOverviewCard extends LitElement {
     `;
   }
 
-  /** Stima del consumo di pellet: oggi, settimana, mese. Non compare se i sensori non esistono. */
-  private _renderPelletUse() {
-    const e = this._e;
-    const known = [e.pellet_today, e.pellet_week, e.pellet_month].some((id) => this.hass.states[id]);
-    if (!known) return nothing;
-    return html`
-      <div class="counters" title="Stima dal modello di consumo: si tara con il fattore nelle preferenze">
-        <span class="tl">Pellet (stima)</span>
-        <div>
-          <b>${fmt(this._n(e.pellet_today), 1)} kg oggi</b>
-          <b>${fmt(this._n(e.pellet_week), 1)} kg settimana</b>
-          <b>${fmt(this._n(e.pellet_month), 0)} kg mese</b>
-        </div>
-      </div>
-    `;
-  }
-
   private _renderStove() {
     const e = this._e;
     const stateRaw = this._s(e.stove_state);
@@ -697,8 +689,6 @@ export class ImpiantoOverviewCard extends LitElement {
     const since = changed ? new Date(changed).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
     const alarmRaw = (this._s(e.alarm) ?? "").trim();
     const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown";
-    const pump = this._s(e.pump);
-    const pumpOn = pump !== undefined && pump !== "OFF" && pump !== "unknown" && pump !== "unavailable";
     const work = this._n(e.work_hours_today);
     const pellet = pelletStatus(this._yes(e.pellet_reserve), this._yes(e.pellet_empty), this._yes(e.pellet_open));
 
@@ -718,24 +708,12 @@ export class ImpiantoOverviewCard extends LitElement {
             <span class="pelletpill ${pellet.key}">${pellet.label}</span>
           </div>
         </div>
-        <div class="legendbar">
-          <div><span class="dot"></span><b>Senza fiamma</b><small>ECO STOP / OFF</small></div>
-          <div>${this._legendFlame(0.38)}<b class="amber">Accensione</b><small>START</small></div>
-          <div>${this._legendFlame(0.62)}<b class="red">In lavoro</b><small>WORK</small></div>
-        </div>
+        ${noAlarm ? nothing : html`<div class="alarmbar" role="alert"><b>Allarme</b><span>${alarmRaw}</span></div>`}
         <div class="tiles">
           ${this._tile("Puffer 50 L", `${fmt(this._n(this.hass.states[e.puffer_effective] ? e.puffer_effective : e.puffer), 1)} °C${this.hass.states[e.puffer_effective]?.attributes?.fonte === "sonda ingresso" ? " (stima)" : ""}`, "#f59e0b")}
           ${this._tile("Set boiler", `${fmt(this._n(e.set_boiler), 0)} °C`)}
           ${this._tile("Set acqua", `${fmt(this._n(e.set_water), 0)} °C`)}
-          ${this._tile("Fumi", `${fmt(this._n(e.smoke), 0)} °C`)}
-          ${this._tile("Fiamma", `${fmt(this._n(e.flame), 0)} °C`)}
           ${this._tile("Potenza reale", `${fmt(this._n(e.power), 0)} %`)}
-          ${this._tile("Pressione acqua", `${fmt(this._n(e.water_pressure), 1)} bar`)}
-          ${this._tile("Pressione braciere", fmt(this._n(e.brazier_pressure), 1))}
-          ${this._tile("Estrattore fumi", `${fmt(this._n(e.extractor), 0)} giri`)}
-          ${this._tile("Circolatore", pump === undefined ? "–" : pumpOn ? "ON" : "OFF", pumpOn ? "#22c55e" : undefined)}
-          ${this._tile("Accensioni ieri", fmt(this._n(e.starts_yesterday), 0))}
-          ${this._tile("Allarme", noAlarm ? "nessuno" : alarmRaw, noAlarm ? "#22c55e" : "#ef4444")}
         </div>
         <div class="counters">
           <span class="tl">Oggi</span>
@@ -744,8 +722,8 @@ export class ImpiantoOverviewCard extends LitElement {
             <b>${fmt(work, 1)} h in lavoro</b>
             <b>${fmt(this._n(e.standby_today), 0)} stand-by</b>
           </div>
+          <button class="more" @click=${() => this._openDetails()} aria-label="Altri dati della caldaia">Altri dati ▸</button>
         </div>
-        ${this._renderPelletUse()}
         <div class="chips">
           ${this._chip("Richiesta ACS", this._yes(e.request_acs))} ${this._chip("Riscaldamento", this._yes(e.request_heating))}
           ${this._chip("Consenso suggerito", this._yes(e.consent))}
@@ -754,6 +732,74 @@ export class ImpiantoOverviewCard extends LitElement {
         <p class="look">${LOOK_LABEL[look]}</p>
       </section>
     `;
+  }
+
+  /** Tutti i valori che non stanno nella colonna principale della caldaia. */
+  private _detailGroups(): DetailGroup[] {
+    const e = this._e;
+    const pump = this._s(e.pump);
+    const pumpOn = pump !== undefined && pump !== "OFF" && pump !== "unknown" && pump !== "unavailable";
+    const alarmRaw = (this._s(e.alarm) ?? "").trim();
+    const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown";
+    const groups: DetailGroup[] = [
+      {
+        title: "Combustione",
+        tiles: [
+          { label: "Fumi", value: `${fmt(this._n(e.smoke), 0)} °C` },
+          { label: "Fiamma", value: `${fmt(this._n(e.flame), 0)} °C` },
+          { label: "Estrattore fumi", value: `${fmt(this._n(e.extractor), 0)} giri` },
+          { label: "Pressione braciere", value: fmt(this._n(e.brazier_pressure), 1) },
+        ],
+      },
+      {
+        title: "Acqua e circolatore",
+        tiles: [
+          { label: "Pressione acqua", value: `${fmt(this._n(e.water_pressure), 1)} bar` },
+          { label: "Circolatore", value: pump === undefined ? "–" : pumpOn ? "ON" : "OFF", color: pumpOn ? "#22c55e" : undefined },
+          { label: "Accensioni ieri", value: fmt(this._n(e.starts_yesterday), 0) },
+          { label: "Allarme", value: noAlarm ? "nessuno" : alarmRaw, color: noAlarm ? "#22c55e" : "#ef4444" },
+        ],
+      },
+    ];
+    if ([e.pellet_today, e.pellet_week, e.pellet_month].some((id) => this.hass.states[id])) {
+      groups.push({
+        title: "Pellet (stima dal modello di consumo)",
+        tiles: [
+          { label: "Oggi", value: `${fmt(this._n(e.pellet_today), 1)} kg` },
+          { label: "Settimana", value: `${fmt(this._n(e.pellet_week), 1)} kg` },
+          { label: "Mese", value: `${fmt(this._n(e.pellet_month), 0)} kg` },
+        ],
+      });
+    }
+    return groups;
+  }
+
+  /** Apre la finestra "Altri dati" (si aggiunge alla pagina, come le altre). */
+  private _openDetails(): void {
+    if (this._details) return;
+    const d = document.createElement("impianto-details-dialog") as ImpiantoDetailsDialog;
+    d.groups = this._detailGroups();
+    d.addEventListener("closed", () => {
+      this._details = undefined;
+    });
+    document.body.appendChild(d);
+    this._details = d;
+  }
+
+  /** Il termostato ambiente (integrazione termostato_riscaldamento): sotto la caldaia, solo se è installato. */
+  private _renderThermostat() {
+    const opt = this._config.thermostat;
+    if (opt === false || !customElements.get("termostato-card")) return nothing;
+    const cfg = typeof opt === "object" && opt !== null ? opt : {};
+    const key = JSON.stringify(cfg);
+    if (!this._thermo || this._thermoKey !== key) {
+      const el = document.createElement("termostato-card") as HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
+      el.setConfig({ type: "custom:termostato-card", embedded: true, ...(cfg.entry_id ? { entry_id: cfg.entry_id } : {}), ...(cfg.title ? { title: cfg.title } : {}) });
+      this._thermo = el;
+      this._thermoKey = key;
+    }
+    this._thermo.hass = this.hass;
+    return html`<div class="thermo">${this._thermo}</div>`;
   }
 
   /** Le righe della finestra "Stato": poche frasi sul momento dell'impianto. */
@@ -840,7 +886,7 @@ export class ImpiantoOverviewCard extends LitElement {
               <ha-icon icon="mdi:cog-outline"></ha-icon>
             </button>`}
         ${this._config.title ? html`<div class="ctitle">${this._config.title}</div>` : nothing}
-        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()} ${this._renderStove()}</div>
+        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()}<div class="rightcol">${this._renderStove()}${this._renderThermostat()}</div></div>
       </ha-card>
     `;
   }
@@ -1260,9 +1306,45 @@ export class ImpiantoOverviewCard extends LitElement {
     .legendbar .red {
       color: #ef4444;
     }
+    .rightcol {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .compact .rightcol {
+      gap: 6px;
+    }
+    .alarmbar {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      margin-top: 8px;
+      padding: 6px 12px;
+      border-radius: 10px;
+      background: rgba(239, 68, 68, 0.16);
+      color: #ef4444;
+      font-size: 14px;
+    }
+    .more {
+      margin-left: auto;
+      min-height: 36px;
+      padding: 4px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .counters {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
     .tiles {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 8px;
       margin-top: 12px;
     }

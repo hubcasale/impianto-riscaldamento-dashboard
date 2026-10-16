@@ -595,140 +595,209 @@ function r5(r6) {
 }
 
 // src/settings-logic.ts
+var H2 = (what, when, suggested) => ({ what, when, ...suggested ? { suggested } : {} });
 var SETTINGS_SECTIONS = [
   {
-    title: "Pompa di integrazione",
-    fields: [
-      {
-        kind: "toggle",
-        entity: "input_boolean.caldaia_integrazione_blocco_attivo",
-        label: "Blocco automatico",
-        hint: "Tiene ferma la pompa quando il puffer non \xE8 abbastanza pi\xF9 caldo del boiler."
-      },
-      {
-        kind: "toggle",
-        entity: "input_boolean.caldaia_integrazione_forzatura_attiva",
-        label: "Accensione forzata",
-        hint: "Accende la pompa anche quando l'Elios non la chiama, finch\xE9 il puffer ha calore da cedere."
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_delta_blocco",
-        label: "Blocca se il puffer supera il boiler di meno di"
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_delta_sblocco",
-        label: "Sblocca quando il puffer supera il boiler di"
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_temp_max",
-        label: "Non scaldare la testa del boiler oltre"
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_isteresi_max",
-        label: "Isteresi su questa temperatura"
-      }
-    ]
-  },
-  {
+    id: "caldaia",
+    icon: "mdi:fire",
     title: "Caldaia a pellet (Polygon)",
+    help: H2(
+      "Le temperature che la Polygon deve raggiungere: l'acqua di riscaldamento e il puffer da 50 litri che serve l'acqua calda.",
+      "Cambiale solo se vuoi una casa pi\xF9 calda o pi\xF9 acqua calda; i programmi della scheda di programmazione hanno i loro valori."
+    ),
     fields: [
       {
         kind: "climate",
         entity: "climate.casale_acqua",
         label: "Temperatura dell'acqua della caldaia",
-        hint: "Setpoint dell'acqua di riscaldamento. I programmi della scheda di programmazione hanno i loro valori."
+        hint: "Setpoint dell'acqua di riscaldamento. I programmi della scheda di programmazione hanno i loro valori.",
+        help: H2("Il setpoint dell'acqua di riscaldamento della Polygon.", "Quando la casa \xE8 troppo fredda o troppo calda con i termosifoni.", "Quello che usi di solito nei programmi.")
       },
       {
         kind: "number",
         entity: "number.casale_setpoint_boiler",
         label: "Setpoint del puffer da 50 litri",
-        hint: "Setpoint boiler della Polygon (consenso per l'acqua calda sanitaria)."
+        hint: "Setpoint boiler della Polygon (consenso per l'acqua calda sanitaria).",
+        help: H2("Il setpoint boiler della Polygon: sotto questa temperatura il puffer chiede calore per l'acqua calda sanitaria.", "Alzalo se l'acqua calda finisce presto, abbassalo per consumare meno pellet.")
       }
     ]
   },
   {
+    id: "partenze",
+    icon: "mdi:shield-check",
     title: "Salvaguardia accensioni",
+    help: H2(
+      "Evita che la caldaia parta quando non serve: il puffer e il boiler sono gi\xE0 caldi e nessuno chiede riscaldamento.",
+      "Per non sprecare pellet nelle accensioni dei programmi quando l'acqua \xE8 gi\xE0 calda."
+    ),
     fields: [
       {
         kind: "toggle",
         entity: "input_boolean.caldaia_salvaguardia_attiva",
         label: "Evita partenze inutili",
-        hint: "Annulla l'avvio della caldaia quando il puffer \xE8 gi\xE0 caldo."
+        hint: "Annulla l'avvio della caldaia quando il puffer \xE8 gi\xE0 caldo.",
+        help: H2("Annulla la partenza di un programma se puffer e boiler sono gi\xE0 caldi e il termostato non chiede calore.", "Lascialo acceso: se serve, la caldaia riparte da sola quando il termostato chiede calore o l'acqua si raffredda.", "Acceso.")
       },
       {
         kind: "number",
         entity: "input_number.caldaia_salvaguardia_t_puffer",
-        label: "Partenza inutile se il puffer \xE8 gi\xE0 sopra"
+        label: "Partenza inutile se il puffer \xE8 gi\xE0 sopra",
+        help: H2("La temperatura del puffer oltre la quale una partenza viene considerata inutile.", "Alzala se vuoi che la caldaia parta pi\xF9 spesso; abbassala per risparmiare.")
       }
     ]
   },
   {
+    id: "integrazione",
+    icon: "mdi:pump",
+    title: "Pompa di integrazione",
+    help: H2(
+      "La pompa che porta il calore del puffer alla serpentina del boiler. Qui si decide quando fermarla e quando forzarla.",
+      "Per far lavorare bene insieme solare e caldaia, senza raffreddare il boiler con acqua meno calda."
+    ),
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_integrazione_blocco_attivo",
+        label: "Blocco automatico",
+        hint: "Tiene ferma la pompa quando il puffer non \xE8 abbastanza pi\xF9 caldo del boiler.",
+        help: H2("Tiene ferma la pompa quando il puffer non \xE8 abbastanza pi\xF9 caldo del boiler.", "Evita di portare al boiler acqua meno calda di quella che ha gi\xE0.", "Acceso.")
+      },
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_integrazione_forzatura_attiva",
+        label: "Accensione forzata",
+        hint: "Accende la pompa anche quando l'Elios non la chiama, finch\xE9 il puffer ha calore da cedere.",
+        help: H2("Accende la pompa anche quando l'Elios non la chiama, finch\xE9 il puffer ha calore da cedere.", "Per sfruttare il puffer caldo e fare meno ore di caldaia.")
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_delta_blocco",
+        label: "Blocca se il puffer supera il boiler di meno di",
+        help: H2("Se il puffer supera il boiler di meno di questi gradi la pompa si ferma.", "Alzalo se la pompa parte per differenze troppo piccole.")
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_delta_sblocco",
+        label: "Sblocca quando il puffer supera il boiler di",
+        help: H2("La differenza di temperatura oltre la quale la pompa pu\xF2 ripartire.", "Deve essere pi\xF9 alta della soglia di blocco, cos\xEC la pompa non parte e si ferma di continuo.")
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_temp_max",
+        label: "Non scaldare la testa del boiler oltre",
+        help: H2("La temperatura massima della sonda alta del boiler: oltre questo valore la pompa non lo scalda pi\xF9.", "Protegge dalle scottature e lascia spazio al solare.", "60 \xB0C.")
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_integrazione_isteresi_max",
+        label: "Isteresi su questa temperatura",
+        help: H2("Di quanti gradi deve scendere la testa del boiler sotto il massimo prima che la pompa possa ripartire.", "Evita accensioni e spegnimenti ravvicinati intorno al limite.")
+      }
+    ]
+  },
+  {
+    id: "assenza",
+    icon: "mdi:home-off",
     title: "Spegnimento se nessuno \xE8 in casa",
+    help: H2(
+      "Spegne la caldaia quando tutti sono fuori casa (iPhone e Wi-Fi) e la riaccende al rientro solo se un programma \xE8 attivo.",
+      "Per non scaldare una casa vuota quando ti dimentichi di spegnere."
+    ),
     fields: [
       {
         kind: "toggle",
         entity: "input_boolean.caldaia_assenza_attiva",
         label: "Spegni la caldaia con la casa vuota",
-        hint: "Usa gli iPhone (iCloud3) e il Wi-Fi CASALE2G. Al rientro riaccende solo se un programma \xE8 attivo."
+        hint: "Usa gli iPhone (iCloud3) e il Wi-Fi CASALE2G. Al rientro riaccende solo se un programma \xE8 attivo.",
+        help: H2("Spegne la caldaia dopo il tempo indicato di casa vuota, controllando gli iPhone (iCloud3) e il Wi-Fi CASALE2G.", "Se parti e ti dimentichi di spegnere o di premere Vacanza.")
       },
       {
         kind: "toggle",
         entity: "input_boolean.caldaia_assenza_ospiti",
         label: "Ospiti in casa (non spegnere)",
-        hint: "Per chi non ha un telefono tracciato."
+        hint: "Per chi non ha un telefono tracciato.",
+        help: H2("Con gli ospiti la casa non \xE8 considerata vuota e la caldaia non si spegne.", "Quando ci sono persone che non hanno un telefono tracciato.")
       },
-      { kind: "number", entity: "input_number.caldaia_assenza_minuti", label: "Spegni dopo questi minuti di assenza" },
-      { kind: "number", entity: "input_number.caldaia_assenza_t_esterna_min", label: "Non spegnere se fuori fa meno di" }
+      {
+        kind: "number",
+        entity: "input_number.caldaia_assenza_minuti",
+        label: "Spegni dopo questi minuti di assenza",
+        help: H2("Quanto deve restare vuota la casa prima di spegnere.", "Allungalo se esci spesso per brevi commissioni.")
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_assenza_t_esterna_min",
+        label: "Non spegnere se fuori fa meno di",
+        help: H2("Con pi\xF9 freddo di questa temperatura esterna la caldaia non viene spenta.", "Per non far raffreddare troppo la casa nelle giornate pi\xF9 fredde.")
+      }
     ]
   },
   {
+    id: "pellet",
+    icon: "mdi:grain",
     title: "Consumo di pellet (stima)",
     advanced: true,
+    help: H2(
+      "I valori con cui la scheda stima quanto pellet consuma la caldaia (non c'\xE8 un sensore del pellet).",
+      "Si ritarano una volta, confrontando la stima con i sacchi realmente usati."
+    ),
     fields: [
       {
         kind: "number",
         entity: "input_number.caldaia_pellet_kg_h_min",
         label: "Consumo a potenza minima (30 %)",
-        hint: "Chili all'ora quando la caldaia modula al minimo."
+        hint: "Chili all'ora quando la caldaia modula al minimo.",
+        help: H2("I chili di pellet all'ora quando la caldaia modula al minimo.", "Per la stima del consumo.")
       },
       {
         kind: "number",
         entity: "input_number.caldaia_pellet_kg_h_max",
         label: "Consumo a potenza 100 %",
-        hint: "Chili all'ora quando la caldaia lavora al massimo."
+        hint: "Chili all'ora quando la caldaia lavora al massimo.",
+        help: H2("I chili di pellet all'ora quando la caldaia lavora al massimo.", "Per la stima del consumo.")
       },
       {
         kind: "number",
         entity: "input_number.caldaia_pellet_kg_h_mantenimento",
-        label: "Consumo in stand-by e spegnimento"
+        label: "Consumo in stand-by e spegnimento",
+        help: H2("I chili all'ora consumati durante lo stand-by e lo spegnimento.", "Per la stima del consumo.")
       },
-      { kind: "number", entity: "input_number.caldaia_pellet_g_accensione", label: "Consumo per accensione" },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_pellet_g_accensione",
+        label: "Consumo per accensione",
+        help: H2("I grammi di pellet usati a ogni accensione.", "Per la stima del consumo.")
+      },
       {
         kind: "number",
         entity: "input_number.caldaia_pellet_fattore",
         label: "Fattore di taratura",
-        hint: "Pellet realmente consumato diviso la stima: 1,10 = la stima \xE8 bassa del 10 %."
+        hint: "Pellet realmente consumato diviso la stima: 1,10 = la stima \xE8 bassa del 10 %.",
+        help: H2("Pellet realmente consumato diviso la stima: 1,10 significa che la stima \xE8 bassa del 10 %.", "Dopo aver finito un sacco o una scorta, per allineare la stima alla realt\xE0.", "1,00 finch\xE9 non hai un confronto.")
       }
     ]
   },
   {
+    id: "pompe",
+    icon: "mdi:flash-outline",
     title: "Misura delle pompe",
     advanced: true,
+    help: H2(
+      "Le soglie in watt con cui la scheda capisce se le pompe del collettore e dell'integrazione sono ferme o accese.",
+      "Servono solo se cambi le pompe o il misuratore: altrimenti lasciale come sono."
+    ),
     fields: [
       {
         kind: "toggle",
         entity: "input_boolean.centralina_pompe_misura_attiva",
         label: "Misura della potenza attiva",
-        hint: "Spenta se il misuratore \xE8 scollegato: gli indicatori delle pompe spariscono."
+        hint: "Spenta se il misuratore \xE8 scollegato: gli indicatori delle pompe spariscono.",
+        help: H2("Attiva la lettura della potenza delle pompe. Spenta, gli indicatori delle pompe spariscono.", "Spegnila se il misuratore \xE8 scollegato.")
       },
-      { kind: "number", entity: "input_number.centralina_pompe_w_ferme", label: "Pompe ferme sotto" },
-      { kind: "number", entity: "input_number.centralina_pompe_w_collettore_max", label: "Solo collettore fino a" },
-      { kind: "number", entity: "input_number.centralina_pompe_w_entrambe_min", label: "Entrambe le pompe da" },
-      { kind: "number", entity: "input_number.centralina_pompa_integrazione_w_min", label: "Integrazione accesa sopra (Shelly 1PM)" }
+      { kind: "number", entity: "input_number.centralina_pompe_w_ferme", label: "Pompe ferme sotto", help: H2("Sotto questa potenza le pompe sono considerate ferme.", "Alzala se il misuratore legge un po' anche a pompe ferme.") },
+      { kind: "number", entity: "input_number.centralina_pompe_w_collettore_max", label: "Solo collettore fino a", help: H2("Fino a questa potenza \xE8 accesa solo la pompa del collettore.", "Si ritara con le misure reali delle due pompe.") },
+      { kind: "number", entity: "input_number.centralina_pompe_w_entrambe_min", label: "Entrambe le pompe da", help: H2("Da questa potenza risultano accese entrambe le pompe.", "Si ritara con le misure reali delle due pompe.") },
+      { kind: "number", entity: "input_number.centralina_pompa_integrazione_w_min", label: "Integrazione accesa sopra (Shelly 1PM)", help: H2("Sopra questa potenza, misurata dallo Shelly 1PM, la pompa di integrazione \xE8 considerata accesa.", "Si ritara se cambi pompa.") }
     ]
   }
 ];
@@ -756,6 +825,7 @@ function buildSettingsView(states, sections = SETTINGS_SECTIONS) {
         domain: f3.entity.split(".")[0],
         label: f3.label,
         hint: f3.hint,
+        help: f3.help,
         on: st.state === "on",
         value,
         unit: isClimate ? "\xB0C" : String(st.attributes.unit_of_measurement ?? ""),
@@ -765,7 +835,7 @@ function buildSettingsView(states, sections = SETTINGS_SECTIONS) {
         unavailable
       });
     }
-    if (rows.length) out.push({ title: sec.title, advanced: !!sec.advanced, rows });
+    if (rows.length) out.push({ id: sec.id, icon: sec.icon, title: sec.title, advanced: !!sec.advanced, help: sec.help, rows });
   }
   return out;
 }
@@ -805,18 +875,30 @@ function applyPending(sections, pending, now) {
   }));
   return { sections: out, settled };
 }
+function sectionSummary(sec) {
+  const first = sec.rows.find((r6) => r6.kind === "toggle");
+  const n5 = sec.rows.length;
+  const count = `${n5} ${n5 === 1 ? "impostazione" : "impostazioni"}`;
+  if (!first) return count;
+  if (first.unavailable) return "Non disponibile";
+  return `${first.on ? "Attivo" : "Disattivato"} \xB7 ${count}`;
+}
 
 // src/settings-dialog.ts
 var TAG = "impianto-settings-dialog";
 var ImpiantoSettingsDialog = class extends i4 {
   constructor() {
     super(...arguments);
-    this._open = /* @__PURE__ */ new Set();
+    this._open = null;
+    this._help = null;
+    this._thermoBusy = false;
     this._error = "";
     this._pending = {};
     this._timers = /* @__PURE__ */ new Map();
     this._onKey = (e5) => {
-      if (e5.key === "Escape") this._close();
+      if (e5.key !== "Escape") return;
+      if (this._help) this._help = null;
+      else this._close();
     };
   }
   connectedCallback() {
@@ -879,20 +961,21 @@ var ImpiantoSettingsDialog = class extends i4 {
     }
     this._setNumber(row, clampValue(n5, row.min, row.max, row.step));
   }
-  _toggleSection(title) {
-    const next = new Set(this._open);
-    if (next.has(title)) next.delete(title);
-    else next.add(title);
-    this._open = next;
+  _toggleBlock(id) {
+    this._open = this._open === id ? null : id;
+  }
+  _helpBtn(title, help) {
+    if (!help) return A;
+    return b2`<button class="i" aria-label="Spiegazione: ${title}" @click=${(e5) => {
+      e5.stopPropagation();
+      this._help = { title, help };
+    }}>i</button>`;
   }
   _renderRow(row) {
     if (row.kind === "toggle") {
       return b2`
         <div class="row tog">
-          <div class="txt">
-            <div class="lab">${row.label}</div>
-            ${row.hint ? b2`<div class="hint">${row.hint}</div>` : A}
-          </div>
+          <div class="txt"><span class="lab">${row.label}</span>${this._helpBtn(row.label, row.help)}</div>
           <button
             class=${row.on ? "sw on" : "sw"}
             role="switch"
@@ -906,10 +989,7 @@ var ImpiantoSettingsDialog = class extends i4 {
     }
     return b2`
       <div class="row">
-        <div class="txt">
-          <div class="lab">${row.label}</div>
-          ${row.hint ? b2`<div class="hint">${row.hint}</div>` : A}
-        </div>
+        <div class="txt"><span class="lab">${row.label}</span>${this._helpBtn(row.label, row.help)}</div>
         <div class="num">
           <button class="st" aria-label="Diminuisci" ?disabled=${row.unavailable || row.value !== null && row.value <= row.min} @click=${() => this._step(row, -1)}>−</button>
           <input
@@ -927,11 +1007,84 @@ var ImpiantoSettingsDialog = class extends i4 {
       </div>
     `;
   }
+  _renderBlock(sec) {
+    const open = this._open === sec.id;
+    return b2`
+      <section class="block ${open ? "open" : ""}">
+        <div class="bh" role="button" tabindex="0" aria-expanded=${open ? "true" : "false"} @click=${() => this._toggleBlock(sec.id)} @keydown=${(e5) => {
+      if (e5.key === "Enter" || e5.key === " ") this._toggleBlock(sec.id);
+    }}>
+          <ha-icon icon=${sec.icon}></ha-icon>
+          <div class="bt"><div class="bn">${sec.title}</div><div class="bs">${sectionSummary(sec)}</div></div>
+          ${this._helpBtn(sec.title, sec.help)}
+          <span class="chev">${open ? "\u25BE" : "\u25B8"}</span>
+        </div>
+        ${open ? b2`<div class="bb">${sec.rows.map((r6) => this._renderRow(r6))}</div>` : A}
+      </section>
+    `;
+  }
+  /** Le preferenze del termostato stanno nell'altra integrazione: si apre la sua finestra. */
+  async _openThermostat() {
+    this._thermoBusy = true;
+    this._error = "";
+    try {
+      const cw = this.hass.callWS;
+      if (!cw) throw new Error("callWS non disponibile");
+      const info = await cw.call(this.hass, { type: "termostato_riscaldamento/info" });
+      const d3 = document.createElement("termostato-settings-dialog");
+      d3.hass = this.hass;
+      d3.info = info;
+      document.body.appendChild(d3);
+    } catch (err) {
+      this._error = `Termostato non raggiungibile: ${err instanceof Error ? err.message : err?.message ?? String(err)}`;
+    } finally {
+      this._thermoBusy = false;
+    }
+  }
+  _renderThermostatBlock() {
+    if (!customElements.get("termostato-settings-dialog")) return A;
+    const id = "termostato";
+    const open = this._open === id;
+    const help = {
+      what: "Antigelo, limiti dell'obiettivo, durata del timer, comportamento a casa vuota, annunci vocali e collegamenti del termostato ambiente.",
+      when: "Per cambiare come il termostato scalda quando non c'\xE8 il programma o quando la casa \xE8 vuota."
+    };
+    return b2`
+      <section class="block ${open ? "open" : ""}">
+        <div class="bh" role="button" tabindex="0" aria-expanded=${open ? "true" : "false"} @click=${() => this._toggleBlock(id)} @keydown=${(e5) => {
+      if (e5.key === "Enter" || e5.key === " ") this._toggleBlock(id);
+    }}>
+          <ha-icon icon="mdi:thermostat"></ha-icon>
+          <div class="bt"><div class="bn">Termostato ambiente</div><div class="bs">Antigelo, timer, casa vuota, annunci</div></div>
+          ${this._helpBtn("Termostato ambiente", help)}
+          <span class="chev">${open ? "\u25BE" : "\u25B8"}</span>
+        </div>
+        ${open ? b2`<div class="bb"><div class="row"><div class="txt"><span class="lab">Preferenze del termostato</span></div><button class="btn" ?disabled=${this._thermoBusy} @click=${() => void this._openThermostat()}>Apri</button></div></div>` : A}
+      </section>
+    `;
+  }
+  _renderHelp() {
+    if (!this._help) return A;
+    const { title, help } = this._help;
+    return b2`
+      <div class="hback" @click=${(e5) => e5.target === e5.currentTarget && (this._help = null)}>
+        <div class="hbox" role="dialog" aria-modal="true" aria-label=${title}>
+          <div class="ht">${title}</div>
+          <div class="hs">Cosa fa</div><p>${help.what}</p>
+          <div class="hs">Quando serve</div><p>${help.when}</p>
+          ${help.suggested ? b2`<div class="hs">Valore consigliato</div><p>${help.suggested}</p>` : A}
+          <button class="btn primary" @click=${() => this._help = null}>Ho capito</button>
+        </div>
+      </div>
+    `;
+  }
   render() {
     if (!this.hass) return A;
     const built = applyPending(buildSettingsView(this.hass.states), this._pending, Date.now());
     for (const e5 of built.settled) delete this._pending[e5];
-    const sections = built.sections;
+    const main = built.sections.filter((x2) => !x2.advanced);
+    const adv = built.sections.filter((x2) => x2.advanced);
+    const thermo = this._renderThermostatBlock();
     return b2`
       <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
         <div class="panel" role="dialog" aria-modal="true" aria-label="Preferenze impianto">
@@ -940,19 +1093,14 @@ var ImpiantoSettingsDialog = class extends i4 {
             <button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button>
           </div>
           <div class="body">
-            ${sections.length === 0 ? b2`<div class="empty">Nessuna impostazione trovata: installa i pacchetti Home Assistant del progetto (cartella ha-packages).</div>` : sections.map((sec) => {
-      const open = !sec.advanced || this._open.has(sec.title);
-      return b2`
-                    <section>
-                      ${sec.advanced ? b2`<button class="sec adv" aria-expanded=${open ? "true" : "false"} @click=${() => this._toggleSection(sec.title)}>
-                            <span>${sec.title}</span><span class="chev">${open ? "\u25BE" : "\u25B8"}</span>
-                          </button>` : b2`<div class="sec">${sec.title}</div>`}
-                      ${open ? sec.rows.map((r6) => this._renderRow(r6)) : A}
-                    </section>
-                  `;
-    })}
+            ${built.sections.length === 0 && thermo === A ? b2`<div class="empty">Nessuna impostazione trovata: installa i pacchetti Home Assistant del progetto (cartella ha-packages).</div>` : b2`
+                  ${main.map((sec) => this._renderBlock(sec))}
+                  ${thermo}
+                  ${adv.length ? b2`<div class="adv">Avanzate</div>${adv.map((sec) => this._renderBlock(sec))}` : A}
+                `}
             ${this._error ? b2`<div class="err">${this._error}</div>` : A}
           </div>
+          ${this._renderHelp()}
         </div>
       </div>
     `;
@@ -977,6 +1125,7 @@ var ImpiantoSettingsDialog = class extends i4 {
       box-sizing: border-box;
     }
     .panel {
+      position: relative;
       background: var(--card-background-color, #fff);
       border-radius: 16px;
       width: 100%;
@@ -1057,9 +1206,9 @@ var ImpiantoSettingsDialog = class extends i4 {
     }
     .sw {
       flex: none;
-      width: 46px;
-      height: 26px;
-      border-radius: 13px;
+      width: 54px;
+      height: 30px;
+      border-radius: 15px;
       border: none;
       padding: 0;
       background: var(--disabled-text-color, #9e9e9e);
@@ -1074,14 +1223,14 @@ var ImpiantoSettingsDialog = class extends i4 {
       position: absolute;
       top: 3px;
       left: 3px;
-      width: 20px;
-      height: 20px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       background: #fff;
       transition: transform 0.15s;
     }
     .sw.on .knob {
-      transform: translateX(20px);
+      transform: translateX(24px);
     }
     .sw:disabled,
     .st:disabled,
@@ -1096,8 +1245,8 @@ var ImpiantoSettingsDialog = class extends i4 {
       gap: 6px;
     }
     .st {
-      width: 34px;
-      height: 34px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
       background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
@@ -1108,7 +1257,8 @@ var ImpiantoSettingsDialog = class extends i4 {
       padding: 0;
     }
     input {
-      width: 64px;
+      width: 66px;
+      min-height: 44px;
       text-align: center;
       font-size: 16px;
       font-weight: 600;
@@ -1127,6 +1277,137 @@ var ImpiantoSettingsDialog = class extends i4 {
       min-width: 22px;
       font-size: 13px;
       color: var(--secondary-text-color, #727272);
+    }
+    .block {
+      margin-top: 10px;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .block.open {
+      border-color: var(--primary-color, #03a9f4);
+    }
+    .bh {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 58px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    .bh ha-icon {
+      --mdc-icon-size: 26px;
+      flex: none;
+      color: var(--secondary-text-color, #727272);
+    }
+    .bt {
+      flex: 1;
+      min-width: 0;
+    }
+    .bn {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .bs {
+      font-size: 12.5px;
+      color: var(--secondary-text-color, #727272);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .chev {
+      width: 18px;
+      text-align: center;
+      color: var(--secondary-text-color, #727272);
+    }
+    .bb {
+      padding: 0 12px 8px;
+      border-top: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
+    }
+    .bb .row:last-child {
+      border-bottom: none;
+    }
+    .adv {
+      margin: 18px 2px 0;
+      font-size: 12.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--secondary-text-color, #727272);
+    }
+    .txt {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .i {
+      flex: none;
+      width: 36px;
+      height: 36px;
+      margin-left: 6px;
+      border-radius: 50%;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      background: transparent;
+      color: var(--secondary-text-color, #727272);
+      font-size: 15px;
+      font-style: italic;
+      font-family: Georgia, serif;
+      cursor: pointer;
+    }
+    .btn {
+      min-height: 44px;
+      padding: 8px 18px;
+      border-radius: 12px;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      color: inherit;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .btn.primary {
+      background: var(--primary-color, #03a9f4);
+      color: #fff;
+      border-color: transparent;
+    }
+    .hback {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+    }
+    .hbox {
+      background: var(--card-background-color, #fff);
+      border-radius: 16px;
+      padding: 16px 18px;
+      max-width: 420px;
+      max-height: 90%;
+      overflow-y: auto;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    }
+    .ht {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .hs {
+      margin-top: 8px;
+      font-size: 11.5px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--secondary-text-color, #727272);
+    }
+    .hbox p {
+      margin: 2px 0 0;
+      font-size: 15px;
+      line-height: 1.4;
+    }
+    .hbox .btn {
+      margin-top: 14px;
+      width: 100%;
     }
     .empty,
     .err {
@@ -1155,6 +1436,12 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoSettingsDialog.prototype, "_open", 2);
+__decorateClass([
+  r5()
+], ImpiantoSettingsDialog.prototype, "_help", 2);
+__decorateClass([
+  r5()
+], ImpiantoSettingsDialog.prototype, "_thermoBusy", 2);
 __decorateClass([
   r5()
 ], ImpiantoSettingsDialog.prototype, "_error", 2);
@@ -1298,6 +1585,147 @@ __decorateClass([
   n4({ attribute: false })
 ], ImpiantoInfoDialog.prototype, "lines", 2);
 if (!customElements.get(TAG2)) customElements.define(TAG2, ImpiantoInfoDialog);
+
+// src/details-dialog.ts
+var TAG3 = "impianto-details-dialog";
+var ImpiantoDetailsDialog = class extends i4 {
+  constructor() {
+    super(...arguments);
+    this.groups = [];
+    this._onKey = (e5) => {
+      if (e5.key === "Escape") this._close();
+    };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("keydown", this._onKey);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener("keydown", this._onKey);
+  }
+  _close() {
+    this.dispatchEvent(new CustomEvent("closed"));
+    this.remove();
+  }
+  render() {
+    return b2`
+      <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
+        <div class="panel" role="dialog" aria-modal="true" aria-label="Altri dati della caldaia">
+          <div class="head">
+            <div class="title">Altri dati della caldaia</div>
+            <button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button>
+          </div>
+          <div class="body">
+            ${this.groups.length === 0 ? b2`<div class="empty">Nessun dato disponibile.</div>` : A}
+            ${this.groups.map(
+      (g2) => b2`
+                <div class="gt">${g2.title}</div>
+                <div class="grid">
+                  ${g2.tiles.map(
+        (t3) => b2`<div class="tile"><span class="tl">${t3.label}</span><span class="tv" style=${t3.color ? `color:${t3.color}` : ""}>${t3.value}</span></div>`
+      )}
+                </div>`
+    )}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  static {
+    this.styles = i`
+    :host {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      color: var(--primary-text-color, #212121);
+      font-family: var(--paper-font-body1_-_font-family, Roboto, Helvetica, Arial, sans-serif);
+    }
+    .backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .panel {
+      background: var(--card-background-color, #fff);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 560px;
+      max-height: min(86vh, 700px);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+    }
+    .title {
+      font-size: 19px;
+      font-weight: 700;
+    }
+    .x {
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 10px 14px;
+      border-radius: 10px;
+    }
+    .body {
+      overflow-y: auto;
+      padding: 4px 18px 18px;
+    }
+    .gt {
+      margin: 14px 0 6px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--secondary-text-color, #727272);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+    }
+    .tile {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      border-radius: 10px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .tl {
+      font-size: 12px;
+      color: var(--secondary-text-color, #727272);
+    }
+    .tv {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .empty {
+      padding: 16px 0;
+      color: var(--secondary-text-color, #727272);
+    }
+  `;
+  }
+};
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoDetailsDialog.prototype, "groups", 2);
+if (!customElements.get(TAG3)) customElements.define(TAG3, ImpiantoDetailsDialog);
 
 // src/charts-logic.ts
 function toMs(v2) {
@@ -1571,7 +1999,7 @@ function normalizeValue(v2, st) {
 }
 
 // src/charts-dialog.ts
-var TAG3 = "impianto-charts-dialog";
+var TAG4 = "impianto-charts-dialog";
 var H_MS = 36e5;
 var PLOT_H = 210;
 var MT = 10;
@@ -2279,7 +2707,7 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoChartsDialog.prototype, "_computed", 2);
-if (!customElements.get(TAG3)) customElements.define(TAG3, ImpiantoChartsDialog);
+if (!customElements.get(TAG4)) customElements.define(TAG4, ImpiantoChartsDialog);
 
 // src/plant-logic.ts
 var DEFAULT_MODEL = {
@@ -2638,6 +3066,7 @@ var ImpiantoOverviewCard = class extends i4 {
     this._armed = false;
     this._width = 1e3;
     this._onResize = () => this._updateCompact();
+    this._thermoKey = "";
   }
   connectedCallback() {
     super.connectedCallback();
@@ -2650,6 +3079,7 @@ var ImpiantoOverviewCard = class extends i4 {
     });
     this._ro.observe(this);
     window.addEventListener("resize", this._onResize);
+    void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
   }
   /** Compatta se richiesto, oppure (auto) quando c'è spazio in larghezza ma lo schermo è basso. */
   _updateCompact() {
@@ -2672,6 +3102,8 @@ var ImpiantoOverviewCard = class extends i4 {
     if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
     if (changed.has("hass") && this._info) this._info.lines = this._summaryLines();
     if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
+    if (changed.has("hass") && this._details) this._details.groups = this._detailGroups();
+    if (changed.has("hass") && this._thermo) this._thermo.hass = this.hass;
   }
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -2681,6 +3113,8 @@ var ImpiantoOverviewCard = class extends i4 {
     this._info = void 0;
     this._charts?.remove();
     this._charts = void 0;
+    this._details?.remove();
+    this._details = void 0;
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
@@ -2973,9 +3407,6 @@ var ImpiantoOverviewCard = class extends i4 {
       </svg>
     `;
   }
-  _legendFlame(k2) {
-    return b2`<svg viewBox="-30 -40 60 60" class="lg"><g transform="scale(${k2})"><path d=${FLAME_PATH} fill="url(#fiamma)" /><path d=${FLAME_PATH} fill="#fde047" transform="translate(0,6) scale(0.52)" /></g></svg>`;
-  }
   _tile(label, value, color) {
     return b2`<div class="tile"><span class="tl">${label}</span><span class="tv" style=${color ? `color:${color}` : ""}>${value}</span></div>`;
   }
@@ -3000,22 +3431,6 @@ var ImpiantoOverviewCard = class extends i4 {
       </button>
     `;
   }
-  /** Stima del consumo di pellet: oggi, settimana, mese. Non compare se i sensori non esistono. */
-  _renderPelletUse() {
-    const e5 = this._e;
-    const known = [e5.pellet_today, e5.pellet_week, e5.pellet_month].some((id) => this.hass.states[id]);
-    if (!known) return A;
-    return b2`
-      <div class="counters" title="Stima dal modello di consumo: si tara con il fattore nelle preferenze">
-        <span class="tl">Pellet (stima)</span>
-        <div>
-          <b>${fmt(this._n(e5.pellet_today), 1)} kg oggi</b>
-          <b>${fmt(this._n(e5.pellet_week), 1)} kg settimana</b>
-          <b>${fmt(this._n(e5.pellet_month), 0)} kg mese</b>
-        </div>
-      </div>
-    `;
-  }
   _renderStove() {
     const e5 = this._e;
     const stateRaw = this._s(e5.stove_state);
@@ -3024,8 +3439,6 @@ var ImpiantoOverviewCard = class extends i4 {
     const since = changed ? new Date(changed).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
     const alarmRaw = (this._s(e5.alarm) ?? "").trim();
     const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown";
-    const pump = this._s(e5.pump);
-    const pumpOn = pump !== void 0 && pump !== "OFF" && pump !== "unknown" && pump !== "unavailable";
     const work = this._n(e5.work_hours_today);
     const pellet = pelletStatus(this._yes(e5.pellet_reserve), this._yes(e5.pellet_empty), this._yes(e5.pellet_open));
     return b2`
@@ -3044,24 +3457,12 @@ var ImpiantoOverviewCard = class extends i4 {
             <span class="pelletpill ${pellet.key}">${pellet.label}</span>
           </div>
         </div>
-        <div class="legendbar">
-          <div><span class="dot"></span><b>Senza fiamma</b><small>ECO STOP / OFF</small></div>
-          <div>${this._legendFlame(0.38)}<b class="amber">Accensione</b><small>START</small></div>
-          <div>${this._legendFlame(0.62)}<b class="red">In lavoro</b><small>WORK</small></div>
-        </div>
+        ${noAlarm ? A : b2`<div class="alarmbar" role="alert"><b>Allarme</b><span>${alarmRaw}</span></div>`}
         <div class="tiles">
           ${this._tile("Puffer 50 L", `${fmt(this._n(this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer), 1)} \xB0C${this.hass.states[e5.puffer_effective]?.attributes?.fonte === "sonda ingresso" ? " (stima)" : ""}`, "#f59e0b")}
           ${this._tile("Set boiler", `${fmt(this._n(e5.set_boiler), 0)} \xB0C`)}
           ${this._tile("Set acqua", `${fmt(this._n(e5.set_water), 0)} \xB0C`)}
-          ${this._tile("Fumi", `${fmt(this._n(e5.smoke), 0)} \xB0C`)}
-          ${this._tile("Fiamma", `${fmt(this._n(e5.flame), 0)} \xB0C`)}
           ${this._tile("Potenza reale", `${fmt(this._n(e5.power), 0)} %`)}
-          ${this._tile("Pressione acqua", `${fmt(this._n(e5.water_pressure), 1)} bar`)}
-          ${this._tile("Pressione braciere", fmt(this._n(e5.brazier_pressure), 1))}
-          ${this._tile("Estrattore fumi", `${fmt(this._n(e5.extractor), 0)} giri`)}
-          ${this._tile("Circolatore", pump === void 0 ? "\u2013" : pumpOn ? "ON" : "OFF", pumpOn ? "#22c55e" : void 0)}
-          ${this._tile("Accensioni ieri", fmt(this._n(e5.starts_yesterday), 0))}
-          ${this._tile("Allarme", noAlarm ? "nessuno" : alarmRaw, noAlarm ? "#22c55e" : "#ef4444")}
         </div>
         <div class="counters">
           <span class="tl">Oggi</span>
@@ -3070,8 +3471,8 @@ var ImpiantoOverviewCard = class extends i4 {
             <b>${fmt(work, 1)} h in lavoro</b>
             <b>${fmt(this._n(e5.standby_today), 0)} stand-by</b>
           </div>
+          <button class="more" @click=${() => this._openDetails()} aria-label="Altri dati della caldaia">Altri dati ▸</button>
         </div>
-        ${this._renderPelletUse()}
         <div class="chips">
           ${this._chip("Richiesta ACS", this._yes(e5.request_acs))} ${this._chip("Riscaldamento", this._yes(e5.request_heating))}
           ${this._chip("Consenso suggerito", this._yes(e5.consent))}
@@ -3080,6 +3481,71 @@ var ImpiantoOverviewCard = class extends i4 {
         <p class="look">${LOOK_LABEL[look]}</p>
       </section>
     `;
+  }
+  /** Tutti i valori che non stanno nella colonna principale della caldaia. */
+  _detailGroups() {
+    const e5 = this._e;
+    const pump = this._s(e5.pump);
+    const pumpOn = pump !== void 0 && pump !== "OFF" && pump !== "unknown" && pump !== "unavailable";
+    const alarmRaw = (this._s(e5.alarm) ?? "").trim();
+    const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown";
+    const groups = [
+      {
+        title: "Combustione",
+        tiles: [
+          { label: "Fumi", value: `${fmt(this._n(e5.smoke), 0)} \xB0C` },
+          { label: "Fiamma", value: `${fmt(this._n(e5.flame), 0)} \xB0C` },
+          { label: "Estrattore fumi", value: `${fmt(this._n(e5.extractor), 0)} giri` },
+          { label: "Pressione braciere", value: fmt(this._n(e5.brazier_pressure), 1) }
+        ]
+      },
+      {
+        title: "Acqua e circolatore",
+        tiles: [
+          { label: "Pressione acqua", value: `${fmt(this._n(e5.water_pressure), 1)} bar` },
+          { label: "Circolatore", value: pump === void 0 ? "\u2013" : pumpOn ? "ON" : "OFF", color: pumpOn ? "#22c55e" : void 0 },
+          { label: "Accensioni ieri", value: fmt(this._n(e5.starts_yesterday), 0) },
+          { label: "Allarme", value: noAlarm ? "nessuno" : alarmRaw, color: noAlarm ? "#22c55e" : "#ef4444" }
+        ]
+      }
+    ];
+    if ([e5.pellet_today, e5.pellet_week, e5.pellet_month].some((id) => this.hass.states[id])) {
+      groups.push({
+        title: "Pellet (stima dal modello di consumo)",
+        tiles: [
+          { label: "Oggi", value: `${fmt(this._n(e5.pellet_today), 1)} kg` },
+          { label: "Settimana", value: `${fmt(this._n(e5.pellet_week), 1)} kg` },
+          { label: "Mese", value: `${fmt(this._n(e5.pellet_month), 0)} kg` }
+        ]
+      });
+    }
+    return groups;
+  }
+  /** Apre la finestra "Altri dati" (si aggiunge alla pagina, come le altre). */
+  _openDetails() {
+    if (this._details) return;
+    const d3 = document.createElement("impianto-details-dialog");
+    d3.groups = this._detailGroups();
+    d3.addEventListener("closed", () => {
+      this._details = void 0;
+    });
+    document.body.appendChild(d3);
+    this._details = d3;
+  }
+  /** Il termostato ambiente (integrazione termostato_riscaldamento): sotto la caldaia, solo se è installato. */
+  _renderThermostat() {
+    const opt = this._config.thermostat;
+    if (opt === false || !customElements.get("termostato-card")) return A;
+    const cfg = typeof opt === "object" && opt !== null ? opt : {};
+    const key = JSON.stringify(cfg);
+    if (!this._thermo || this._thermoKey !== key) {
+      const el = document.createElement("termostato-card");
+      el.setConfig({ type: "custom:termostato-card", embedded: true, ...cfg.entry_id ? { entry_id: cfg.entry_id } : {}, ...cfg.title ? { title: cfg.title } : {} });
+      this._thermo = el;
+      this._thermoKey = key;
+    }
+    this._thermo.hass = this.hass;
+    return b2`<div class="thermo">${this._thermo}</div>`;
   }
   /** Le righe della finestra "Stato": poche frasi sul momento dell'impianto. */
   _summaryLines() {
@@ -3160,7 +3626,7 @@ var ImpiantoOverviewCard = class extends i4 {
               <ha-icon icon="mdi:cog-outline"></ha-icon>
             </button>`}
         ${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}
-        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()} ${this._renderStove()}</div>
+        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()}<div class="rightcol">${this._renderStove()}${this._renderThermostat()}</div></div>
       </ha-card>
     `;
   }
@@ -3580,9 +4046,45 @@ var ImpiantoOverviewCard = class extends i4 {
     .legendbar .red {
       color: #ef4444;
     }
+    .rightcol {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .compact .rightcol {
+      gap: 6px;
+    }
+    .alarmbar {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      margin-top: 8px;
+      padding: 6px 12px;
+      border-radius: 10px;
+      background: rgba(239, 68, 68, 0.16);
+      color: #ef4444;
+      font-size: 14px;
+    }
+    .more {
+      margin-left: auto;
+      min-height: 36px;
+      padding: 4px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .counters {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
     .tiles {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 8px;
       margin-top: 12px;
     }

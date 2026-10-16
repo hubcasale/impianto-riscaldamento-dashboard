@@ -44,7 +44,7 @@ Sui dati dal 2 al 6 ottobre 2026 il modello dà circa 2-6 kg al giorno, con poch
 
 ## Preferenze dalla scheda dell'impianto
 
-Il pulsante a forma di ingranaggio in alto a destra sulla scheda dell'impianto apre una finestra con le impostazioni degli helper di Home Assistant: blocco automatico e accensione forzata della pompa di integrazione, le differenze di temperatura che decidono quando bloccare o sbloccare, la temperatura massima della testa del boiler con la sua isteresi, la temperatura dell'acqua della caldaia (`climate.casale_acqua`) e il setpoint del puffer da 50 litri (`number.casale_setpoint_boiler`), la salvaguardia delle accensioni e (ripiegata) la misura delle pompe con le sue soglie. Ogni modifica è attiva subito e resta anche dopo un riavvio. Le impostazioni i cui helper non esistono (pacchetto non installato) non compaiono. Per nascondere il pulsante: `settings: false` nella configurazione della scheda.
+Il pulsante a forma di ingranaggio in alto a destra sulla scheda dell'impianto apre le preferenze, divise in **blocchi per funzione**: *Caldaia a pellet* (temperatura dell'acqua e setpoint del puffer da 50 litri), *Salvaguardia accensioni*, *Pompa di integrazione* (blocco automatico, accensione forzata, differenze di temperatura, temperatura massima della testa del boiler con la sua isteresi), *Spegnimento se nessuno è in casa*, *Termostato ambiente* (si apre la finestra dell'integrazione `termostato_riscaldamento`, se è installata) e, sotto «Avanzate», *Consumo di pellet (stima)* e *Misura delle pompe*. Toccando un blocco si aprono le sue impostazioni; la **«i»** accanto a un blocco o a una voce apre una spiegazione con cosa fa, quando serve e, dove c'è, il valore consigliato (niente suggerimenti al passaggio del mouse: pensato per il tablet). Ogni modifica è attiva subito e resta anche dopo un riavvio. Le impostazioni i cui helper non esistono (pacchetto non installato) non compaiono. Per nascondere il pulsante: `settings: false` nella configurazione della scheda.
 
 ## Installazione
 
@@ -103,6 +103,8 @@ Sotto i 560 px di larghezza il disegno del boiler perde il puffer (resta nelle t
 **Modalità compatta** (`compact: auto | true | false`, predefinito `auto`): sugli schermi larghi ma bassi (tablet, altezza sotto 850 px)
 la scheda si riduce per stare in una schermata: boiler ridimensionato all'altezza dello schermo, caldaia più bassa (tessere su 4 colonne, stato su una riga, contatori e richieste più stretti), tutti i dati restano; sparisce solo la legenda delle fiamme.
 Per forzarla o escluderla: `compact: true` / `compact: false`.
+
+**Termostato ambiente sotto la caldaia** (`thermostat: false | { entry_id, title }`): se è installata l'integrazione [termostato-riscaldamento](https://github.com/hubcasale/termostato-riscaldamento) la scheda mostra sotto la caldaia il quadrante con la temperatura, l'obiettivo con + e − e le modalità Programma, Manuale, Timer e Spento. Senza l'integrazione non compare niente. Per nasconderlo: `thermostat: false`. La colonna della caldaia è compatta: quattro valori (puffer, set boiler, set acqua, potenza), i contatori di oggi, le tre richieste e la salvaguardia; fumi, fiamma, pressioni, estrattore, circolatore, accensioni di ieri, allarme e stima del pellet stanno nella finestra **«Altri dati»**; un allarme in corso resta sempre visibile sulla scheda.
 
 ## `caldaia-schedule-card`
 

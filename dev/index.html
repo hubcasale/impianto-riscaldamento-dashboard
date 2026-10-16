@@ -45,6 +45,7 @@
 </div>
 
 <script src="bundle.js"></script>
+<script>if (new URLSearchParams(location.search).get("termostato")) document.write('<script src="/termostato-riscaldamento/dev/bundle.js"><\/script>');</script>
 <script>
 
 const q = new URLSearchParams(location.search);
@@ -176,6 +177,24 @@ P.forEach(([on, off, days], i) => {
   slugs.forEach((s, d) => set(`switch.casale_crono_p${n}_${s}`, days.includes(d) ? "on" : "off"));
 });
 
+// termostato ambiente (?termostato=programma|manuale|timer|spento|fuori_programma; serve il bundle di ../termostato-riscaldamento e un server sulla cartella PROGRAMMAZIONE)
+const tmode = q.get("termostato");
+let tinfo = null;
+if (tmode) {
+  const idle = tmode === "spento";
+  const target = idle ? 5 : tmode === "fuori_programma" ? 22.5 : tmode === "timer" ? 21.5 : 20.5;
+  const in72 = new Date(Date.now() + 72 * 60000).toISOString(), in95 = new Date(Date.now() + 95 * 60000).toISOString();
+  const sched = { enabled: tmode === "programma" || tmode === "fuori_programma", slots: [{ days: [0,1,2,3,4], start: "06:30", end: "08:30", temp: 21 }, { days: [0,1,2,3,4], start: "17:00", end: "22:00", temp: 20.5 }] };
+  tinfo = { entry_id: "t1", title: "Termostato ambiente", mode: tmode, available: true, hvac_mode: "heat", hvac_action: idle ? "idle" : "heating", target, current: 19.4, expected: null,
+    sources: { climate: "climate.termostato", temperature_sensor: null, away_entity: "binary_sensor.caldaia_nessuno_in_casa", guests_entity: null },
+    settings: { antigelo: 5, min_target: 10, max_target: 23, default_target: 20.5, timer_max_hours: 6, frost_keep_heat: true, away_setback: true, away_minutes: 30, notify_enabled: true, notify_service: "notify.alexa_media", notify_targets: [] },
+    schedule: sched, timer_until: tmode === "timer" ? in72 : null, timer_temp: tmode === "timer" ? 21.5 : null,
+    next_event: sched.enabled ? { kind: "set", time: in95, temp: 20.5 } : null, away_applied: false, last_action: null, entities: { modo: "sensor.termostato_modo" } };
+  set("climate.termostato", "heat", { temperature: target, current_temperature: 19.4, hvac_action: tinfo.hvac_action });
+  set("sensor.termostato_modo", tmode, { programmazione_attiva: sched.enabled, timer_fino: tinfo.timer_until, temperatura_timer: tinfo.timer_temp, prossima_azione: sched.enabled ? "riscaldamento" : null, prossimo_evento: sched.enabled ? in95 : null, prossima_temperatura: 20.5, assenza_attiva: false });
+  set("media_player.soggiorno", "idle", { friendly_name: "Soggiorno" });
+  set("media_player.cucina", "idle", { friendly_name: "Cucina" });
+}
 const log = document.getElementById("log");
 const cards = [];
 function push() { cards.forEach((c) => (c.hass = hass)); }
@@ -183,6 +202,7 @@ const hass = {
   states: S,
   // storico finto per la finestra dei grafici: curve plausibili ogni 5 minuti
   async callWS(msg) {
+    if (msg.type && msg.type.startsWith("termostato_riscaldamento/")) return msg.type.endsWith("/info") ? tinfo : { ok: true };
     await new Promise((r) => setTimeout(r, 150));
     if (msg.type === "frontend/get_user_data") { const v = localStorage.getItem("dev_ud_" + msg.key); return { value: v ? JSON.parse(v) : null }; }
     if (msg.type === "frontend/set_user_data") { localStorage.setItem("dev_ud_" + msg.key, JSON.stringify(msg.value)); return null; }
@@ -291,7 +311,10 @@ for (const [tag, cfg] of [
 }
 push();
 if (q.get("impostazioni")) setTimeout(() => cards[0]._openSettings(), 200);
+if (q.get("blocco")) setTimeout(() => { document.querySelector("impianto-settings-dialog")._open = q.get("blocco"); }, 500);
+if (q.get("aiuto")) setTimeout(() => { document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".block.open .bb .i, .block.open .bh .i").click(); }, 900);
 if (q.get("stato_popup")) setTimeout(() => cards[0]._openInfo(), 200);
+if (q.get("altri")) setTimeout(() => cards[0]._openDetails(), 200);
 if (q.get("salva")) setTimeout(() => { const c = cards.find((x) => x.localName === "caldaia-schedule-card"); c._openSave(); if (q.get("salva") === "nuovo") c._saving = { target: "__new__", newName: "Inverno" }; }, 600);
 if (q.get("grafici")) setTimeout(() => {
   cards[0]._openCharts();

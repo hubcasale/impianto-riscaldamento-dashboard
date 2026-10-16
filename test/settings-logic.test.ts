@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyPending, buildSettingsView, clampValue, stepValue, valueText, writeService } from "../src/settings-logic";
+import { SETTINGS_SECTIONS, applyPending, buildSettingsView, clampValue, sectionSummary, stepValue, valueText, writeService } from "../src/settings-logic";
 
 const st = (state: string, attributes: Record<string, unknown> = {}) => ({ state, attributes });
 
@@ -128,4 +128,32 @@ test("preferenze: sezione del consumo di pellet, ripiegata e con i decimali del 
   assert.deepEqual(v[0].rows.map((r) => r.entity), ["input_number.caldaia_pellet_kg_h_max", "input_number.caldaia_pellet_fattore"]);
   assert.equal(stepValue(1, 1, 0.5, 2, 0.01), 1.01);
   assert.equal(valueText(v[0].rows[0]), "5.5 kg/h");
+});
+
+test("blocchi: ognuno ha identificativo, icona e spiegazione; ogni voce ha la sua", () => {
+  const ids = SETTINGS_SECTIONS.map((x) => x.id);
+  assert.equal(new Set(ids).size, ids.length);
+  for (const sec of SETTINGS_SECTIONS) {
+    assert.match(sec.icon, /^mdi:/, sec.id);
+    assert.ok(sec.help.what.length > 20 && sec.help.when.length > 10, sec.id);
+    for (const f of sec.fields) {
+      assert.ok(f.help && f.help.what.length > 10 && f.help.when.length > 5, `${sec.id}: ${f.entity}`);
+    }
+  }
+});
+
+test("blocchi: la vista porta icona, spiegazione e spiegazione delle righe", () => {
+  const v = buildSettingsView({ "input_boolean.caldaia_salvaguardia_attiva": st("on") });
+  assert.equal(v[0].id, "partenze");
+  assert.match(v[0].icon, /^mdi:/);
+  assert.ok(v[0].help.what.length > 0);
+  assert.ok(v[0].rows[0].help);
+});
+
+test("blocchi: riepilogo sotto il titolo", () => {
+  const row = (kind: "toggle" | "number", on = false, unavailable = false) => ({ kind, on, unavailable }) as never;
+  assert.equal(sectionSummary({ rows: [row("toggle", true), row("number")] }), "Attivo · 2 impostazioni");
+  assert.equal(sectionSummary({ rows: [row("toggle", false)] }), "Disattivato · 1 impostazione");
+  assert.equal(sectionSummary({ rows: [row("number"), row("number")] }), "2 impostazioni");
+  assert.equal(sectionSummary({ rows: [row("toggle", false, true)] }), "Non disponibile");
 });
