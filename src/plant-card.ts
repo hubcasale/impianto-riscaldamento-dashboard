@@ -9,10 +9,19 @@ import type { DetailGroup, ImpiantoDetailsDialog } from "./details-dialog";
 import "./details-dialog";
 import type { ImpiantoChartsDialog } from "./charts-dialog";
 import "./charts-dialog";
+import type { ImpiantoCardDialog } from "./card-dialog";
+import "./card-dialog";
 import { summarize, type SummaryLine } from "./summary-logic";
-import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
+import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, sinceText, stoveLook, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
 const CARD_TAG = "impianto-overview-card";
+
+/** Quello che serve dell'integrazione stufa_pellet (risposta di stufa_pellet/info). */
+interface StufaInfoLite {
+  title: string;
+  entities: Record<string, string>;
+  sources: { power_sensor: string; switch: string | null };
+}
 
 /** Entità lette dalla scheda. Tutte facoltative: i valori predefiniti sono quelli dell'impianto di casa. */
 export interface PlantEntities {
@@ -202,6 +211,11 @@ export interface PlantCardConfig {
   charts?: boolean;
   /** "auto" (predefinito): compatta sugli schermi bassi (tablet); true/false per forzare */
   compact?: boolean | "auto";
+  /**
+   * Prova: sintesi della stufa a pellet (integrazione stufa_pellet) accanto al termostato, con l'accensione manuale e un
+   * pulsante che apre la scheda completa in un popup. `true`, oppure `{ entry_id, title }` se hai più stufe.
+   */
+  stufa?: boolean | { entry_id?: string; title?: string };
   /** false per nascondere il termostato ambiente (compare se è installata l'integrazione termostato_riscaldamento); entry_id se hai più termostati */
   thermostat?: boolean | { entry_id?: string; title?: string };
   entities?: Partial<PlantEntities>;
@@ -261,6 +275,12 @@ export class ImpiantoOverviewCard extends LitElement {
   private _info?: ImpiantoInfoDialog;
   private _charts?: ImpiantoChartsDialog;
   private _details?: ImpiantoDetailsDialog;
+  private _stufaDlg?: ImpiantoCardDialog;
+  @state() private _stufa: StufaInfoLite | null = null;
+  @state() private _stufaArmed = false;
+  private _stufaLoadedAt = 0;
+  private _stufaLoading = false;
+  private _stufaTimer?: number;
   private _thermo?: HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
   private _thermoKey = "";
 
@@ -306,6 +326,8 @@ export class ImpiantoOverviewCard extends LitElement {
     if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
     if (changed.has("hass") && this._details) this._details.groups = this._detailGroups();
     if (changed.has("hass") && this._thermo) this._thermo.hass = this.hass;
+    if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
+    if (this._config?.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 60000) void this._loadStufa();
   }
 
   disconnectedCallback(): void {
@@ -318,6 +340,9 @@ export class ImpiantoOverviewCard extends LitElement {
     this._charts = undefined;
     this._details?.remove();
     this._details = undefined;
+    this._stufaDlg?.remove();
+    this._stufaDlg = undefined;
+    if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
@@ -876,8 +901,100 @@ export class ImpiantoOverviewCard extends LitElement {
     this._info = d;
   }
 
+  /** Legge dall'integrazione stufa_pellet gli id delle entità; se non c'è la sintesi non compare. */
+  private async _loadStufa(): Promise<void> {
+    this._stufaLoading = true;
+    try {
+      const opt = this._config.stufa;
+      const cfg = typeof opt === "object" && opt !== null ? opt : {};
+      const msg: Record<string, unknown> = { type: "stufa_pellet/info", ...(cfg.entry_id ? { entry_id: cfg.entry_id } : {}) };
+      const info = (await (this.hass as unknown as { callWS(m: Record<string, unknown>): Promise<unknown> }).callWS(msg)) as StufaInfoLite | null;
+      this._stufa = info && info.entities && info.sources ? info : null;
+    } catch {
+      this._stufa = null;
+    } finally {
+      this._stufaLoadedAt = Date.now();
+      this._stufaLoading = false;
+    }
+  }
+
+  /** Primo tocco = conferma (4 secondi), secondo tocco = comanda l'interruttore della stufa. */
+  private _stufaPress(): void {
+    const sw = this._stufa?.sources.switch;
+    if (!sw) return;
+    const on = this.hass.states[sw]?.state === "on" ? true : this.hass.states[sw]?.state === "off" ? false : null;
+    const btn = stufaButton(on, this._stufaArmed);
+    if (btn.action === "none") return;
+    if (!this._stufaArmed) {
+      this._stufaArmed = true;
+      this._stufaTimer = window.setTimeout(() => (this._stufaArmed = false), 4000);
+      return;
+    }
+    this._stufaArmed = false;
+    if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
+    void this.hass.callService("homeassistant", btn.action === "on" ? "turn_on" : "turn_off", { entity_id: sw });
+  }
+
+  /** Popup con la scheda completa della stufa (stufa-pellet-card, dell'integrazione stufa_pellet). */
+  private _openStufa(): void {
+    if (this._stufaDlg || !customElements.get("stufa-pellet-card")) return;
+    const opt = this._config.stufa;
+    const cfg = typeof opt === "object" && opt !== null ? opt : {};
+    const d = document.createElement("impianto-card-dialog") as ImpiantoCardDialog;
+    d.hass = this.hass;
+    d.tag = "stufa-pellet-card";
+    d.label = "Stufa a pellet";
+    d.config = { ...(cfg.entry_id ? { entry_id: cfg.entry_id } : {}), ...(cfg.title ? { title: cfg.title } : {}) };
+    d.addEventListener("closed", () => {
+      this._stufaDlg = undefined;
+    });
+    document.body.appendChild(d);
+    this._stufaDlg = d;
+  }
+
+  /** Sintesi della stufa a pellet: stato, modo, potenza, accensione manuale e pulsante della scheda completa. */
+  private _renderStufa() {
+    const info = this._stufa;
+    if (!this._config.stufa || !info) return nothing;
+    const st = info.entities.stato ? this.hass.states[info.entities.stato] : undefined;
+    const key = stufaKey(st?.state);
+    const attrs = (st?.attributes ?? {}) as Record<string, unknown>;
+    const power = toNumber(String(attrs.potenza ?? "")) ?? toNumber(this.hass.states[info.sources.power_sensor]?.state);
+    const sinceRaw = attrs.da as string | null | undefined;
+    const since = sinceRaw && key !== "non_disponibile" ? sinceText(Date.now() - Date.parse(sinceRaw)) : "";
+    const modeRaw = info.entities.modo ? this.hass.states[info.entities.modo]?.state : undefined;
+    const sw = info.sources.switch;
+    const swRaw = sw ? this.hass.states[sw]?.state : undefined;
+    const btn = stufaButton(swRaw === "on" ? true : swRaw === "off" ? false : null, this._stufaArmed);
+    const cls = btn.action === "none" ? "sbtn off" : this._stufaArmed ? "sbtn armed" : swRaw === "on" ? "sbtn stop" : "sbtn";
+    return html`
+      <section class="stufa">
+        <h3>${(typeof this._config.stufa === "object" && this._config.stufa.title) || info.title || "Stufa a pellet"}</h3>
+        <div class="mid">
+          <div class="sumstate">
+            <span class="statepill st-${key}">${STUFA_LABEL[key]}</span>
+            <span class="since">${since}</span>
+          </div>
+          ${modeRaw && STUFA_MODE_LABEL[modeRaw] ? html`<div class="sumrow"><span class="tl">Modo</span><b>${STUFA_MODE_LABEL[modeRaw]}</b></div>` : nothing}
+          <div class="sumrow"><span class="tl">Potenza</span><b>${power === null ? "–" : `${fmt(power, power % 1 ? 1 : 0)} W`}</b></div>
+        </div>
+        ${sw
+          ? html`<button class=${cls} ?disabled=${btn.action === "none"} @click=${() => this._stufaPress()}>
+              <span>${btn.label}</span>${btn.sub ? html`<small>${btn.sub}</small>` : nothing}
+            </button>`
+          : nothing}
+        ${customElements.get("stufa-pellet-card")
+          ? html`<button class="more full" @click=${() => this._openStufa()} aria-label="Apri la scheda completa della stufa">Scheda completa ▸</button>`
+          : nothing}
+      </section>
+    `;
+  }
+
   render() {
     if (!this._config || !this.hass) return nothing;
+    const thermo = this._renderThermostat();
+    const stufa = this._renderStufa();
+
     return html`
       <ha-card>
         ${this._config.settings === false
@@ -886,7 +1003,7 @@ export class ImpiantoOverviewCard extends LitElement {
               <ha-icon icon="mdi:cog-outline"></ha-icon>
             </button>`}
         ${this._config.title ? html`<div class="ctitle">${this._config.title}</div>` : nothing}
-        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()}<div class="rightcol">${this._renderStove()}${this._renderThermostat()}</div></div>
+        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()}<div class="rightcol">${stufa === nothing ? this._renderStove() : html`<div class="stoverow">${this._renderStove()}${stufa}</div>`}${thermo}</div></div>
       </ha-card>
     `;
   }
@@ -1314,6 +1431,129 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .compact .rightcol {
       gap: 6px;
+    }
+    /* prova: sintesi della stufa a pellet a destra della scheda della caldaia (sotto 1150 px una sopra l'altra) */
+    .stoverow {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    @container (min-width: 1150px) {
+      .stoverow {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 164px;
+        align-items: stretch;
+      }
+    }
+    .stufa {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color);
+      border-radius: 20px;
+      padding: 14px;
+    }
+    .stufa h3 {
+      margin: 0;
+      text-align: center;
+      font-size: 17px;
+    }
+    .sumstate {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .statepill.st-spenta {
+      background: rgba(107, 114, 128, 0.25);
+    }
+    .statepill.st-accensione {
+      background: rgba(245, 158, 11, 0.25);
+      color: #f59e0b;
+    }
+    .statepill.st-accesa {
+      background: rgba(239, 68, 68, 0.22);
+      color: #ef4444;
+    }
+    .statepill.st-spegnimento {
+      background: rgba(96, 165, 250, 0.25);
+      color: #60a5fa;
+    }
+    .statepill.st-non_disponibile {
+      background: rgba(220, 38, 38, 0.2);
+      color: #dc2626;
+    }
+    .sumrow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .stufa .statepill {
+      white-space: nowrap;
+      font-size: 15px;
+      padding: 3px 12px;
+    }
+    .stufa .mid {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+    }
+    @container (min-width: 1150px) {
+      .stufa .sumrow {
+        flex-direction: column;
+        gap: 0;
+        text-align: center;
+      }
+      .stufa .sumrow b {
+        font-size: 15px;
+      }
+    }
+    .sbtn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      min-height: 52px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 14px;
+      background: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+      font: inherit;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .sbtn small {
+      font-size: 12.5px;
+      font-weight: 400;
+      opacity: 0.9;
+    }
+    .sbtn.stop {
+      background: #ef4444;
+    }
+    .sbtn.armed {
+      background: #f59e0b;
+    }
+    .sbtn.off,
+    .sbtn:disabled {
+      background: var(--secondary-background-color);
+      color: var(--secondary-text-color);
+      border: 1px solid var(--divider-color);
+      cursor: default;
+    }
+    .more.full {
+      width: 100%;
+      min-height: 44px;
+    }
+    .more {
+      white-space: nowrap;
     }
     .alarmbar {
       display: flex;

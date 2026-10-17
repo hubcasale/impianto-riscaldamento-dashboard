@@ -3019,6 +3019,119 @@ __decorateClass([
 ], ImpiantoChartsDialog.prototype, "_computed", 2);
 if (!customElements.get(TAG4)) customElements.define(TAG4, ImpiantoChartsDialog);
 
+// src/card-dialog.ts
+var TAG5 = "impianto-card-dialog";
+var ImpiantoCardDialog = class extends i4 {
+  constructor() {
+    super(...arguments);
+    this.tag = "";
+    this.config = {};
+    this.label = "";
+    this._onKey = (e5) => {
+      if (e5.key === "Escape") this._close();
+    };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("keydown", this._onKey);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener("keydown", this._onKey);
+  }
+  _close() {
+    this.dispatchEvent(new CustomEvent("closed"));
+    this.remove();
+  }
+  _ensureCard() {
+    if (!this._card) {
+      const el = document.createElement(this.tag);
+      el.setConfig({ type: `custom:${this.tag}`, ...this.config });
+      this._card = el;
+    }
+    return this._card;
+  }
+  render() {
+    const card = this._ensureCard();
+    if (this.hass) card.hass = this.hass;
+    return b2`
+      <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
+        <div class="panel" role="dialog" aria-modal="true" aria-label=${this.label || this.tag}>
+          <div class="bar"><button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button></div>
+          <div class="body">${card}</div>
+        </div>
+      </div>
+    `;
+  }
+  static {
+    this.styles = i`
+    :host {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      color: var(--primary-text-color, #212121);
+      font-family: var(--paper-font-body1_-_font-family, Roboto, Helvetica, Arial, sans-serif);
+    }
+    .backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .panel {
+      position: relative;
+      width: 100%;
+      max-width: 620px;
+      max-height: 94vh;
+      display: flex;
+      flex-direction: column;
+      border-radius: 16px;
+      overflow: hidden;
+      background: var(--card-background-color, #fff);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    }
+    .bar {
+      display: flex;
+      justify-content: flex-end;
+      padding: 4px 8px 0;
+    }
+    .x {
+      width: 44px;
+      height: 44px;
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: 20px;
+      cursor: pointer;
+      border-radius: 50%;
+    }
+    .x:hover {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.15));
+    }
+    .body {
+      overflow-y: auto;
+    }
+  `;
+  }
+};
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoCardDialog.prototype, "hass", 2);
+__decorateClass([
+  n4()
+], ImpiantoCardDialog.prototype, "tag", 2);
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoCardDialog.prototype, "config", 2);
+__decorateClass([
+  n4()
+], ImpiantoCardDialog.prototype, "label", 2);
+if (!customElements.get(TAG5)) customElements.define(TAG5, ImpiantoCardDialog);
+
 // src/plant-logic.ts
 var DEFAULT_MODEL = {
   volume: 190,
@@ -3152,6 +3265,37 @@ function panelColor(t3) {
   const k2 = Math.min(1, (t3 - 65) / 35);
   const rgb = [239, 68, 68].map((c4, i5) => Math.round(c4 + ([127, 29, 29][i5] - c4) * k2));
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
+var STUFA_LABEL = {
+  spenta: "Spenta",
+  accensione: "Accensione",
+  accesa: "In funzione",
+  spegnimento: "Spegnimento",
+  non_disponibile: "Non disponibile"
+};
+var STUFA_MODE_LABEL = {
+  programma: "Programma attivo",
+  manuale: "Manuale",
+  fuori_programma: "Fuori programma",
+  timer: "Timer"
+};
+function stufaKey(raw) {
+  return raw === "spenta" || raw === "accensione" || raw === "accesa" || raw === "spegnimento" ? raw : "non_disponibile";
+}
+function stufaButton(switchOn, armed) {
+  if (switchOn === null) return { label: "Interruttore non disponibile", sub: "", action: "none" };
+  if (switchOn) return armed ? { label: "Conferma?", sub: "tocca ancora per spegnere", action: "off" } : { label: "Spegni la stufa", sub: "interruttore acceso", action: "off" };
+  return armed ? { label: "Conferma?", sub: "tocca ancora per accendere", action: "on" } : { label: "Accendi la stufa", sub: "interruttore spento", action: "on" };
+}
+function sinceText(ms) {
+  if (ms === null || !Number.isFinite(ms) || ms < 0) return "";
+  const min = Math.floor(ms / 6e4);
+  if (min < 1) return "da meno di 1 min";
+  if (min < 60) return `da ${min} min`;
+  const h3 = Math.floor(min / 60);
+  if (h3 < 24) return `da ${h3} h ${String(min % 60).padStart(2, "0")} min`;
+  const d3 = Math.floor(h3 / 24);
+  return `da ${d3} ${d3 === 1 ? "giorno" : "giorni"}`;
 }
 
 // src/summary-logic.ts
@@ -3376,6 +3520,10 @@ var ImpiantoOverviewCard = class extends i4 {
     this._armed = false;
     this._width = 1e3;
     this._onResize = () => this._updateCompact();
+    this._stufa = null;
+    this._stufaArmed = false;
+    this._stufaLoadedAt = 0;
+    this._stufaLoading = false;
     this._thermoKey = "";
   }
   connectedCallback() {
@@ -3414,6 +3562,8 @@ var ImpiantoOverviewCard = class extends i4 {
     if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
     if (changed.has("hass") && this._details) this._details.groups = this._detailGroups();
     if (changed.has("hass") && this._thermo) this._thermo.hass = this.hass;
+    if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
+    if (this._config?.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 6e4) void this._loadStufa();
   }
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -3425,6 +3575,9 @@ var ImpiantoOverviewCard = class extends i4 {
     this._charts = void 0;
     this._details?.remove();
     this._details = void 0;
+    this._stufaDlg?.remove();
+    this._stufaDlg = void 0;
+    if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
     if (this._armTimer) window.clearTimeout(this._armTimer);
@@ -3928,15 +4081,98 @@ var ImpiantoOverviewCard = class extends i4 {
     document.body.appendChild(d3);
     this._info = d3;
   }
+  /** Legge dall'integrazione stufa_pellet gli id delle entità; se non c'è la sintesi non compare. */
+  async _loadStufa() {
+    this._stufaLoading = true;
+    try {
+      const opt = this._config.stufa;
+      const cfg = typeof opt === "object" && opt !== null ? opt : {};
+      const msg = { type: "stufa_pellet/info", ...cfg.entry_id ? { entry_id: cfg.entry_id } : {} };
+      const info = await this.hass.callWS(msg);
+      this._stufa = info && info.entities && info.sources ? info : null;
+    } catch {
+      this._stufa = null;
+    } finally {
+      this._stufaLoadedAt = Date.now();
+      this._stufaLoading = false;
+    }
+  }
+  /** Primo tocco = conferma (4 secondi), secondo tocco = comanda l'interruttore della stufa. */
+  _stufaPress() {
+    const sw = this._stufa?.sources.switch;
+    if (!sw) return;
+    const on2 = this.hass.states[sw]?.state === "on" ? true : this.hass.states[sw]?.state === "off" ? false : null;
+    const btn = stufaButton(on2, this._stufaArmed);
+    if (btn.action === "none") return;
+    if (!this._stufaArmed) {
+      this._stufaArmed = true;
+      this._stufaTimer = window.setTimeout(() => this._stufaArmed = false, 4e3);
+      return;
+    }
+    this._stufaArmed = false;
+    if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
+    void this.hass.callService("homeassistant", btn.action === "on" ? "turn_on" : "turn_off", { entity_id: sw });
+  }
+  /** Popup con la scheda completa della stufa (stufa-pellet-card, dell'integrazione stufa_pellet). */
+  _openStufa() {
+    if (this._stufaDlg || !customElements.get("stufa-pellet-card")) return;
+    const opt = this._config.stufa;
+    const cfg = typeof opt === "object" && opt !== null ? opt : {};
+    const d3 = document.createElement("impianto-card-dialog");
+    d3.hass = this.hass;
+    d3.tag = "stufa-pellet-card";
+    d3.label = "Stufa a pellet";
+    d3.config = { ...cfg.entry_id ? { entry_id: cfg.entry_id } : {}, ...cfg.title ? { title: cfg.title } : {} };
+    d3.addEventListener("closed", () => {
+      this._stufaDlg = void 0;
+    });
+    document.body.appendChild(d3);
+    this._stufaDlg = d3;
+  }
+  /** Sintesi della stufa a pellet: stato, modo, potenza, accensione manuale e pulsante della scheda completa. */
+  _renderStufa() {
+    const info = this._stufa;
+    if (!this._config.stufa || !info) return A;
+    const st = info.entities.stato ? this.hass.states[info.entities.stato] : void 0;
+    const key = stufaKey(st?.state);
+    const attrs = st?.attributes ?? {};
+    const power = toNumber(String(attrs.potenza ?? "")) ?? toNumber(this.hass.states[info.sources.power_sensor]?.state);
+    const sinceRaw = attrs.da;
+    const since = sinceRaw && key !== "non_disponibile" ? sinceText(Date.now() - Date.parse(sinceRaw)) : "";
+    const modeRaw = info.entities.modo ? this.hass.states[info.entities.modo]?.state : void 0;
+    const sw = info.sources.switch;
+    const swRaw = sw ? this.hass.states[sw]?.state : void 0;
+    const btn = stufaButton(swRaw === "on" ? true : swRaw === "off" ? false : null, this._stufaArmed);
+    const cls = btn.action === "none" ? "sbtn off" : this._stufaArmed ? "sbtn armed" : swRaw === "on" ? "sbtn stop" : "sbtn";
+    return b2`
+      <section class="stufa">
+        <h3>${typeof this._config.stufa === "object" && this._config.stufa.title || info.title || "Stufa a pellet"}</h3>
+        <div class="mid">
+          <div class="sumstate">
+            <span class="statepill st-${key}">${STUFA_LABEL[key]}</span>
+            <span class="since">${since}</span>
+          </div>
+          ${modeRaw && STUFA_MODE_LABEL[modeRaw] ? b2`<div class="sumrow"><span class="tl">Modo</span><b>${STUFA_MODE_LABEL[modeRaw]}</b></div>` : A}
+          <div class="sumrow"><span class="tl">Potenza</span><b>${power === null ? "\u2013" : `${fmt(power, power % 1 ? 1 : 0)} W`}</b></div>
+        </div>
+        ${sw ? b2`<button class=${cls} ?disabled=${btn.action === "none"} @click=${() => this._stufaPress()}>
+              <span>${btn.label}</span>${btn.sub ? b2`<small>${btn.sub}</small>` : A}
+            </button>` : A}
+        ${customElements.get("stufa-pellet-card") ? b2`<button class="more full" @click=${() => this._openStufa()} aria-label="Apri la scheda completa della stufa">Scheda completa ▸</button>` : A}
+      </section>
+    `;
+  }
   render() {
     if (!this._config || !this.hass) return A;
+    const thermo = this._renderThermostat();
+    const stufa = this._renderStufa();
     return b2`
       <ha-card>
         ${this._config.settings === false ? A : b2`<button class="gear" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
               <ha-icon icon="mdi:cog-outline"></ha-icon>
             </button>`}
         ${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}
-        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()}<div class="rightcol">${this._renderStove()}${this._renderThermostat()}</div></div>
+        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()}<div class="rightcol">${stufa === A ? this._renderStove() : b2`<div class="stoverow">${this._renderStove()}${stufa}</div>`}${thermo}</div></div>
       </ha-card>
     `;
   }
@@ -4365,6 +4601,129 @@ var ImpiantoOverviewCard = class extends i4 {
     .compact .rightcol {
       gap: 6px;
     }
+    /* prova: sintesi della stufa a pellet a destra della scheda della caldaia (sotto 1150 px una sopra l'altra) */
+    .stoverow {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    @container (min-width: 1150px) {
+      .stoverow {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 164px;
+        align-items: stretch;
+      }
+    }
+    .stufa {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color);
+      border-radius: 20px;
+      padding: 14px;
+    }
+    .stufa h3 {
+      margin: 0;
+      text-align: center;
+      font-size: 17px;
+    }
+    .sumstate {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .statepill.st-spenta {
+      background: rgba(107, 114, 128, 0.25);
+    }
+    .statepill.st-accensione {
+      background: rgba(245, 158, 11, 0.25);
+      color: #f59e0b;
+    }
+    .statepill.st-accesa {
+      background: rgba(239, 68, 68, 0.22);
+      color: #ef4444;
+    }
+    .statepill.st-spegnimento {
+      background: rgba(96, 165, 250, 0.25);
+      color: #60a5fa;
+    }
+    .statepill.st-non_disponibile {
+      background: rgba(220, 38, 38, 0.2);
+      color: #dc2626;
+    }
+    .sumrow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .stufa .statepill {
+      white-space: nowrap;
+      font-size: 15px;
+      padding: 3px 12px;
+    }
+    .stufa .mid {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+    }
+    @container (min-width: 1150px) {
+      .stufa .sumrow {
+        flex-direction: column;
+        gap: 0;
+        text-align: center;
+      }
+      .stufa .sumrow b {
+        font-size: 15px;
+      }
+    }
+    .sbtn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      min-height: 52px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 14px;
+      background: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+      font: inherit;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .sbtn small {
+      font-size: 12.5px;
+      font-weight: 400;
+      opacity: 0.9;
+    }
+    .sbtn.stop {
+      background: #ef4444;
+    }
+    .sbtn.armed {
+      background: #f59e0b;
+    }
+    .sbtn.off,
+    .sbtn:disabled {
+      background: var(--secondary-background-color);
+      color: var(--secondary-text-color);
+      border: 1px solid var(--divider-color);
+      cursor: default;
+    }
+    .more.full {
+      width: 100%;
+      min-height: 44px;
+    }
+    .more {
+      white-space: nowrap;
+    }
     .alarmbar {
       display: flex;
       gap: 10px;
@@ -4637,6 +4996,12 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoOverviewCard.prototype, "_armed", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCard.prototype, "_stufa", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCard.prototype, "_stufaArmed", 2);
 customElements.define(CARD_TAG, ImpiantoOverviewCard);
 
 // src/schedule-logic.ts

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_MODEL, boostButton, collectorPumpPill, integrationPumpPill, panelColor, panelModel, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber } from "../src/plant-logic";
+import { DEFAULT_MODEL, boostButton, collectorPumpPill, integrationPumpPill, panelColor, panelModel, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, sinceText, stufaButton, stufaKey, STUFA_LABEL } from "../src/plant-logic";
 
 test("docce: boiler caldo in alto, freddo in basso", () => {
   // zona alta 95 L a 55,6 °C -> 95*(40,6)/23 = 167,7 L a 38 °C -> 4 docce da 40 L
@@ -136,4 +136,31 @@ test("pannello: colore sull'acqua fino a 65 gradi, poi piu' scuro", () => {
   assert.notEqual(panelColor(90), tempColor(65));
   assert.equal(panelColor(null), "#94a3b8");
   assert.equal(panelColor(100), "rgb(127, 29, 29)");
+});
+
+test("stufa: stato sconosciuto diventa non disponibile", () => {
+  assert.equal(stufaKey("accesa"), "accesa");
+  assert.equal(stufaKey("spenta"), "spenta");
+  assert.equal(stufaKey("boh"), "non_disponibile");
+  assert.equal(stufaKey(undefined), "non_disponibile");
+  assert.equal(STUFA_LABEL[stufaKey("accesa")], "In funzione");
+});
+
+test("stufa: accensione manuale con conferma al secondo tocco", () => {
+  assert.deepEqual(stufaButton(false, false), { label: "Accendi la stufa", sub: "interruttore spento", action: "on" });
+  assert.deepEqual(stufaButton(false, true), { label: "Conferma?", sub: "tocca ancora per accendere", action: "on" });
+  assert.deepEqual(stufaButton(true, false), { label: "Spegni la stufa", sub: "interruttore acceso", action: "off" });
+  assert.deepEqual(stufaButton(true, true), { label: "Conferma?", sub: "tocca ancora per spegnere", action: "off" });
+  assert.equal(stufaButton(null, false).action, "none");
+});
+
+test("stufa: da quanto dura lo stato", () => {
+  assert.equal(sinceText(null), "");
+  assert.equal(sinceText(-5), "");
+  assert.equal(sinceText(20000), "da meno di 1 min");
+  assert.equal(sinceText(7 * 60000), "da 7 min");
+  assert.equal(sinceText(95 * 60000), "da 1 h 35 min");
+  assert.equal(sinceText(125 * 60000), "da 2 h 05 min");
+  assert.equal(sinceText(24 * 3600000), "da 1 giorno");
+  assert.equal(sinceText(50 * 3600000), "da 2 giorni");
 });

@@ -248,3 +248,54 @@ export function panelColor(t: number | null): string {
   const rgb = [239, 68, 68].map((c, i) => Math.round(c + ([127, 29, 29][i] - c) * k));
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
+
+/** Stato della stufa a pellet come lo dà l'integrazione stufa_pellet. */
+export type StufaKey = "spenta" | "accensione" | "accesa" | "spegnimento" | "non_disponibile";
+
+export const STUFA_LABEL: Record<StufaKey, string> = {
+  spenta: "Spenta",
+  accensione: "Accensione",
+  accesa: "In funzione",
+  spegnimento: "Spegnimento",
+  non_disponibile: "Non disponibile",
+};
+
+export const STUFA_MODE_LABEL: Record<string, string> = {
+  programma: "Programma attivo",
+  manuale: "Manuale",
+  fuori_programma: "Fuori programma",
+  timer: "Timer",
+};
+
+export function stufaKey(raw: string | undefined): StufaKey {
+  return raw === "spenta" || raw === "accensione" || raw === "accesa" || raw === "spegnimento" ? raw : "non_disponibile";
+}
+
+export interface StufaButtonModel {
+  label: string;
+  sub: string;
+  /** on/off: comando da dare all'interruttore; none: niente da fare */
+  action: "on" | "off" | "none";
+}
+
+/**
+ * Pulsante di accensione manuale: segue l'interruttore (Shelly) della stufa. Il primo tocco chiede conferma
+ * (come l'accensione rapida della caldaia), il secondo esegue.
+ */
+export function stufaButton(switchOn: boolean | null, armed: boolean): StufaButtonModel {
+  if (switchOn === null) return { label: "Interruttore non disponibile", sub: "", action: "none" };
+  if (switchOn) return armed ? { label: "Conferma?", sub: "tocca ancora per spegnere", action: "off" } : { label: "Spegni la stufa", sub: "interruttore acceso", action: "off" };
+  return armed ? { label: "Conferma?", sub: "tocca ancora per accendere", action: "on" } : { label: "Accendi la stufa", sub: "interruttore spento", action: "on" };
+}
+
+/** Da quanto tempo dura lo stato: "7 min", "1 h 35 min", "2 giorni". */
+export function sinceText(ms: number | null): string {
+  if (ms === null || !Number.isFinite(ms) || ms < 0) return "";
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return "da meno di 1 min";
+  if (min < 60) return `da ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `da ${h} h ${String(min % 60).padStart(2, "0")} min`;
+  const d = Math.floor(h / 24);
+  return `da ${d} ${d === 1 ? "giorno" : "giorni"}`;
+}

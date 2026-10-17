@@ -45,6 +45,7 @@
 </div>
 
 <script src="bundle.js"></script>
+<script>if (new URLSearchParams(location.search).get("stufa")) document.write('<script src="/stufa-pellet-monitor/dev/bundle.js"><\/script>');</script>
 <script>if (new URLSearchParams(location.search).get("termostato")) document.write('<script src="/termostato-riscaldamento/dev/bundle.js"><\/script>');</script>
 <script>
 
@@ -203,6 +204,24 @@ if (tmode) {
   set("media_player.soggiorno", "idle", { friendly_name: "Soggiorno" });
   set("media_player.cucina", "idle", { friendly_name: "Cucina" });
 }
+// stufa a pellet (?stufa=accesa|spenta|accensione|spegnimento|non_disponibile; serve il bundle di ../stufa-pellet-monitor e un server sulla cartella PROGRAMMAZIONE)
+const sm = q.get("stufa");
+let sinfo = null;
+if (sm) {
+  const pot = { accesa: 128.2, spenta: 1.2, accensione: 312, spegnimento: 127.4, non_disponibile: null }[sm];
+  const da = new Date(Date.now() - (sm === "accesa" ? 95 : 7) * 60000).toISOString();
+  const next = new Date(Date.now() + 95 * 60000).toISOString();
+  sinfo = { entry_id: "s1", title: "Stufa a pellet", state: sm, power: pot, since: da, sources: { power_sensor: "sensor.presa_power", switch: "switch.stufa", plug: "switch.presa", energy_sensor: null },
+    settings: { off_below: 5, ignition_above: 250, shutdown_min: 126, shutdown_max: 129, shutdown_needs_switch_off: true, confirm_seconds: 10, grace_seconds: 15, restore_delay_seconds: 30, sync_switch_on: true, sync_switch_off: true, notify_events: true, notify_sensor_problem: true, notify_service: "", tile_color: "arancio", show_switch_button: true },
+    schedule: { enabled: true, slots: [{ days: [0,1,2,3,4], start: "06:30", end: "08:30" }] }, mode: sm === "accesa" ? "programma" : "manuale", timer_until: null,
+    next_event: { kind: "off", time: next }, last_action: null, entities: { modo: "sensor.stufa_modo", stato: "sensor.stufa_stato", accensioni_oggi: "sensor.acc", ore_in_funzione_oggi: "sensor.ore" } };
+  set("sensor.stufa_stato", sm, { potenza: pot, da, interruttore: sm === "spenta" ? "spento" : "acceso", presa: "accesa", azioni_bloccate: sm === "non_disponibile" });
+  set("sensor.stufa_modo", sinfo.mode, { programmazione_attiva: true, timer_fino: null, prossima_azione: "spegnimento", prossimo_evento: next });
+  set("sensor.acc", 2); set("sensor.ore", 3.4);
+  set("sensor.presa_power", pot === null ? "unavailable" : pot);
+  set("switch.stufa", sm === "spenta" ? "off" : "on");
+  set("switch.presa", "on");
+}
 const log = document.getElementById("log");
 const cards = [];
 function push() { cards.forEach((c) => (c.hass = hass)); }
@@ -210,6 +229,7 @@ const hass = {
   states: S,
   // storico finto per la finestra dei grafici: curve plausibili ogni 5 minuti
   async callWS(msg) {
+    if (msg.type === "stufa_pellet/info") return sinfo;
     if (msg.type && msg.type.startsWith("termostato_riscaldamento/")) return msg.type.endsWith("/info") ? tinfo : { ok: true };
     await new Promise((r) => setTimeout(r, 150));
     if (msg.type === "frontend/get_user_data") { const v = localStorage.getItem("dev_ud_" + msg.key); return { value: v ? JSON.parse(v) : null }; }
@@ -255,6 +275,12 @@ const hass = {
     log.scrollTop = log.scrollHeight;
     await new Promise((r) => setTimeout(r, 250));
     if (domain === "input_boolean" && (service === "turn_on" || service === "turn_off")) {
+      S[data.entity_id].state = service === "turn_on" ? "on" : "off";
+      hass.states = { ...S };
+      push();
+      return;
+    }
+    if (domain === "homeassistant" && (service === "turn_on" || service === "turn_off")) {
       S[data.entity_id].state = service === "turn_on" ? "on" : "off";
       hass.states = { ...S };
       push();
@@ -307,7 +333,7 @@ const hass = {
 
 const wrap = document.getElementById("cards");
 for (const [tag, cfg] of [
-  ["impianto-overview-card", { type: "custom:impianto-overview-card" }],
+  ["impianto-overview-card", { type: "custom:impianto-overview-card", ...(q.get("stufa") ? { stufa: true } : {}) }],
   ["caldaia-schedule-card", { type: "custom:caldaia-schedule-card" }],
 ]) {
   const el = document.createElement(tag);
@@ -322,6 +348,7 @@ if (q.get("impostazioni")) setTimeout(() => cards[0]._openSettings(), 200);
 if (q.get("blocco")) setTimeout(() => { document.querySelector("impianto-settings-dialog")._open = q.get("blocco"); }, 500);
 if (q.get("scroll")) setTimeout(() => { const b = document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".body"); b.scrollTop = b.scrollHeight; }, 1000);
 if (q.get("aiuto")) setTimeout(() => { document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".block.open .bb .i, .block.open .bh .i").click(); }, 900);
+if (q.get("stufa_popup")) setTimeout(() => cards[0]._openStufa(), 1500);
 if (q.get("stato_popup")) setTimeout(() => cards[0]._openInfo(), 200);
 if (q.get("altri")) setTimeout(() => cards[0]._openDetails(), 200);
 if (q.get("salva")) setTimeout(() => { const c = cards.find((x) => x.localName === "caldaia-schedule-card"); c._openSave(); if (q.get("salva") === "nuovo") c._saving = { target: "__new__", newName: "Inverno" }; }, 600);

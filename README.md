@@ -106,6 +106,8 @@ Per forzarla o escluderla: `compact: true` / `compact: false`.
 
 **Termostato ambiente sotto la caldaia** (`thermostat: false | { entry_id, title }`): se è installata l'integrazione [termostato-riscaldamento](https://github.com/hubcasale/termostato-riscaldamento) la scheda mostra sotto la caldaia il quadrante con la temperatura, l'obiettivo con + e − e le modalità Programma, Manuale, Timer e Spento. Senza l'integrazione non compare niente. Per nasconderlo: `thermostat: false`. La colonna della caldaia è compatta: quattro valori (puffer, set boiler, set acqua, potenza), i contatori di oggi, le tre richieste e la salvaguardia; fumi, fiamma, pressioni, estrattore, circolatore, accensioni di ieri, allarme e stima del pellet stanno nella finestra **«Altri dati»**; un allarme in corso resta sempre visibile sulla scheda.
 
+**Sintesi della stufa a pellet (prova)** (`stufa: true | { entry_id, title }`, predefinito spenta): se è installata l'integrazione [stufa-pellet-monitor](https://github.com/hubcasale/stufa-pellet-monitor), a destra della scheda della caldaia compare una sintesi della stufa: stato e da quanto dura, modo (programma, manuale, timer), potenza, il pulsante di **accensione manuale** dell'interruttore (primo tocco = conferma, secondo = esegue) e **«Scheda completa»**, che apre in un popup la scheda `stufa-pellet-card`, aggiornata in tempo reale. Il termostato resta intero sotto. Quando la scheda è più stretta di 1150 px (portatili piccoli, tablet in verticale, telefoni) la sintesi va sotto la caldaia, a tutta larghezza. Senza l'integrazione, o senza `stufa`, non cambia niente.
+
 ## `caldaia-schedule-card`
 
 ```yaml
