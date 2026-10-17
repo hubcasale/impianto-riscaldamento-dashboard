@@ -1,7 +1,7 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
-import { PENDING_MS, applyPending, buildSettingsView, clampValue, sectionSummary, stepValue, writeService, type HelpDef, type PendingMap, type RowView, type SectionView } from "./settings-logic";
+import { PENDING_MS, SETTINGS_GROUPS, applyPending, buildSettingsView, clampValue, stepValue, writeService, type HelpDef, type PendingMap, type RowView, type SectionView, type ThresholdBar } from "./settings-logic";
 
 const TAG = "impianto-settings-dialog";
 
@@ -95,18 +95,26 @@ export class ImpiantoSettingsDialog extends LitElement {
 
   private _toggleBlock(id: string): void {
     this._open = this._open === id ? null : id;
+    if (this._open) void this.updateComplete.then(() => this.renderRoot.querySelector(".block.open")?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   }
 
+  /** Link "Quando serve": apre la spiegazione completa (cosa fa, quando serve, valore consigliato). */
   private _helpBtn(title: string, help?: HelpDef) {
     if (!help) return nothing;
-    return html`<button class="i" aria-label="Spiegazione: ${title}" @click=${(e: Event) => { e.stopPropagation(); this._help = { title, help }; }}>i</button>`;
+    return html`<button class="why" aria-label="Quando serve: ${title}" @click=${(e: Event) => { e.stopPropagation(); this._help = { title, help }; }}>Quando serve?</button>`;
   }
 
   private _renderRow(row: RowView) {
+    const text = html`
+      <div class="txt">
+        <div class="lab">${row.label}</div>
+        <div class="hint">${row.hint ?? row.help?.what ?? ""} ${this._helpBtn(row.label, row.help)}</div>
+      </div>
+    `;
     if (row.kind === "toggle") {
       return html`
         <div class="row tog">
-          <div class="txt"><span class="lab">${row.label}</span>${this._helpBtn(row.label, row.help)}</div>
+          ${text}
           <button
             class=${row.on ? "sw on" : "sw"}
             role="switch"
@@ -120,7 +128,7 @@ export class ImpiantoSettingsDialog extends LitElement {
     }
     return html`
       <div class="row">
-        <div class="txt"><span class="lab">${row.label}</span>${this._helpBtn(row.label, row.help)}</div>
+        ${text}
         <div class="num">
           <button class="st" aria-label="Diminuisci" ?disabled=${row.unavailable || (row.value !== null && row.value <= row.min)} @click=${() => this._step(row, -1)}>−</button>
           <input
@@ -139,17 +147,57 @@ export class ImpiantoSettingsDialog extends LitElement {
     `;
   }
 
+  /** Le due soglie della pompa su una barra: ferma, attesa, può girare; il segno è la differenza di adesso. */
+  private _renderBar(b: ThresholdBar) {
+    const f = (v: number) => `+${String(v).replace(".", ",")} °C`;
+    return html`
+      <div class="gauge" aria-label="Soglie della pompa di integrazione">
+        <div class="gcap">Quanto il puffer è più caldo del boiler</div>
+        <div class="mk">${b.markerPct !== null ? html`<span style="left:${b.markerPct}%">adesso ▼</span>` : nothing}</div>
+        <div class="track">
+          <div class="seg stop" style="width:${b.blockPct}%"><span>ferma</span></div>
+          <div class="seg wait" style="width:${b.unblockPct - b.blockPct}%"><span>attesa</span></div>
+          <div class="seg go" style="width:${100 - b.unblockPct}%"><span>gira</span></div>
+        </div>
+        <div class="ticks">
+          <span style="left:0%">0</span>
+          <span style="left:${b.blockPct}%">${f(b.block)}</span>
+          <span style="left:${b.unblockPct}%">${f(b.unblock)}</span>
+        </div>
+        ${b.text ? html`<div class="now ${b.zone ?? ""}">${b.text}</div>` : nothing}
+      </div>
+    `;
+  }
+
   private _renderBlock(sec: SectionView) {
     const open = this._open === sec.id;
+    const m = sec.master;
     return html`
       <section class="block ${open ? "open" : ""}">
-        <div class="bh" role="button" tabindex="0" aria-expanded=${open ? "true" : "false"} @click=${() => this._toggleBlock(sec.id)} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") this._toggleBlock(sec.id); }}>
+        <div class="bh" role="button" tabindex="0" aria-expanded=${open ? "true" : "false"} @click=${() => this._toggleBlock(sec.id)} @keydown=${(e: KeyboardEvent) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); this._toggleBlock(sec.id); } }}>
           <ha-icon icon=${sec.icon}></ha-icon>
-          <div class="bt"><div class="bn">${sec.title}</div><div class="bs">${sectionSummary(sec)}</div></div>
-          ${this._helpBtn(sec.title, sec.help)}
+          <div class="bt"><div class="bn">${sec.title}</div><div class="bs">${sec.summary}</div></div>
+          ${m
+            ? html`<button
+                class=${m.on ? "sw on" : "sw"}
+                role="switch"
+                aria-checked=${m.on ? "true" : "false"}
+                aria-label=${m.label}
+                title=${m.label}
+                ?disabled=${m.unavailable}
+                @click=${(e: Event) => { e.stopPropagation(); this._toggle(m); }}
+              ><span class="knob"></span></button>`
+            : nothing}
           <span class="chev">${open ? "▾" : "▸"}</span>
         </div>
-        ${open ? html`<div class="bb">${sec.rows.map((r) => this._renderRow(r))}</div>` : nothing}
+        ${open
+          ? html`<div class="bb">
+              <p class="intro">${m?.hint ?? sec.help.what} ${this._helpBtn(sec.title, sec.help)}</p>
+              ${sec.bar ? this._renderBar(sec.bar) : nothing}
+              ${sec.notes.map((n) => html`<p class="note">${n}</p>`)}
+              ${sec.rows.map((r) => this._renderRow(r))}
+            </div>`
+          : nothing}
       </section>
     `;
   }
@@ -186,10 +234,14 @@ export class ImpiantoSettingsDialog extends LitElement {
         <div class="bh" role="button" tabindex="0" aria-expanded=${open ? "true" : "false"} @click=${() => this._toggleBlock(id)} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") this._toggleBlock(id); }}>
           <ha-icon icon="mdi:thermostat"></ha-icon>
           <div class="bt"><div class="bn">Termostato ambiente</div><div class="bs">Antigelo, timer, casa vuota, annunci</div></div>
-          ${this._helpBtn("Termostato ambiente", help)}
           <span class="chev">${open ? "▾" : "▸"}</span>
         </div>
-        ${open ? html`<div class="bb"><div class="row"><div class="txt"><span class="lab">Preferenze del termostato</span></div><button class="btn" ?disabled=${this._thermoBusy} @click=${() => void this._openThermostat()}>Apri</button></div></div>` : nothing}
+        ${open
+          ? html`<div class="bb">
+              <p class="intro">${help.what} ${this._helpBtn("Termostato ambiente", help)}</p>
+              <div class="row"><div class="txt"><div class="lab">Preferenze del termostato</div><div class="hint">Si apre la sua finestra.</div></div><button class="btn" ?disabled=${this._thermoBusy} @click=${() => void this._openThermostat()}>Apri</button></div>
+            </div>`
+          : nothing}
       </section>
     `;
   }
@@ -214,9 +266,10 @@ export class ImpiantoSettingsDialog extends LitElement {
     if (!this.hass) return nothing;
     const built = applyPending(buildSettingsView(this.hass.states), this._pending, Date.now());
     for (const e of built.settled) delete this._pending[e];
-    const main = built.sections.filter((x) => !x.advanced);
-    const adv = built.sections.filter((x) => x.advanced);
     const thermo = this._renderThermostatBlock();
+    const groups = SETTINGS_GROUPS.map((g) => ({ g, secs: built.sections.filter((x) => x.group === g.id), extra: g.id === "casa" ? thermo : nothing })).filter(
+      (x) => x.secs.length || x.extra !== nothing,
+    );
     return html`
       <div class="backdrop" @click=${(e: Event) => e.target === e.currentTarget && this._close()}>
         <div class="panel" role="dialog" aria-modal="true" aria-label="Preferenze impianto">
@@ -225,12 +278,18 @@ export class ImpiantoSettingsDialog extends LitElement {
             <button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button>
           </div>
           <div class="body">
-            ${built.sections.length === 0 && thermo === nothing
+            ${groups.length === 0
               ? html`<div class="empty">Nessuna impostazione trovata: installa i pacchetti Home Assistant del progetto (cartella ha-packages).</div>`
               : html`
-                  ${main.map((sec) => this._renderBlock(sec))}
-                  ${thermo}
-                  ${adv.length ? html`<div class="adv">Avanzate</div>${adv.map((sec) => this._renderBlock(sec))}` : nothing}
+                  <p class="lead">Tocca un blocco per aprirlo e cambiare i valori: ogni modifica vale subito. Gli interruttori accendono e spengono la funzione senza aprire il blocco.</p>
+                  ${groups.map(
+                    ({ g, secs, extra }) => html`
+                      <h3 class="grp">${g.title}</h3>
+                      ${g.note ? html`<div class="gnote">${g.note}</div>` : nothing}
+                      ${secs.map((sec) => this._renderBlock(sec))}
+                      ${extra}
+                    `,
+                  )}
                 `}
             ${this._error ? html`<div class="err">${this._error}</div>` : nothing}
           </div>
@@ -297,27 +356,6 @@ export class ImpiantoSettingsDialog extends LitElement {
       overflow-y: auto;
       padding: 4px 18px 18px;
     }
-    section {
-      margin-top: 14px;
-    }
-    .sec {
-      font-size: 12.5px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--primary-color, #03a9f4);
-      margin: 0 0 4px;
-    }
-    .sec.adv {
-      background: none;
-      border: none;
-      width: 100%;
-      display: flex;
-      justify-content: space-between;
-      cursor: pointer;
-      padding: 4px 0;
-      font-family: inherit;
-    }
     .row {
       display: flex;
       align-items: center;
@@ -332,11 +370,124 @@ export class ImpiantoSettingsDialog extends LitElement {
     }
     .lab {
       font-size: 15px;
+      font-weight: 500;
     }
     .hint {
       font-size: 12.5px;
+      line-height: 1.35;
       color: var(--secondary-text-color, #727272);
       margin-top: 2px;
+    }
+    .why {
+      background: none;
+      border: none;
+      padding: 4px 2px;
+      font: inherit;
+      font-size: 12.5px;
+      color: var(--primary-color, #03a9f4);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .lead {
+      margin: 14px 0 0;
+      font-size: 13.5px;
+      line-height: 1.4;
+      color: var(--secondary-text-color, #727272);
+    }
+    .grp {
+      margin: 20px 2px 0;
+      font-size: 12.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--primary-color, #03a9f4);
+    }
+    .gnote {
+      margin: 2px 2px 0;
+      font-size: 12.5px;
+      color: var(--secondary-text-color, #727272);
+    }
+    .intro {
+      margin: 10px 0 2px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .note {
+      margin: 10px 0 2px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .gauge {
+      margin: 12px 0 6px;
+      padding: 0 14px;
+    }
+    .gcap {
+      font-size: 12px;
+      color: var(--secondary-text-color, #727272);
+      margin-bottom: 6px;
+    }
+    .track {
+      position: relative;
+      display: flex;
+      height: 26px;
+      border-radius: 13px;
+      overflow: hidden;
+    }
+    .seg {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .seg.stop {
+      background: var(--error-color, #db4437);
+    }
+    .seg.wait {
+      background: var(--warning-color, #ffa600);
+    }
+    .seg.go {
+      background: var(--success-color, #43a047);
+    }
+    .mk {
+      position: relative;
+      height: 16px;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+    .mk span {
+      position: absolute;
+      bottom: 0;
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+    .ticks {
+      position: relative;
+      height: 18px;
+      margin-top: 3px;
+      font-size: 11.5px;
+      color: var(--secondary-text-color, #727272);
+    }
+    .ticks span {
+      position: absolute;
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+    .ticks span:first-child {
+      transform: none;
+    }
+    .now {
+      margin-top: 6px;
+      font-size: 13px;
+      line-height: 1.4;
+      font-weight: 500;
     }
     .sw {
       flex: none;
@@ -444,10 +595,8 @@ export class ImpiantoSettingsDialog extends LitElement {
     }
     .bs {
       font-size: 12.5px;
+      line-height: 1.35;
       color: var(--secondary-text-color, #727272);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
     .chev {
       width: 18px;
@@ -460,33 +609,6 @@ export class ImpiantoSettingsDialog extends LitElement {
     }
     .bb .row:last-child {
       border-bottom: none;
-    }
-    .adv {
-      margin: 18px 2px 0;
-      font-size: 12.5px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--secondary-text-color, #727272);
-    }
-    .txt {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .i {
-      flex: none;
-      width: 36px;
-      height: 36px;
-      margin-left: 6px;
-      border-radius: 50%;
-      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
-      background: transparent;
-      color: var(--secondary-text-color, #727272);
-      font-size: 15px;
-      font-style: italic;
-      font-family: Georgia, serif;
-      cursor: pointer;
     }
     .btn {
       min-height: 44px;

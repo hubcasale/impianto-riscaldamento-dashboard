@@ -140,6 +140,14 @@ nb("input_number.caldaia_pellet_kg_h_mantenimento", 0.2, { min: 0, max: 1, step:
 nb("input_number.caldaia_pellet_g_accensione", 200, { min: 0, max: 500, step: 10, unit_of_measurement: "g" });
 nb("input_number.caldaia_pellet_fattore", 1, { min: 0.5, max: 2, step: 0.01 });
 nb("input_number.caldaia_salvaguardia_t_puffer", 40, { min: 30, max: 70, step: 1, unit_of_measurement: "°C" });
+nb("input_number.caldaia_assenza_t_esterna_min", 5, { min: -10, max: 15, step: 1, unit_of_measurement: "°C" });
+nb("input_number.solare_termico_k", 0.078, { min: 0.01, max: 0.3, step: 0.001, unit_of_measurement: "K·m²/W" });
+nb("input_number.solare_termico_tau", 120, { min: 1, max: 360, step: 5, unit_of_measurement: "min" });
+nb("input_number.solare_termico_inclinazione", 22, { min: 0, max: 90, step: 1, unit_of_measurement: "°" });
+nb("input_number.solare_termico_orientamento", 270, { min: 0, max: 360, step: 1, unit_of_measurement: "°" });
+nb("input_number.solare_fattore_stazione", 1.6, { min: 1, max: 3, step: 0.01 });
+nb("input_number.solare_pannello_fattore_sereno", 1, { min: 0.5, max: 1.5, step: 0.01 });
+set("input_boolean.solare_orizzonte_attivo", "on");
 set("sensor.solare_termico_irraggiamento_sul_piano", 420, { unit_of_measurement: "W/m²" });
 set("sensor.open_meteo_irraggiamento_previsto_sul_piano", 380, { unit_of_measurement: "W/m²" });
 set("sensor.open_meteo_irraggiamento_osservato_dal_satellite", 400, { unit_of_measurement: "W/m²" });
@@ -312,6 +320,7 @@ for (const [tag, cfg] of [
 push();
 if (q.get("impostazioni")) setTimeout(() => cards[0]._openSettings(), 200);
 if (q.get("blocco")) setTimeout(() => { document.querySelector("impianto-settings-dialog")._open = q.get("blocco"); }, 500);
+if (q.get("scroll")) setTimeout(() => { const b = document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".body"); b.scrollTop = b.scrollHeight; }, 1000);
 if (q.get("aiuto")) setTimeout(() => { document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".block.open .bb .i, .block.open .bh .i").click(); }, 900);
 if (q.get("stato_popup")) setTimeout(() => cards[0]._openInfo(), 200);
 if (q.get("altri")) setTimeout(() => cards[0]._openDetails(), 200);

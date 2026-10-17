@@ -19,9 +19,21 @@ export interface FieldDef {
   help?: HelpDef;
 }
 
+/** Gruppi in cui la finestra raccoglie i blocchi, nell'ordine in cui compaiono. */
+export const SETTINGS_GROUPS: { id: string; title: string; note?: string }[] = [
+  { id: "riscaldamento", title: "Caldaia e acqua calda" },
+  { id: "pompe", title: "Pompe" },
+  { id: "casa", title: "Quando esci di casa" },
+  { id: "taratura", title: "Taratura", note: "Valori che si cambiano di rado: con quelli giusti non serve toccarli." },
+];
+
 export interface SectionDef {
   /** identificativo stabile del blocco */
   id: string;
+  /** gruppo della finestra (vedi SETTINGS_GROUPS) */
+  group: string;
+  /** interruttore generale del blocco: sta nell'intestazione, senza aprire il blocco */
+  master?: string;
   /** icona mdi del blocco */
   icon: string;
   title: string;
@@ -37,6 +49,7 @@ const H = (what: string, when: string, suggested?: string): HelpDef => ({ what, 
 export const SETTINGS_SECTIONS: SectionDef[] = [
   {
     id: "caldaia",
+    group: "riscaldamento",
     icon: "mdi:fire",
     title: "Caldaia a pellet (Polygon)",
     help: H(
@@ -62,6 +75,8 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
   },
   {
     id: "partenze",
+    group: "riscaldamento",
+    master: "input_boolean.caldaia_salvaguardia_attiva",
     icon: "mdi:shield-check",
     title: "Salvaguardia accensioni",
     help: H(
@@ -86,6 +101,7 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
   },
   {
     id: "integrazione",
+    group: "pompe",
     icon: "mdi:pump",
     title: "Pompa di integrazione",
     help: H(
@@ -135,6 +151,8 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
   },
   {
     id: "assenza",
+    group: "casa",
+    master: "input_boolean.caldaia_assenza_attiva",
     icon: "mdi:home-off",
     title: "Spegnimento se nessuno è in casa",
     help: H(
@@ -172,6 +190,7 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
   },
   {
     id: "pellet",
+    group: "taratura",
     icon: "mdi:grain",
     title: "Consumo di pellet (stima)",
     advanced: true,
@@ -217,6 +236,8 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
   },
   {
     id: "pompe",
+    group: "taratura",
+    master: "input_boolean.centralina_pompe_misura_attiva",
     icon: "mdi:flash-outline",
     title: "Misura delle pompe",
     advanced: true,
@@ -236,6 +257,68 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
       { kind: "number", entity: "input_number.centralina_pompe_w_collettore_max", label: "Solo collettore fino a", help: H("Fino a questa potenza è accesa solo la pompa del collettore.", "Si ritara con le misure reali delle due pompe.") },
       { kind: "number", entity: "input_number.centralina_pompe_w_entrambe_min", label: "Entrambe le pompe da", help: H("Da questa potenza risultano accese entrambe le pompe.", "Si ritara con le misure reali delle due pompe.") },
       { kind: "number", entity: "input_number.centralina_pompa_integrazione_w_min", label: "Integrazione accesa sopra (Shelly 1PM)", help: H("Sopra questa potenza, misurata dallo Shelly 1PM, la pompa di integrazione è considerata accesa.", "Si ritara se cambi pompa.") },
+    ],
+  },
+  {
+    id: "solare",
+    group: "taratura",
+    icon: "mdi:solar-power-variant",
+    title: "Modello del collettore solare",
+    advanced: true,
+    help: H(
+      "I valori con cui la scheda stima la temperatura del collettore e la resa del sole: posizione dei pannelli, quanto si scaldano e quanto ci mettono.",
+      "Si ritarano confrontando la stima con il display del regolatore, a pompa ferma e con il sole pieno; altrimenti lasciali come sono.",
+    ),
+    fields: [
+      {
+        kind: "number",
+        entity: "input_number.solare_termico_k",
+        label: "Riscaldamento al sole",
+        hint: "Di quanti gradi il collettore ferma supera l'aria per ogni W/m² di sole sul piano.",
+        help: H("Quanto si scalda il collettore a pompa ferma per ogni W/m² di sole: più è alto, più la stima è calda.", "Alzalo se la stima è più fredda del display del regolatore a sole pieno, abbassalo nel caso opposto.", "0,078 (ritarato il 15/10/2026)."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.solare_termico_tau",
+        label: "Inerzia del collettore",
+        hint: "Quanto tempo ci mette a scaldarsi e a raffreddarsi.",
+        help: H("La costante di tempo con cui la stima segue la temperatura che il sole richiederebbe.", "Alzala se la stima sale e scende troppo in fretta rispetto al display, abbassala nel caso opposto.", "120 minuti (ritarato il 15/10/2026)."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.solare_termico_inclinazione",
+        label: "Inclinazione dei collettori",
+        hint: "Rispetto all'orizzontale: 0° piatti, 90° verticali.",
+        help: H("L'inclinazione reale dei pannelli, per calcolare quanto sole ricevono.", "Si cambia solo se si spostano i pannelli.", "22°."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.solare_termico_orientamento",
+        label: "Orientamento dei collettori",
+        hint: "180° è sud, 270° è ovest.",
+        help: H("La direzione verso cui guardano i pannelli.", "Si cambia solo se si spostano i pannelli.", "270° (ovest)."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.solare_fattore_stazione",
+        label: "Correzione del sensore di sole",
+        hint: "Il sensore della stazione legge circa il 54 % del satellite: 1,6 lo porta a valori reali.",
+        help: H("Moltiplica il sole misurato dalla stazione per ottenere i W/m² reali nei grafici di confronto con il satellite e l'allsky. Non cambia il sensore originale.", "Si ritara se il sensore viene spostato o sostituito.", "1,6."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.solare_pannello_fattore_sereno",
+        label: "Correzione del cielo sereno",
+        hint: "Aggiusta la previsione della massima del pannello nelle giornate limpide.",
+        help: H("Moltiplica il sole a cielo sereno usato per prevedere la massima del pannello.", "Si ritara dopo qualche giornata limpida, confrontando la massima prevista con quella raggiunta.", "1,00."),
+      },
+      {
+        kind: "toggle",
+        entity: "input_boolean.solare_orizzonte_attivo",
+        label: "Considera colline e alberi",
+        hint: "Toglie il sole diretto quando il terreno lo nasconde (profilo misurato con l'allsky).",
+        help: H("Quando il sole è sotto il profilo del terreno, nelle previsioni conta solo la luce diffusa.", "Spegnilo solo per confrontare le previsioni senza il terreno.", "Acceso."),
+      },
     ],
   },
 ];
@@ -269,11 +352,23 @@ export interface RowView {
 
 export interface SectionView {
   id: string;
+  group: string;
   icon: string;
   title: string;
   advanced: boolean;
   help: HelpDef;
+  /** interruttore generale (sta nell'intestazione, non tra le righe) */
+  master?: RowView;
+  /** le altre impostazioni del blocco */
   rows: RowView[];
+  /** riga sotto il titolo: i valori scelti, a parole */
+  summary: string;
+  /** frasi che spiegano che cosa succede con i valori scelti */
+  notes: string[];
+  /** barra delle soglie della pompa di integrazione */
+  bar?: ThresholdBar;
+  /** temperature di adesso di puffer e boiler (solo per il blocco della pompa di integrazione) */
+  live?: { puffer: number | null; boiler: number | null };
 }
 
 function num(v: unknown, fallback: number): number {
@@ -281,14 +376,26 @@ function num(v: unknown, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** Sensori per la differenza di temperatura "ora" mostrata nel blocco della pompa di integrazione. */
+const LIVE_PUFFER = ["sensor.puffer_temperatura_effettiva", "sensor.casale_temperatura_boiler"];
+const LIVE_BOILER = ["sensor.boiler_solare_alto_stimato"];
+
+function firstNumber(states: Record<string, StateLike | undefined>, ids: string[]): number | null {
+  for (const id of ids) {
+    const st = states[id];
+    if (st && st.state !== "unavailable" && st.state !== "unknown" && Number.isFinite(Number(st.state))) return Number(st.state);
+  }
+  return null;
+}
+
 /**
  * Costruisce la vista: le impostazioni la cui entità non esiste vengono nascoste (pacchetto non installato),
- * le sezioni senza righe spariscono.
+ * le sezioni senza righe spariscono. L'interruttore generale di un blocco esce dalle righe e va nell'intestazione.
  */
 export function buildSettingsView(states: Record<string, StateLike | undefined>, sections: SectionDef[] = SETTINGS_SECTIONS): SectionView[] {
   const out: SectionView[] = [];
   for (const sec of sections) {
-    const rows: RowView[] = [];
+    const all: RowView[] = [];
     for (const f of sec.fields) {
       const st = states[f.entity];
       if (!st) continue;
@@ -299,7 +406,7 @@ export function buildSettingsView(states: Record<string, StateLike | undefined>,
       if (isClimate && !unavailable && st.attributes.temperature !== null && st.attributes.temperature !== undefined && Number.isFinite(Number(st.attributes.temperature))) {
         value = Number(st.attributes.temperature);
       }
-      rows.push({
+      all.push({
         kind: f.kind,
         entity: f.entity,
         domain: f.entity.split(".")[0],
@@ -315,7 +422,23 @@ export function buildSettingsView(states: Record<string, StateLike | undefined>,
         unavailable,
       });
     }
-    if (rows.length) out.push({ id: sec.id, icon: sec.icon, title: sec.title, advanced: !!sec.advanced, help: sec.help, rows });
+    if (!all.length) continue;
+    const master = sec.master ? all.find((r) => r.entity === sec.master) : undefined;
+    const rows = master ? all.filter((r) => r !== master) : all;
+    const view: SectionView = {
+      id: sec.id,
+      group: sec.group,
+      icon: sec.icon,
+      title: sec.title,
+      advanced: !!sec.advanced,
+      help: sec.help,
+      master,
+      rows,
+      summary: "",
+      notes: [],
+    };
+    if (sec.id === "integrazione") view.live = { puffer: firstNumber(states, LIVE_PUFFER), boiler: firstNumber(states, LIVE_BOILER) };
+    out.push(describeSection(view));
   }
   return out;
 }
@@ -366,27 +489,151 @@ export const PENDING_MS = 30000;
  */
 export function applyPending(sections: SectionView[], pending: PendingMap, now: number): { sections: SectionView[]; settled: string[] } {
   const settled: string[] = [];
-  const out = sections.map((sec) => ({
-    ...sec,
-    rows: sec.rows.map((row) => {
+  const out = sections.map((sec) => {
+    let touched = false;
+    const rows = sec.rows.map((row) => {
       const p = pending[row.entity];
       if (!p || row.kind === "toggle") return row;
       if (now >= p.until || row.value === p.value) {
         settled.push(row.entity);
         return row;
       }
+      touched = true;
       return { ...row, value: p.value, saving: true };
-    }),
-  }));
+    });
+    return touched ? describeSection({ ...sec, rows }) : { ...sec, rows };
+  });
   return { sections: out, settled };
 }
 
-/** Riga di riepilogo di un blocco (sotto il titolo): se ha un interruttore dice se è attivo, altrimenti quante impostazioni ha. */
-export function sectionSummary(sec: Pick<SectionView, "rows">): string {
-  const first = sec.rows.find((r) => r.kind === "toggle");
-  const n = sec.rows.length;
-  const count = `${n} ${n === 1 ? "impostazione" : "impostazioni"}`;
-  if (!first) return count;
-  if (first.unavailable) return "Non disponibile";
-  return `${first.on ? "Attivo" : "Disattivato"} · ${count}`;
+
+// ---------------------------------------------------------------------------------------------------------------
+// Riepiloghi e spiegazioni a parole
+
+const byEntity = (rows: RowView[], entity: string): RowView | undefined => rows.find((r) => r.entity === entity);
+
+/** Numero all'italiana (virgola decimale), con i decimali del passo, e l'unità. */
+export function italianValue(row: RowView | undefined): string {
+  if (!row || row.value === null) return "–";
+  return valueText(row).replace(".", ",");
+}
+
+/** Il valore senza unità, per le frasi che l'hanno già nel testo. */
+function bare(row: RowView | undefined): string {
+  return row && row.value !== null ? valueText({ value: row.value, unit: "", step: row.step }).replace(".", ",") : "–";
+}
+
+/** Riga di riepilogo sotto il titolo di un blocco: i valori scelti, a parole. */
+export function sectionSummaryText(sec: Pick<SectionView, "id" | "master">, rows: RowView[]): string {
+  const g = (e: string) => byEntity(rows, e);
+  if (sec.master?.unavailable) return "Non disponibile";
+  switch (sec.id) {
+    case "caldaia":
+      return `Acqua ${italianValue(g("climate.casale_acqua"))} · puffer ${italianValue(g("number.casale_setpoint_boiler"))}`;
+    case "partenze":
+      return sec.master?.on
+        ? `Attiva: non parte se il puffer è già sopra ${italianValue(g("input_number.caldaia_salvaguardia_t_puffer"))}`
+        : "Disattivata: la caldaia parte sempre con il programma";
+    case "integrazione": {
+      const blocco = g("input_boolean.caldaia_integrazione_blocco_attivo");
+      const forza = g("input_boolean.caldaia_integrazione_forzatura_attiva");
+      const parts = [blocco ? (blocco.on ? "Blocco attivo" : "Blocco spento") : null, forza?.on ? "forzatura attiva" : null, `testa boiler max ${italianValue(g("input_number.caldaia_integrazione_temp_max"))}`];
+      return parts.filter(Boolean).join(" · ");
+    }
+    case "assenza": {
+      if (!sec.master?.on) return "Disattivato: la caldaia non si spegne da sola";
+      const ospiti = g("input_boolean.caldaia_assenza_ospiti");
+      return `Spegne dopo ${italianValue(g("input_number.caldaia_assenza_minuti"))} di casa vuota${ospiti?.on ? " · ospiti in casa" : ""}`;
+    }
+    case "pellet":
+      return `${bare(g("input_number.caldaia_pellet_kg_h_min"))}–${italianValue(g("input_number.caldaia_pellet_kg_h_max"))} · fattore ${bare(g("input_number.caldaia_pellet_fattore"))}`;
+    case "pompe":
+      return sec.master?.on ? `Pompe ferme sotto ${italianValue(g("input_number.centralina_pompe_w_ferme"))}` : "Misura spenta: gli indicatori delle pompe non compaiono";
+    case "solare":
+      return `k ${bare(g("input_number.solare_termico_k"))} · inerzia ${italianValue(g("input_number.solare_termico_tau"))} · ${bare(g("input_number.solare_termico_inclinazione"))}° verso ${bare(g("input_number.solare_termico_orientamento"))}°`;
+    default: {
+      const n = rows.length;
+      return `${n} ${n === 1 ? "impostazione" : "impostazioni"}`;
+    }
+  }
+}
+
+/** Frasi che dicono che cosa succede con i valori scelti (sotto la spiegazione del blocco). */
+export function sectionNotes(sec: Pick<SectionView, "id" | "master">, rows: RowView[]): string[] {
+  const g = (e: string) => byEntity(rows, e);
+  if (sec.id === "integrazione") {
+    const max = g("input_number.caldaia_integrazione_temp_max");
+    const ist = g("input_number.caldaia_integrazione_isteresi_max");
+    if (max?.value == null) return [];
+    const riparte = ist?.value != null ? ` e riparte sotto ${bare({ ...max, value: max.value - ist.value } as RowView)} °C` : "";
+    return [`La pompa smette di scaldare quando la testa del boiler arriva a ${bare(max)} °C${riparte}.`];
+  }
+  if (sec.id === "assenza") {
+    const min = g("input_number.caldaia_assenza_minuti");
+    const t = g("input_number.caldaia_assenza_t_esterna_min");
+    if (!sec.master?.on || min?.value == null) return [];
+    const freddo = t?.value != null ? ` Con meno di ${bare(t)} °C fuori non la spegne, per non far raffreddare la casa.` : "";
+    return [`Se nessuno è in casa da ${bare(min)} minuti (iPhone e Wi-Fi) la caldaia si spegne; al rientro riparte solo se c'è un programma attivo.${freddo}`];
+  }
+  if (sec.id === "partenze") {
+    const t = g("input_number.caldaia_salvaguardia_t_puffer");
+    if (!sec.master?.on || t?.value == null) return [];
+    return [`All'ora di un programma, se il puffer è già sopra ${bare(t)} °C e il termostato non chiede calore, la partenza viene annullata: si risparmia pellet.`];
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Barra delle soglie della pompa di integrazione
+
+export interface ThresholdBar {
+  /** scala della barra: differenza puffer meno boiler da 0 a max, in gradi */
+  max: number;
+  block: number;
+  unblock: number;
+  /** differenza attuale puffer - boiler (null se non si conosce) */
+  delta: number | null;
+  /** in quale zona cade la differenza attuale */
+  zone: "ferma" | "attesa" | "gira" | null;
+  /** posizione del segnaposto, in percentuale della barra */
+  markerPct: number | null;
+  blockPct: number;
+  unblockPct: number;
+  text: string;
+}
+
+/**
+ * Le due soglie del blocco: sotto la prima la pompa si ferma, sopra la seconda può ripartire, in mezzo resta com'è
+ * (isteresi). Il segnaposto è la differenza di temperatura di adesso tra puffer e boiler.
+ */
+export function integrazioneBar(rows: RowView[], live?: { puffer: number | null; boiler: number | null }): ThresholdBar | undefined {
+  const block = byEntity(rows, "input_number.caldaia_integrazione_delta_blocco")?.value;
+  const unblock = byEntity(rows, "input_number.caldaia_integrazione_delta_sblocco")?.value;
+  if (block == null || unblock == null) return undefined;
+  const max = Math.max(Math.ceil((Math.max(block, unblock) * 1.6) / 2) * 2, 10);
+  const delta = live && live.puffer !== null && live.boiler !== null ? Number((live.puffer - live.boiler).toFixed(1)) : null;
+  const zone = delta === null ? null : delta < block ? "ferma" : delta > unblock ? "gira" : "attesa";
+  const pct = (v: number) => Math.min(100, Math.max(0, (v / max) * 100));
+  const fmtD = (v: number) => String(v).replace(".", ",");
+  let text = "";
+  if (delta !== null && zone) {
+    const quanto = delta >= 0 ? `${fmtD(delta)} °C più caldo del boiler` : `${fmtD(-delta)} °C più freddo del boiler`;
+    const effetto =
+      zone === "ferma" ? "la pompa resta ferma: il puffer non scalderebbe il boiler abbastanza."
+      : zone === "gira" ? "la pompa può girare."
+      : "zona di attesa: la pompa resta com'è (se gira continua, se è ferma resta ferma).";
+    text = `Adesso il puffer è ${quanto}: ${effetto}`;
+  }
+  return { max, block, unblock, delta, zone, markerPct: delta === null ? null : pct(delta), blockPct: pct(block), unblockPct: pct(unblock), text };
+}
+
+/** Riepilogo, frasi e barra del blocco, calcolati dai valori che le righe mostrano adesso (anche quelli in attesa di conferma). */
+export function describeSection(view: SectionView): SectionView {
+  const all = view.master ? [view.master, ...view.rows] : view.rows;
+  return {
+    ...view,
+    summary: sectionSummaryText(view, all),
+    notes: sectionNotes(view, all),
+    bar: view.id === "integrazione" ? integrazioneBar(all, view.live) : undefined,
+  };
 }
