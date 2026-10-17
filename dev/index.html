@@ -337,6 +337,7 @@ if (q.get("grafici")) setTimeout(() => {
 document.getElementById("t").onclick = () => document.body.classList.toggle("chiaro") | document.body.classList.toggle("scuro");
 document.getElementById("stato").value = q.get("stato") || "WORK";
 document.getElementById("stato").onchange = (e) => { S["sensor.casale_stato"].state = e.target.value; hass.states = { ...S }; push(); };
+if (q.get("misura")) setTimeout(() => { const o = cards[0].getBoundingClientRect(); const L = cards[0].shadowRoot.querySelector(".layout"); const kids = [...L.children].map((k) => Math.round(k.getBoundingClientRect().height) + "x" + Math.round(k.getBoundingClientRect().width)); document.getElementById("info").textContent = "MISURA " + JSON.stringify({ w: Math.round(o.width), h: Math.round(o.height), col: kids }); }, 1500);
 document.getElementById("info").textContent = "Valori di esempio. Il lunedì P1 e P3 si sovrappongono apposta.";
 </script>
 </body>

@@ -1413,7 +1413,7 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     /* modalità compatta: tutto in una schermata di tablet, senza togliere dati */
     .compact svg.boiler {
-      max-height: calc(100vh - 150px);
+      max-height: calc(100vh - 182px);
     }
     .compact .stove {
       padding: 8px 10px;
