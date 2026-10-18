@@ -211,6 +211,8 @@ export interface PlantCardConfig {
   charts?: boolean;
   /** "auto" (predefinito): compatta sugli schermi bassi (tablet); true/false per forzare */
   compact?: boolean | "auto";
+  /** false per nascondere il pulsante «Programmazione» della scheda della caldaia; un oggetto passa le opzioni alla scheda della programmazione (prefix, master, status, presets) */
+  schedule?: boolean | Record<string, unknown>;
   /**
    * Prova: sintesi della stufa a pellet (integrazione stufa_pellet) accanto al termostato, con l'accensione manuale e un
    * pulsante che apre la scheda completa in un popup. `true`, oppure `{ entry_id, title }` se hai più stufe.
@@ -276,6 +278,7 @@ export class ImpiantoOverviewCard extends LitElement {
   private _charts?: ImpiantoChartsDialog;
   private _details?: ImpiantoDetailsDialog;
   private _stufaDlg?: ImpiantoCardDialog;
+  private _scheduleDlg?: ImpiantoCardDialog;
   @state() private _stufa: StufaInfoLite | null = null;
   @state() private _stufaArmed = false;
   private _stufaLoadedAt = 0;
@@ -327,6 +330,7 @@ export class ImpiantoOverviewCard extends LitElement {
     if (changed.has("hass") && this._details) this._details.groups = this._detailGroups();
     if (changed.has("hass") && this._thermo) this._thermo.hass = this.hass;
     if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
+    if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
     if (this._config?.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 60000) void this._loadStufa();
   }
 
@@ -342,6 +346,8 @@ export class ImpiantoOverviewCard extends LitElement {
     this._details = undefined;
     this._stufaDlg?.remove();
     this._stufaDlg = undefined;
+    this._scheduleDlg?.remove();
+    this._scheduleDlg = undefined;
     if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
@@ -719,7 +725,14 @@ export class ImpiantoOverviewCard extends LitElement {
 
     return html`
       <section class="stove">
-        <h3>Caldaia a pellet (Polygon)</h3>
+        <div class="shead">
+          <h3>Caldaia a pellet (Polygon)</h3>
+          ${this._config.schedule === false
+            ? nothing
+            : html`<button class="progbtn" @click=${() => this._openSchedule()} aria-label="Programmazione settimanale della caldaia">
+                <ha-icon icon="mdi:calendar-clock"></ha-icon><span>Programma</span>
+              </button>`}
+        </div>
         <div class="top">
           ${this._renderStoveImage(look, pellet)}
           <div class="statecard">
@@ -933,6 +946,23 @@ export class ImpiantoOverviewCard extends LitElement {
     this._stufaArmed = false;
     if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
     void this.hass.callService("homeassistant", btn.action === "on" ? "turn_on" : "turn_off", { entity_id: sw });
+  }
+
+  /** Popup con la programmazione settimanale della caldaia (caldaia-schedule-card), senza passare da altri pop-up della dashboard. */
+  private _openSchedule(): void {
+    if (this._scheduleDlg) return;
+    const opt = this._config.schedule;
+    const d = document.createElement("impianto-card-dialog") as ImpiantoCardDialog;
+    d.hass = this.hass;
+    d.tag = "caldaia-schedule-card";
+    d.label = "Programmazione caldaia";
+    d.wide = true;
+    d.config = typeof opt === "object" && opt !== null ? opt : {};
+    d.addEventListener("closed", () => {
+      this._scheduleDlg = undefined;
+    });
+    document.body.appendChild(d);
+    this._scheduleDlg = d;
   }
 
   /** Popup con la scheda completa della stufa (stufa-pellet-card, dell'integrazione stufa_pellet). */
@@ -1279,9 +1309,43 @@ export class ImpiantoOverviewCard extends LitElement {
       border: 1px solid var(--divider-color);
     }
     .stove h3 {
-      margin: 0 0 12px;
-      text-align: center;
+      margin: 0;
       font-size: 17px;
+    }
+    .shead {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 0 0 12px;
+    }
+    .shead:has(.progbtn) {
+      justify-content: space-between;
+    }
+    /* pulsante alto 36 px senza alzare la riga del titolo */
+    .progbtn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: none;
+      min-height: 36px;
+      margin: -10px 0;
+      padding: 4px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .progbtn ha-icon {
+      --mdc-icon-size: 18px;
+      color: var(--primary-color, #03a9f4);
+    }
+    .progbtn:hover {
+      border-color: var(--primary-color, #03a9f4);
     }
     .top {
       display: grid;
@@ -1660,8 +1724,10 @@ export class ImpiantoOverviewCard extends LitElement {
       border-radius: 16px;
     }
     .compact .stove h3 {
-      margin: 0 0 4px;
       font-size: 14px;
+    }
+    .compact .shead {
+      margin: 0 0 4px;
     }
     .compact .top {
       grid-template-columns: 92px 1fr;

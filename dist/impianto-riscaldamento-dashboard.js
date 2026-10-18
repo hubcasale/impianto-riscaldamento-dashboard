@@ -3027,6 +3027,7 @@ var ImpiantoCardDialog = class extends i4 {
     this.tag = "";
     this.config = {};
     this.label = "";
+    this.wide = false;
     this._onKey = (e5) => {
       if (e5.key === "Escape") this._close();
     };
@@ -3056,7 +3057,7 @@ var ImpiantoCardDialog = class extends i4 {
     if (this.hass) card.hass = this.hass;
     return b2`
       <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
-        <div class="panel" role="dialog" aria-modal="true" aria-label=${this.label || this.tag}>
+        <div class=${this.wide ? "panel wide" : "panel"} role="dialog" aria-modal="true" aria-label=${this.label || this.tag}>
           <div class="bar"><button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button></div>
           <div class="body">${card}</div>
         </div>
@@ -3094,6 +3095,9 @@ var ImpiantoCardDialog = class extends i4 {
       background: var(--card-background-color, #fff);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
     }
+    .panel.wide {
+      max-width: 940px;
+    }
     .bar {
       display: flex;
       justify-content: flex-end;
@@ -3130,6 +3134,9 @@ __decorateClass([
 __decorateClass([
   n4()
 ], ImpiantoCardDialog.prototype, "label", 2);
+__decorateClass([
+  n4({ type: Boolean })
+], ImpiantoCardDialog.prototype, "wide", 2);
 if (!customElements.get(TAG5)) customElements.define(TAG5, ImpiantoCardDialog);
 
 // src/plant-logic.ts
@@ -3563,6 +3570,7 @@ var ImpiantoOverviewCard = class extends i4 {
     if (changed.has("hass") && this._details) this._details.groups = this._detailGroups();
     if (changed.has("hass") && this._thermo) this._thermo.hass = this.hass;
     if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
+    if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
     if (this._config?.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 6e4) void this._loadStufa();
   }
   disconnectedCallback() {
@@ -3577,6 +3585,8 @@ var ImpiantoOverviewCard = class extends i4 {
     this._details = void 0;
     this._stufaDlg?.remove();
     this._stufaDlg = void 0;
+    this._scheduleDlg?.remove();
+    this._scheduleDlg = void 0;
     if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
@@ -3906,7 +3916,12 @@ var ImpiantoOverviewCard = class extends i4 {
     const pellet = pelletStatus(this._yes(e5.pellet_reserve), this._yes(e5.pellet_empty), this._yes(e5.pellet_open));
     return b2`
       <section class="stove">
-        <h3>Caldaia a pellet (Polygon)</h3>
+        <div class="shead">
+          <h3>Caldaia a pellet (Polygon)</h3>
+          ${this._config.schedule === false ? A : b2`<button class="progbtn" @click=${() => this._openSchedule()} aria-label="Programmazione settimanale della caldaia">
+                <ha-icon icon="mdi:calendar-clock"></ha-icon><span>Programma</span>
+              </button>`}
+        </div>
         <div class="top">
           ${this._renderStoveImage(look, pellet)}
           <div class="statecard">
@@ -4112,6 +4127,22 @@ var ImpiantoOverviewCard = class extends i4 {
     this._stufaArmed = false;
     if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
     void this.hass.callService("homeassistant", btn.action === "on" ? "turn_on" : "turn_off", { entity_id: sw });
+  }
+  /** Popup con la programmazione settimanale della caldaia (caldaia-schedule-card), senza passare da altri pop-up della dashboard. */
+  _openSchedule() {
+    if (this._scheduleDlg) return;
+    const opt = this._config.schedule;
+    const d3 = document.createElement("impianto-card-dialog");
+    d3.hass = this.hass;
+    d3.tag = "caldaia-schedule-card";
+    d3.label = "Programmazione caldaia";
+    d3.wide = true;
+    d3.config = typeof opt === "object" && opt !== null ? opt : {};
+    d3.addEventListener("closed", () => {
+      this._scheduleDlg = void 0;
+    });
+    document.body.appendChild(d3);
+    this._scheduleDlg = d3;
   }
   /** Popup con la scheda completa della stufa (stufa-pellet-card, dell'integrazione stufa_pellet). */
   _openStufa() {
@@ -4448,9 +4479,43 @@ var ImpiantoOverviewCard = class extends i4 {
       border: 1px solid var(--divider-color);
     }
     .stove h3 {
-      margin: 0 0 12px;
-      text-align: center;
+      margin: 0;
       font-size: 17px;
+    }
+    .shead {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 0 0 12px;
+    }
+    .shead:has(.progbtn) {
+      justify-content: space-between;
+    }
+    /* pulsante alto 36 px senza alzare la riga del titolo */
+    .progbtn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: none;
+      min-height: 36px;
+      margin: -10px 0;
+      padding: 4px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .progbtn ha-icon {
+      --mdc-icon-size: 18px;
+      color: var(--primary-color, #03a9f4);
+    }
+    .progbtn:hover {
+      border-color: var(--primary-color, #03a9f4);
     }
     .top {
       display: grid;
@@ -4829,8 +4894,10 @@ var ImpiantoOverviewCard = class extends i4 {
       border-radius: 16px;
     }
     .compact .stove h3 {
-      margin: 0 0 4px;
       font-size: 14px;
+    }
+    .compact .shead {
+      margin: 0 0 4px;
     }
     .compact .top {
       grid-template-columns: 92px 1fr;

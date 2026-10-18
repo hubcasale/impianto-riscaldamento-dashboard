@@ -18,6 +18,8 @@ export class ImpiantoCardDialog extends LitElement {
   @property({ attribute: false }) config: Record<string, unknown> = {};
   /** titolo per i lettori di schermo */
   @property() label = "";
+  /** popup largo (per la programmazione settimanale) */
+  @property({ type: Boolean }) wide = false;
   private _card?: CardEl;
   private _onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") this._close();
@@ -52,7 +54,7 @@ export class ImpiantoCardDialog extends LitElement {
     if (this.hass) card.hass = this.hass;
     return html`
       <div class="backdrop" @click=${(e: Event) => e.target === e.currentTarget && this._close()}>
-        <div class="panel" role="dialog" aria-modal="true" aria-label=${this.label || this.tag}>
+        <div class=${this.wide ? "panel wide" : "panel"} role="dialog" aria-modal="true" aria-label=${this.label || this.tag}>
           <div class="bar"><button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button></div>
           <div class="body">${card}</div>
         </div>
@@ -89,6 +91,9 @@ export class ImpiantoCardDialog extends LitElement {
       overflow: hidden;
       background: var(--card-background-color, #fff);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    }
+    .panel.wide {
+      max-width: 940px;
     }
     .bar {
       display: flex;
