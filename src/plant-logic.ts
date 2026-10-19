@@ -238,7 +238,7 @@ export function panelModel(
     source = "misurata";
   }
   const caption =
-    source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? (pumpOn === true ? "stimata · pompa in marcia" : pumpOn === false ? "stimata · pompa ferma" : "stimata") : "non disponibile";
+    source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? (pumpOn === true ? "stimata · in marcia" : pumpOn === false ? "stimata · pompa ferma" : "stimata") : "non disponibile";
   const pred = maxPredicted !== null && maxToday !== null ? Math.max(maxPredicted, maxToday) : maxPredicted;
   return { value, source, caption, maxPredicted: pred, maxToday };
 }

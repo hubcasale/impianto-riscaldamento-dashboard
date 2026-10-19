@@ -117,7 +117,7 @@ test("pompa collettore: watt solo se in marcia e oltre la soglia", () => {
 test("pannello: la stima del collettore, la misurata in ingresso solo se manca la stima", () => {
   assert.equal(panelModel(true, 38.9, 46.4, 60, 47).value, 46.4);                 // pompa in marcia: non si mostra il fluido in ingresso
   assert.equal(panelModel(true, 38.9, 46.4, 60, 47).source, "stimata");
-  assert.equal(panelModel(true, 38.9, 46.4, 60, 47).caption, "stimata · pompa in marcia");
+  assert.equal(panelModel(true, 38.9, 46.4, 60, 47).caption, "stimata · in marcia");
   assert.equal(panelModel(false, 33.5, 41.6, 60, 42).value, 41.6);
   assert.equal(panelModel(false, 33.5, 41.6, 60, 42).caption, "stimata · pompa ferma");
   assert.equal(panelModel(null, null, 41.6, 60, 42).caption, "stimata");

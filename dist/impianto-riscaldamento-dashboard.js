@@ -3262,7 +3262,7 @@ function panelModel(pumpOn, measured, estimated, maxPredicted, maxToday) {
     value = measured;
     source = "misurata";
   }
-  const caption = source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? pumpOn === true ? "stimata \xB7 pompa in marcia" : pumpOn === false ? "stimata \xB7 pompa ferma" : "stimata" : "non disponibile";
+  const caption = source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? pumpOn === true ? "stimata \xB7 in marcia" : pumpOn === false ? "stimata \xB7 pompa ferma" : "stimata" : "non disponibile";
   const pred = maxPredicted !== null && maxToday !== null ? Math.max(maxPredicted, maxToday) : maxPredicted;
   return { value, source, caption, maxPredicted: pred, maxToday };
 }
