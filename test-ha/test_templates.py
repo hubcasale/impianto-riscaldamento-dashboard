@@ -532,7 +532,7 @@ ST_SENS = {e_["name"]: e_ for e_ in TR["sensor"]}
 STIMA = ST_SENS["Solare termico T collettore stimata"]
 
 
-def passo_collettore(stato_prec, attr_prec, ta=13.0, g=0.0, el=0.0, az=180.0, fattore="1.6"):
+def passo_collettore(stato_prec, attr_prec, ta=13.0, g=0.0, el=0.0, az=180.0, fattore="1.6", gti="0", pompa="off"):
     """Un minuto del modello: valuta le variabili del trigger in ordine, come fa Home Assistant."""
     stati = {"sensor.temperatura_esterna_2_decimali": str(ta),
              "sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato": str(g),
@@ -544,12 +544,17 @@ def passo_collettore(stato_prec, attr_prec, ta=13.0, g=0.0, el=0.0, az=180.0, fa
              "input_number.solare_termico_a1": "3.82", "input_number.solare_termico_a2": "0.013",
              "input_number.solare_termico_coeff_vento": "0.4", "input_number.solare_termico_soglia_irraggiamento": "100",
              "sensor.solare_termico_t_collettore_stimata": stato_prec,
-             "input_number.solare_fattore_stazione": fattore}
+             "input_number.solare_fattore_stazione": fattore,
+             "sensor.open_meteo_irraggiamento_previsto_sul_piano": gti, "binary_sensor.caldaia_pompa_collettore_attiva": pompa}
     attrs = {("sun.sun", "elevation"): el, ("sun.sun", "azimuth"): az,
              ("sensor.solare_termico_t_collettore_stimata", "t_interna"): attr_prec}
     ctx = {}
     for nome, tpl in TR["variables"].items():
         r = render(tpl, stati, attrs=attrs, extra=ctx)
+        # come il motore dei modelli di Home Assistant: numeri e True/False tornano a essere numeri e booleani
+        if r in ("True", "False"):
+            ctx[nome] = r == "True"
+            continue
         try:
             ctx[nome] = float(r)
         except ValueError:
@@ -591,6 +596,22 @@ check("salvaguardia: una doccia in meno non annulla", annulla("2"), "False")
 check("salvaguardia: minimo 4 con 3 docce non annulla", annulla("3", minimo="4"), "False")
 check("salvaguardia: il puffer non conta (caldo o freddo)", annulla("5", puffer="62") == annulla("5", puffer="25") == "True", True)
 check("salvaguardia: sensore delle docce non disponibile non annulla", annulla("unavailable"), "False")
+
+# stazione in ombra con la pompa in marcia: si usa l'irraggiamento previsto sul piano dei collettori (alla scala grezza)
+om = passo_collettore("44.0", "44.0", ta=22.6, g=30.0, el=10.0, az=245.0, gti="419", pompa="on")
+check("ombra: stazione bassa, pompa in marcia e previsione alta usano la previsione", om["ombra"], True)
+check("ombra: l'irraggiamento e' la previsione divisa per il fattore", round(om["gp"], 1), round(419 / 1.6, 1))
+sole = passo_collettore("44.0", "44.0", ta=22.6, g=30.0, el=10.0, az=245.0, gti="419", pompa="off")
+check("ombra: a pompa ferma non si corregge", sole["ombra"], False)
+check("ombra: a pompa ferma resta il valore della stazione", round(sole["gp"], 1), round(sole["g_poa"], 1))
+no_gti = passo_collettore("44.0", "44.0", ta=22.6, g=30.0, el=10.0, az=245.0, gti="0", pompa="on")
+check("ombra: senza previsione non si corregge", no_gti["ombra"], False)
+pieno = passo_collettore("44.0", "44.0", ta=22.6, g=400.0, el=30.0, az=230.0, gti="600", pompa="on")
+check("ombra: con la stazione al sole (oltre la meta' della previsione) non si corregge", pieno["ombra"], False)
+buio = passo_collettore("44.0", "44.0", ta=22.6, g=30.0, el=1.0, az=270.0, gti="419", pompa="on")
+check("ombra: con il sole sotto i 3 gradi non si corregge", buio["ombra"], False)
+check("ombra: la regime sale con la correzione (la stima non crolla)", om["tss"] > sole["tss"] + 10, True)
+check("ombra: la potenza usa l'irraggiamento previsto", om["potenza"] > 0.3, True)
 
 # docce disponibili (stessa formula della scheda: zone alta e bassa, una zona conta se e' ad almeno 38 C, doccia da 40 L)
 BOI = yaml.safe_load(open("ha-packages/boiler_solare.yaml"))

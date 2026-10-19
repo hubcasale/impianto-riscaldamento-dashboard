@@ -144,7 +144,19 @@ template:
           {% set cosi = [sin(el * r) * cos(b) + cos(el * r) * sin(b) * cos((az - azc) * r), 0] | max %}
           {{ (gb * ([cosi / sin(el * r), 4] | min) + gd * (1 + cos(b)) / 2 + g * 0.2 * (1 - cos(b)) / 2) | round(1) }}
         {% endif %}
-      tss: "{{ ta + states('input_number.solare_termico_k') | float(0.07) * g_poa | float(0) * (1 - rh / 600) }}"
+      # SOLUZIONE TEMPORANEA per l'ombra sulla stazione (19/10/2026): il sensore di sole e' coperto da qualcosa di fisso
+      # (con il sole a circa 190-205 gradi e 40 di altezza a mezzogiorno, e a 225-240 gradi e 23-26 di altezza nel
+      # pomeriggio) mentre i collettori, sul tetto, prendono ancora il sole. Se la pompa del collettore e' in marcia (il
+      # collettore sta scaldando davvero) e la stazione vede meno della meta' dell'irraggiamento previsto da Open-Meteo
+      # sul piano dei collettori, si usa quello previsto, riportato alla scala grezza della stazione (diviso per il
+      # fattore). Va tolta quando il sensore viene spostato sul tetto.
+      fattore: "{{ states('input_number.solare_fattore_stazione') | float(1.6) }}"
+      gti: "{{ states('sensor.open_meteo_irraggiamento_previsto_sul_piano') | float(0) }}"
+      pompa: "{{ is_state('binary_sensor.caldaia_pompa_collettore_attiva', 'on') }}"
+      gti_g: "{{ (gti / fattore) if fattore > 0 else 0 }}"
+      ombra: "{{ pompa and el > 3 and gti_g > 100 and (g_poa | float(0)) < 0.5 * gti_g }}"
+      gp: "{{ gti_g if ombra else (g_poa | float(0)) }}"
+      tss: "{{ ta + states('input_number.solare_termico_k') | float(0.07) * gp * (1 - rh / 600) }}"
       taratura: "{{ states('input_number.solare_termico_t_taratura') | float(0) }}"
       # si riparte dal valore interno a piena precisione (attributo t_interna): lo stato e' arrotondato a 0,1 e ad ogni
       # minuto l'incremento (sotto 0,05 K quando si e' a meno di 7 K dal regime) andava perso, con la curva ferma o a gradini
@@ -165,9 +177,7 @@ template:
       offset_f: "{{ states('input_number.solare_termico_offset_fluido') | float(5) }}"
       soglia: "{{ states('input_number.solare_termico_soglia_irraggiamento') | float(100) }}"
       dt: "{{ [tc | float - offset_f - ta, 0] | max }}"
-      gp: "{{ g_poa | float(0) }}"
       # irraggiamento a W/m2 reali per il rendimento e la potenza (la stazione legge circa il 54 % del satellite)
-      fattore: "{{ states('input_number.solare_fattore_stazione') | float(1.6) }}"
       gpc: "{{ gp * fattore }}"
       eta: >
         {% if gpc <= 0 %}0{% else %}{{ [[eta0 - a1 * dt / gpc - a2 * dt * dt / gpc, 0] | max, eta0] | min }}{% endif %}
@@ -196,6 +206,8 @@ template:
           {{ has_value('sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato')
              and has_value('sun.sun') }}
         state: "{{ gp | round(0) }}"
+        attributes:
+          fonte: "{{ 'previsione (stazione in ombra)' if ombra else 'stazione' }}"
 
       - name: Solare termico potenza
         unique_id: solare_termico_potenza
