@@ -274,10 +274,11 @@ def pann(pompa, ing, stima):
            "sensor.solare_termico_t_collettore_stimata": stima}
     return render(temp_tpl, st_), render(fonte_tpl, st_)
 check("pannello: pompa ferma usa la stima", pann("off", "33.5", "41.6")[0], "41.6")
-check("pannello: pompa in marcia usa la misura", pann("on", "33.5", "41.6")[0], "33.5")
-check("pannello: fonte misurata", pann("on", "33.5", "41.6")[1], "misurata")
-check("pannello: fonte stimata", pann("off", "33.5", "41.6")[1], "stimata")
-check("pannello: pompa in marcia ma sensore non disponibile usa la stima", pann("on", "unavailable", "41.6")[0], "41.6")
+check("pannello: pompa in marcia usa comunque la stima (il fluido in ingresso e' piu' freddo del collettore)", pann("on", "38.9", "46.4")[0], "46.4")
+check("pannello: fonte stimata a pompa in marcia", pann("on", "38.9", "46.4")[1], "stimata")
+check("pannello: fonte stimata a pompa ferma", pann("off", "33.5", "41.6")[1], "stimata")
+check("pannello: senza stima e a pompa in marcia si usa la misura", pann("on", "33.5", "unavailable")[0], "33.5")
+check("pannello: fonte misurata solo senza stima", pann("on", "33.5", "unavailable")[1], "misurata")
 def massima(n, now_h=7.5, t0=17.0, oss=None, gobs=0.0, text=17.0, tmax=None):
     ore = [{"h": h, "oggi": True, "t": (16 + 10 * _m.sin(_m.pi * (h - 7) / 12)) if 7 < h < 19 else 16, "u": 60.0, "n": n} for h in range(7, 20)]
     stati = {"sensor.solare_termico_t_collettore_stimata": str(t0), "sensor.solare_pannello_massima_oggi": str(oss if oss is not None else t0),

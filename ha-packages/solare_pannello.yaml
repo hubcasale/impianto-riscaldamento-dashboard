@@ -1,8 +1,10 @@
 # Pannello solare: temperatura mostrata sulla scheda e stima della massima del giorno.
 #
-# TEMPERATURA MOSTRATA (sensor.solare_pannello_temperatura): con la pompa del collettore in marcia e' la temperatura
-# misurata in ingresso alla serpentina solare del boiler (ESP32: sensor.solare_termico_solare_serpentina_ingresso);
-# a pompa ferma e' la stima del collettore (sensor.solare_termico_t_collettore_stimata, packages/solare_termico.yaml).
+# TEMPERATURA MOSTRATA (sensor.solare_pannello_temperatura): la stima del collettore
+# (sensor.solare_termico_t_collettore_stimata, packages/solare_termico.yaml), ritarata sulle letture reali del display
+# del regolatore e valida sia a pompa ferma sia in marcia (19/10/2026: stima 46,4 contro 45,5 letti). La temperatura
+# misurata in ingresso alla serpentina solare (ESP32: sensor.solare_termico_solare_serpentina_ingresso) e' il fluido dopo
+# i tubi, 6-7 gradi sotto il collettore: diventa il valore solo con la pompa in marcia e la stima mancante.
 #
 # MASSIMA DEL GIORNO (sensor.solare_pannello_massima_prevista): la piu' alta fra la massima stimata gia' raggiunta oggi e
 # quella che il modello del collettore raggiungerebbe nelle ore che restano, con la previsione oraria di weather.casale:
@@ -116,13 +118,12 @@ template:
              or (is_state('binary_sensor.caldaia_pompa_collettore_attiva', 'on')
                  and is_number(states('sensor.solare_termico_solare_serpentina_ingresso'))) }}
         state: >
-          {% set misura = states('sensor.solare_termico_solare_serpentina_ingresso') %}
-          {% if is_state('binary_sensor.caldaia_pompa_collettore_attiva', 'on') and is_number(misura) %}{{ misura | float | round(1) }}
-          {% else %}{{ states('sensor.solare_termico_t_collettore_stimata') | float(0) | round(1) }}{% endif %}
+          {% set stima = states('sensor.solare_termico_t_collettore_stimata') %}
+          {% if is_number(stima) %}{{ stima | float | round(1) }}
+          {% else %}{{ states('sensor.solare_termico_solare_serpentina_ingresso') | float(0) | round(1) }}{% endif %}
         attributes:
           fonte: >
-            {{ 'misurata' if is_state('binary_sensor.caldaia_pompa_collettore_attiva', 'on')
-                             and is_number(states('sensor.solare_termico_solare_serpentina_ingresso')) else 'stimata' }}
+            {{ 'stimata' if is_number(states('sensor.solare_termico_t_collettore_stimata')) else 'misurata' }}
 
       - name: Solare pannello massima prevista
         unique_id: solare_pannello_massima_prevista

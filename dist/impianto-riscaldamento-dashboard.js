@@ -3255,14 +3255,14 @@ function collectorPumpPill(running, watts) {
 function panelModel(pumpOn, measured, estimated, maxPredicted, maxToday) {
   let value = null;
   let source = "nd";
-  if (pumpOn === true && measured !== null) {
-    value = measured;
-    source = "misurata";
-  } else if (estimated !== null) {
+  if (estimated !== null) {
     value = estimated;
     source = "stimata";
+  } else if (pumpOn === true && measured !== null) {
+    value = measured;
+    source = "misurata";
   }
-  const caption = source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? pumpOn === true ? "stimata" : "stimata \xB7 pompa ferma" : "non disponibile";
+  const caption = source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? pumpOn === true ? "stimata \xB7 pompa in marcia" : pumpOn === false ? "stimata \xB7 pompa ferma" : "stimata" : "non disponibile";
   const pred = maxPredicted !== null && maxToday !== null ? Math.max(maxPredicted, maxToday) : maxPredicted;
   return { value, source, caption, maxPredicted: pred, maxToday };
 }

@@ -204,7 +204,7 @@ export function collectorPumpPill(running: boolean | null, watts: number | null)
 
 /** Cosa mostra la sagoma del pannello solare. */
 export interface PanelModel {
-  /** temperatura da mostrare (misurata a pompa in marcia, altrimenti stimata) */
+  /** temperatura da mostrare (la stima del collettore; la misurata in ingresso solo se manca la stima) */
   value: number | null;
   source: "misurata" | "stimata" | "nd";
   /** descrizione breve sotto il valore */
@@ -216,8 +216,10 @@ export interface PanelModel {
 }
 
 /**
- * Pannello: con la pompa del collettore in marcia e la temperatura in ingresso al boiler disponibile si mostra quella
- * misurata, altrimenti la stima. La massima prevista non scende mai sotto quella gia' raggiunta oggi.
+ * Pannello: si mostra la stima del collettore (ritarata sulle letture reali del display del regolatore, vale sia a
+ * pompa ferma sia in marcia). La temperatura misurata in ingresso alla serpentina e' il fluido dopo i tubi, circa 6-7 gradi
+ * sotto il collettore: resta sui tubi e si usa come valore solo se la stima manca. La massima prevista non scende mai
+ * sotto quella gia' raggiunta oggi.
  */
 export function panelModel(
   pumpOn: boolean | null,
@@ -228,14 +230,15 @@ export function panelModel(
 ): PanelModel {
   let value: number | null = null;
   let source: PanelModel["source"] = "nd";
-  if (pumpOn === true && measured !== null) {
-    value = measured;
-    source = "misurata";
-  } else if (estimated !== null) {
+  if (estimated !== null) {
     value = estimated;
     source = "stimata";
+  } else if (pumpOn === true && measured !== null) {
+    value = measured;
+    source = "misurata";
   }
-  const caption = source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? (pumpOn === true ? "stimata" : "stimata · pompa ferma") : "non disponibile";
+  const caption =
+    source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? (pumpOn === true ? "stimata · pompa in marcia" : pumpOn === false ? "stimata · pompa ferma" : "stimata") : "non disponibile";
   const pred = maxPredicted !== null && maxToday !== null ? Math.max(maxPredicted, maxToday) : maxPredicted;
   return { value, source, caption, maxPredicted: pred, maxToday };
 }
