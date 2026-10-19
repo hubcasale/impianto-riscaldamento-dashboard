@@ -532,7 +532,7 @@ ST_SENS = {e_["name"]: e_ for e_ in TR["sensor"]}
 STIMA = ST_SENS["Solare termico T collettore stimata"]
 
 
-def passo_collettore(stato_prec, attr_prec, ta=13.0, g=0.0, tss_forzata=None):
+def passo_collettore(stato_prec, attr_prec, ta=13.0, g=0.0, el=0.0, az=180.0, fattore="1.6"):
     """Un minuto del modello: valuta le variabili del trigger in ordine, come fa Home Assistant."""
     stati = {"sensor.temperatura_esterna_2_decimali": str(ta),
              "sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato": str(g),
@@ -543,8 +543,9 @@ def passo_collettore(stato_prec, attr_prec, ta=13.0, g=0.0, tss_forzata=None):
              "input_number.solare_termico_area": "3.66", "input_number.solare_termico_eta0": "0.74",
              "input_number.solare_termico_a1": "3.82", "input_number.solare_termico_a2": "0.013",
              "input_number.solare_termico_coeff_vento": "0.4", "input_number.solare_termico_soglia_irraggiamento": "100",
-             "sensor.solare_termico_t_collettore_stimata": stato_prec}
-    attrs = {("sun.sun", "elevation"): 0.0, ("sun.sun", "azimuth"): 180.0,
+             "sensor.solare_termico_t_collettore_stimata": stato_prec,
+             "input_number.solare_fattore_stazione": fattore}
+    attrs = {("sun.sun", "elevation"): el, ("sun.sun", "azimuth"): az,
              ("sensor.solare_termico_t_collettore_stimata", "t_interna"): attr_prec}
     ctx = {}
     for nome, tpl in TR["variables"].items():
@@ -564,6 +565,18 @@ for _ in range(240):
 atteso = 13 + (20 - 13) * 2.718281828 ** (-240 / 120)
 check("collettore: dopo 4 ore al buio scende come l'esponenziale con tau 120 (non resta fermo a 20)", round(float(attr), 1), round(atteso, 1))
 check("collettore: lo stato mostrato e' il valore interno arrotondato a 0,1", STIMA["state"].strip(), "{{ tc | float | round(1) }}")
+
+# potenza e rendimento a W/m2 reali (fattore della stazione), temperatura del collettore invariata
+c16 = passo_collettore("45.0", "45.0", ta=24.0, g=300.0, el=40.0, az=240.0, fattore="1.6")
+c10 = passo_collettore("45.0", "45.0", ta=24.0, g=300.0, el=40.0, az=240.0, fattore="1.0")
+check("potenza: l'irraggiamento corretto e' il grezzo per il fattore", round(c16["gpc"], 1), round(c16["gp"] * 1.6, 1))
+check("potenza: senza fattore coincide con il grezzo", round(c10["gpc"], 1), round(c10["gp"], 1))
+rend16 = c16["eta0"] - (c16["a1"] * c16["dt"] + c16["a2"] * c16["dt"] ** 2) / c16["gpc"]
+check("potenza: il rendimento usa l'irraggiamento corretto", round(c16["eta"], 3), round(rend16, 3))
+check("potenza: kW = area x G corretto x rendimento", round(c16["potenza"], 3), round(c16["area"] * c16["gpc"] * c16["eta"] / 1000, 3))
+check("potenza: con il fattore 1,6 e' piu' alta che senza", c16["potenza"] > c10["potenza"] * 1.5, True)
+check("potenza: la temperatura del collettore non dipende dal fattore", round(c16["tc"], 3), round(c10["tc"], 3))
+check("potenza: sotto la soglia di irraggiamento (grezzo) e' zero", passo_collettore("45.0", "45.0", ta=24.0, g=40.0, el=40.0, az=240.0)["potenza"], 0.0)
 
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

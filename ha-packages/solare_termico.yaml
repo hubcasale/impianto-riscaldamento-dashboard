@@ -11,8 +11,14 @@
 #     2 ottobre 52,6 C alle 13:40, 54 C alle 16:20, 44,8 C alle 17:26 e 15 ottobre 44,2 C alle 13:20: k 0,078 e tau 120 min
 #     (errore tipico 1,4 K). Prima k 0,07 e tau 150 min, con la curva falsata dall'arrotondamento a 0,1.
 #  4) T media fluido = T collettore stimata - offset fluido
-#  5) rendimento     = eta0 - (a1 + b x vento_m/s) x dT / G_piano - a2 x dT^2 / G_piano     (dT = T media fluido - T_ext)
-#  6) potenza utile (kW) = area x G_piano x rendimento / 1000      (0 sotto la soglia di irraggiamento)
+#  5) rendimento     = eta0 - (a1 + b x vento_m/s) x dT / G_corretto - a2 x dT^2 / G_corretto     (dT = T media fluido - T_ext)
+#  6) potenza utile (kW) = area x G_corretto x rendimento / 1000      (0 sotto la soglia di irraggiamento)
+#
+#  G_corretto = G_piano x input_number.solare_fattore_stazione (1,6). Il sensore di sole della stazione (BH1750) legge circa
+#  il 54 % del satellite: la temperatura del collettore (punti 2 e 3) e' tarata sul valore GREZZO (k, tau), quindi non
+#  cambia; la potenza e il rendimento (5 e 6) usano invece il valore corretto, a W/m2 reali. Controllo del 19/10/2026:
+#  il boiler ha guadagnato circa 0,85 kW (13:10-15:25) contro 0,62 kW del modello senza correzione. Con 1,6 la potenza
+#  risulta un po' sopra (circa 1,15 kW): il fattore che meglio spiega il boiler e' 1,3-1,4 (da riverificare su piu' giorni).
 #
 # Collettori: 2 x Ariston Kairos CF 2.0-1 (apertura 1,83 m2 cad., eta0 0,74, k1 3,82, k2 0,013).
 # Inclinazione e orientamento reali: 22 gradi, ovest (270); si impostano sulle entita' "Solare termico - ...".
@@ -160,9 +166,12 @@ template:
       soglia: "{{ states('input_number.solare_termico_soglia_irraggiamento') | float(100) }}"
       dt: "{{ [tc | float - offset_f - ta, 0] | max }}"
       gp: "{{ g_poa | float(0) }}"
+      # irraggiamento a W/m2 reali per il rendimento e la potenza (la stazione legge circa il 54 % del satellite)
+      fattore: "{{ states('input_number.solare_fattore_stazione') | float(1.6) }}"
+      gpc: "{{ gp * fattore }}"
       eta: >
-        {% if gp <= 0 %}0{% else %}{{ [[eta0 - a1 * dt / gp - a2 * dt * dt / gp, 0] | max, eta0] | min }}{% endif %}
-      potenza: "{{ (area * gp * eta / 1000) if gp >= soglia else 0 }}"
+        {% if gpc <= 0 %}0{% else %}{{ [[eta0 - a1 * dt / gpc - a2 * dt * dt / gpc, 0] | max, eta0] | min }}{% endif %}
+      potenza: "{{ (area * gpc * eta / 1000) if gp >= soglia else 0 }}"
     sensor:
       - name: Solare termico T collettore stimata
         unique_id: solare_termico_t_collettore_stimata
@@ -198,6 +207,9 @@ template:
              and has_value('sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato')
              and has_value('sun.sun') }}
         state: "{{ potenza | float | round(3) }}"
+        attributes:
+          irraggiamento_corretto: "{{ gpc | float | round(0) }}"
+          fattore_irraggiamento: "{{ fattore | float | round(2) }}"
 
       - name: Solare termico rendimento
         unique_id: solare_termico_rendimento
