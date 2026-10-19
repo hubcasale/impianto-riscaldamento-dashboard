@@ -2,8 +2,10 @@
 #
 # Quando la Polygon passa a WAIT/START da OFF (per esempio perche' inizia un programma) oppure da ECO STOP (riaccensione
 # decisa da Comfort Clima quando l'acqua della caldaia scende sotto set acqua meno isteresi, per esempio 65 - 15 = 50 C)
-# ma il puffer e' gia' caldo, il boiler solare e' gia' a temperatura d'uso e il termostato non chiede riscaldamento, la
-# partenza e' inutile e viene annullata (la caldaia viene spenta in fase di accensione, prima di bruciare pellet).
+# ma il boiler solare e' gia' a temperatura d'uso (input_number.caldaia_t_uso_acqua, 43 C dal 19/10/2026) e il termostato
+# non chiede riscaldamento, la partenza e' inutile e viene annullata (la caldaia viene spenta in fase di accensione,
+# prima di bruciare pellet). Il puffer NON conta: serve solo ai termosifoni e a integrare l'acqua sanitaria, e se serve la
+# riaccensione sotto copre entrambi i casi (dal 19/10/2026; prima serviva anche il puffer sopra la soglia).
 # La Polygon decide la riaccensione solo in base alla sua acqua, senza sapere che il boiler solare e' gia' caldo.
 #
 # - Non interviene se il termostato dei radiatori chiede calore.
@@ -14,7 +16,8 @@
 # Poiche' una Polygon spenta non parte da sola quando poi il termostato chiede calore, dopo un'annullamento la
 # salvaguardia la RIACCENDE se, finche' il programma e' attivo, succede una di queste due cose:
 #   - il termostato chiede riscaldamento;
-#   - l'acqua del boiler scende sotto la temperatura d'uso e il puffer non e' piu' abbastanza caldo.
+#   - l'acqua sanitaria chiede calore (richiesta ACS) e il puffer non e' abbastanza caldo da integrare (sotto
+#     input_number.caldaia_salvaguardia_t_puffer): con il puffer caldo ci pensa la pompa di integrazione.
 
 input_boolean:
   caldaia_salvaguardia_attiva:
@@ -29,7 +32,7 @@ input_boolean:
 
 input_number:
   caldaia_salvaguardia_t_puffer:
-    name: Caldaia - partenza inutile se il puffer e' gia' sopra
+    name: Caldaia - riaccendi per l'acqua calda se il puffer e' sotto
     min: 30
     max: 70
     step: 1
@@ -41,7 +44,7 @@ automation:
     alias: Caldaia - salvaguardia, annulla partenza inutile
     description: >
       Parte da OFF o da ECO STOP; dopo 10 secondi controlla che sia davvero la partenza di un programma (con una tolleranza di 3 minuti
-      sull'orologio) e che puffer e boiler siano gia' caldi. Il ritardo vero e' quello del sondaggio del cloud
+      sull'orologio) e che il boiler sia gia' a temperatura d'uso e il termostato non chieda calore. Il ritardo vero e' quello del sondaggio del cloud
       (opzione "update_interval" dell'integrazione, 60 s di serie).
     mode: single
     triggers:
@@ -74,11 +77,8 @@ automation:
         state: "off"
       - condition: template
         value_template: >
-          {% set puffer = states('sensor.casale_temperatura_boiler') %}
           {% set alto = states('sensor.boiler_solare_alto_stimato') %}
-          {{ is_number(puffer) and is_number(alto)
-             and puffer | float >= states('input_number.caldaia_salvaguardia_t_puffer') | float(45)
-             and alto | float >= states('input_number.caldaia_t_uso_acqua') | float(45) }}
+          {{ is_number(alto) and alto | float >= states('input_number.caldaia_t_uso_acqua') | float(45) }}
       - action: input_boolean.turn_on
         target: {entity_id: input_boolean.caldaia_salvaguardia_ha_spento}
       - action: climate.set_hvac_mode
@@ -88,8 +88,8 @@ automation:
         data:
           name: Caldaia
           message: >
-            partenza annullata dalla salvaguardia (puffer {{ states('sensor.casale_temperatura_boiler') }} °C,
-            boiler {{ states('sensor.boiler_solare_alto_stimato') }} °C, nessuna richiesta del termostato)
+            partenza annullata dalla salvaguardia (boiler {{ states('sensor.boiler_solare_alto_stimato') }} °C già a
+            temperatura d'uso, puffer {{ states('sensor.casale_temperatura_boiler') }} °C, nessuna richiesta del termostato)
 
   - id: caldaia_salvaguardia_riaccendi
     alias: Caldaia - salvaguardia, riaccendi se serve

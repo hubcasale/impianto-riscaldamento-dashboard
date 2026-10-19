@@ -80,7 +80,7 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
     icon: "mdi:shield-check",
     title: "Salvaguardia accensioni",
     help: H(
-      "Evita che la caldaia parta quando non serve: il puffer e il boiler sono già caldi e nessuno chiede riscaldamento.",
+      "Evita che la caldaia parta quando non serve: il boiler è già a temperatura d'uso e il termostato non chiede riscaldamento.",
       "Per non sprecare pellet nelle accensioni dei programmi quando l'acqua è già calda.",
     ),
     fields: [
@@ -88,14 +88,22 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
         kind: "toggle",
         entity: "input_boolean.caldaia_salvaguardia_attiva",
         label: "Evita partenze inutili",
-        hint: "Annulla l'avvio della caldaia quando il puffer è già caldo.",
-        help: H("Annulla la partenza di un programma se puffer e boiler sono già caldi e il termostato non chiede calore.", "Lascialo acceso: se serve, la caldaia riparte da sola quando il termostato chiede calore o l'acqua si raffredda.", "Acceso."),
+        hint: "Annulla l'avvio della caldaia quando il boiler è già caldo e il termostato non chiede calore.",
+        help: H("Annulla la partenza di un programma se il boiler è già a temperatura d'uso e il termostato non chiede calore. Il puffer non conta: serve solo ai termosifoni e a integrare l'acqua sanitaria.", "Lascialo acceso: se serve, la caldaia riparte da sola quando il termostato chiede calore o l'acqua sanitaria si raffredda.", "Acceso."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_t_uso_acqua",
+        label: "Boiler già abbastanza caldo da",
+        hint: "Temperatura della parte alta del boiler oltre la quale l'acqua sanitaria è considerata pronta. Vale anche per «Acqua pronta in».",
+        help: H("La temperatura d'uso dell'acqua calda, letta sulla sonda alta del boiler. Con il boiler sopra questa soglia la partenza di un programma viene annullata (se il termostato non chiede calore) e la scheda dice che l'acqua è pronta.", "Alzala se l'acqua con questa temperatura ti pare ancora fredda; abbassala per far partire la caldaia meno spesso.", "43 °C."),
       },
       {
         kind: "number",
         entity: "input_number.caldaia_salvaguardia_t_puffer",
-        label: "Partenza inutile se il puffer è già sopra",
-        help: H("La temperatura del puffer oltre la quale una partenza viene considerata inutile.", "Alzala se vuoi che la caldaia parta più spesso; abbassala per risparmiare."),
+        label: "Riparti per l'acqua calda se il puffer è sotto",
+        hint: "Dopo un'annullamento, se l'acqua sanitaria chiede calore e il puffer è sotto questa temperatura la caldaia riparte; sopra, ci pensa la pompa di integrazione.",
+        help: H("La temperatura del puffer sotto la quale, dopo una partenza annullata, la caldaia riparte quando l'acqua sanitaria chiede calore.", "Alzala se vuoi che riparta prima; abbassala per lasciare lavorare più a lungo la pompa di integrazione."),
       },
     ],
   },
@@ -532,7 +540,7 @@ export function sectionSummaryText(sec: Pick<SectionView, "id" | "master">, rows
       return `Acqua ${italianValue(g("climate.casale_acqua"))} · puffer ${italianValue(g("number.casale_setpoint_boiler"))}`;
     case "partenze":
       return sec.master?.on
-        ? `Attiva: non parte se il puffer è già sopra ${italianValue(g("input_number.caldaia_salvaguardia_t_puffer"))}`
+        ? `Attiva: annulla la partenza se il boiler è già sopra ${italianValue(g("input_number.caldaia_t_uso_acqua"))}`
         : "Disattivata: la caldaia parte sempre con il programma";
     case "integrazione": {
       const blocco = g("input_boolean.caldaia_integrazione_blocco_attivo");
@@ -576,9 +584,11 @@ export function sectionNotes(sec: Pick<SectionView, "id" | "master">, rows: RowV
     return [`Se nessuno è in casa da ${bare(min)} minuti (iPhone e Wi-Fi) la caldaia si spegne; al rientro riparte solo se c'è un programma attivo.${freddo}`];
   }
   if (sec.id === "partenze") {
+    const uso = g("input_number.caldaia_t_uso_acqua");
     const t = g("input_number.caldaia_salvaguardia_t_puffer");
-    if (!sec.master?.on || t?.value == null) return [];
-    return [`All'ora di un programma, se il puffer è già sopra ${bare(t)} °C e il termostato non chiede calore, la partenza viene annullata: si risparmia pellet.`];
+    if (!sec.master?.on || uso?.value == null) return [];
+    const riparte = t?.value != null ? ` Riparte quando il termostato chiede calore, o quando l'acqua sanitaria chiede calore con il puffer sotto ${bare(t)} °C.` : " Riparte quando il termostato chiede calore o l'acqua sanitaria si raffredda.";
+    return [`All'ora di un programma, se il boiler è già sopra ${bare(uso)} °C e il termostato non chiede calore, la partenza viene annullata: si risparmia pellet.${riparte}`];
   }
   return [];
 }

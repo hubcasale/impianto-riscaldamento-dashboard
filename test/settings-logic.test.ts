@@ -245,3 +245,19 @@ test("attesa di conferma: il riepilogo e la barra seguono il valore appena scelt
   assert.match(r.sections[0].summary, /testa boiler max 60 °C/);
   assert.match(r.sections[0].notes[0], /arriva a 60 °C e riparte sotto 58 °C/);
 });
+
+test("salvaguardia: riepilogo e frase con la temperatura d'uso del boiler, il puffer solo per la riaccensione", () => {
+  const v = buildSettingsView({
+    "input_boolean.caldaia_salvaguardia_attiva": st("on"),
+    "input_number.caldaia_t_uso_acqua": st("43", { min: 30, max: 60, step: 1, unit_of_measurement: "°C" }),
+    "input_number.caldaia_salvaguardia_t_puffer": st("50", { min: 30, max: 70, step: 1, unit_of_measurement: "°C" }),
+  });
+  const sec = v.find((x) => x.id === "partenze")!;
+  assert.equal(sec.summary, "Attiva: annulla la partenza se il boiler è già sopra 43 °C");
+  assert.deepEqual(sec.rows.map((r) => r.entity), ["input_number.caldaia_t_uso_acqua", "input_number.caldaia_salvaguardia_t_puffer"]);
+  assert.match(sec.notes[0], /già sopra 43 °C e il termostato non chiede calore/);
+  assert.match(sec.notes[0], /puffer sotto 50 °C/);
+  const off = buildSettingsView({ "input_boolean.caldaia_salvaguardia_attiva": st("off"), "input_number.caldaia_t_uso_acqua": st("43", { min: 30, max: 60, step: 1 }) }).find((x) => x.id === "partenze")!;
+  assert.equal(off.summary, "Disattivata: la caldaia parte sempre con il programma");
+  assert.deepEqual(off.notes, []);
+});

@@ -705,7 +705,7 @@ export class ImpiantoOverviewCard extends LitElement {
       <button class="guard ${on ? "on" : "off"}" @click=${() => this._toggleGuard()} aria-pressed=${on}>
         <span class="gtxt">
           <b>Evita partenze inutili</b>
-          <small>${on ? (flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze con puffer e boiler già caldi") : "disattivata: i programmi partono sempre"}</small>
+          <small>${on ? (flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze con il boiler già caldo e senza richiesta del termostato") : "disattivata: i programmi partono sempre"}</small>
         </span>
         <span class="gsw"><i></i></span>
       </button>

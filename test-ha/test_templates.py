@@ -578,5 +578,19 @@ check("potenza: con il fattore 1,6 e' piu' alta che senza", c16["potenza"] > c10
 check("potenza: la temperatura del collettore non dipende dal fattore", round(c16["tc"], 3), round(c10["tc"], 3))
 check("potenza: sotto la soglia di irraggiamento (grezzo) e' zero", passo_collettore("45.0", "45.0", ta=24.0, g=40.0, el=40.0, az=240.0)["potenza"], 0.0)
 
+
+# ---------------------------------------------------------------- salvaguardia: la partenza si annulla col boiler caldo, il puffer non conta
+SALV = yaml.safe_load(open("ha-packages/caldaia_salvaguardia.yaml"))
+_annulla = next(a for a in SALV["automation"] if a["id"] == "caldaia_salvaguardia_annulla_partenza")
+_cond = next(c["value_template"] for c in _annulla["actions"] if isinstance(c, dict) and c.get("condition") == "template")
+def annulla(alto, puffer="31.0", uso="43"):
+    return render(_cond, {"sensor.boiler_solare_alto_stimato": alto, "sensor.casale_temperatura_boiler": puffer, "input_number.caldaia_t_uso_acqua": uso})
+check("salvaguardia: boiler a 44,6 con puffer a 31 annulla la partenza", annulla("44.6"), "True")
+check("salvaguardia: boiler esattamente alla soglia annulla", annulla("43.0"), "True")
+check("salvaguardia: boiler sotto la soglia non annulla", annulla("42.9"), "False")
+check("salvaguardia: con la soglia a 45 il boiler a 44,6 non annulla", annulla("44.6", uso="45"), "False")
+check("salvaguardia: il puffer non conta (caldo o freddo)", annulla("46", puffer="62") == annulla("46", puffer="25") == "True", True)
+check("salvaguardia: sonda del boiler non disponibile non annulla", annulla("unavailable"), "False")
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

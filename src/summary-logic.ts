@@ -105,7 +105,7 @@ function whyOffLine(i: SummaryInput): SummaryLine | null {
   if (!OFF_STATES.includes(raw) || raw === "UNAVAILABLE" || raw === "UNKNOWN" || raw === "") return null;
   if (i.awayFlag) return { icon: "mdi:home-off", text: "È spenta perché nessuno era in casa: riparte al rientro se c'è un programma attivo.", tone: "info" };
   if (i.guardFlag)
-    return { icon: "mdi:shield-check", text: "Ho annullato una partenza inutile: puffer e boiler erano già caldi.", tone: "info" };
+    return { icon: "mdi:shield-check", text: "Ho annullato una partenza inutile: il boiler era già caldo e il termostato non chiedeva calore.", tone: "info" };
   if (i.boostActive) return null;
   if (i.cronoOn === false)
     return { icon: "mdi:palm-tree", text: "Cronotermostato disattivato (vacanza): non parte da sola.", tone: "info" };
