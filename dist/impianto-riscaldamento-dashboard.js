@@ -636,7 +636,7 @@ var SETTINGS_SECTIONS = [
     icon: "mdi:shield-check",
     title: "Salvaguardia accensioni",
     help: H2(
-      "Evita che la caldaia parta quando non serve: il boiler \xE8 gi\xE0 a temperatura d'uso e il termostato non chiede riscaldamento.",
+      "Evita che la caldaia parta quando non serve: il boiler ha gi\xE0 abbastanza acqua calda e il termostato non chiede riscaldamento.",
       "Per non sprecare pellet nelle accensioni dei programmi quando l'acqua \xE8 gi\xE0 calda."
     ),
     fields: [
@@ -644,15 +644,15 @@ var SETTINGS_SECTIONS = [
         kind: "toggle",
         entity: "input_boolean.caldaia_salvaguardia_attiva",
         label: "Evita partenze inutili",
-        hint: "Annulla l'avvio della caldaia quando il boiler \xE8 gi\xE0 caldo e il termostato non chiede calore.",
-        help: H2("Annulla la partenza di un programma se il boiler \xE8 gi\xE0 a temperatura d'uso e il termostato non chiede calore. Il puffer non conta: serve solo ai termosifoni e a integrare l'acqua sanitaria.", "Lascialo acceso: se serve, la caldaia riparte da sola quando il termostato chiede calore o l'acqua sanitaria si raffredda.", "Acceso.")
+        hint: "Annulla l'avvio della caldaia quando il boiler ha gi\xE0 abbastanza docce e il termostato non chiede calore.",
+        help: H2("Annulla la partenza di un programma se il boiler ha gi\xE0 le docce che vuoi garantire e il termostato non chiede calore. Il puffer non conta: serve solo ai termosifoni e a integrare l'acqua sanitaria.", "Lascialo acceso: se serve, la caldaia riparte da sola quando il termostato chiede calore o l'acqua sanitaria si raffredda.", "Acceso.")
       },
       {
         kind: "number",
-        entity: "input_number.caldaia_t_uso_acqua",
-        label: "Boiler gi\xE0 abbastanza caldo da",
-        hint: "Temperatura della parte alta del boiler oltre la quale l'acqua sanitaria \xE8 considerata pronta. Vale anche per \xABAcqua pronta in\xBB.",
-        help: H2("La temperatura d'uso dell'acqua calda, letta sulla sonda alta del boiler. Con il boiler sopra questa soglia la partenza di un programma viene annullata (se il termostato non chiede calore) e la scheda dice che l'acqua \xE8 pronta.", "Alzala se l'acqua con questa temperatura ti pare ancora fredda; abbassala per far partire la caldaia meno spesso.", "43 \xB0C.")
+        entity: "input_number.caldaia_salvaguardia_docce_min",
+        label: "Docce da garantire prima di annullare",
+        hint: "Quante docce deve avere gi\xE0 il boiler (come le conta la scheda, 40 L a 38 \xB0C) perch\xE9 la partenza di un programma venga annullata.",
+        help: H2("Il numero minimo di docce disponibili nel boiler per annullare la partenza di un programma. Conta sia la sonda alta sia la bassa: con la testa calda ma il fondo freddo le docce sono poche.", "Alzalo se la sera ti serve pi\xF9 acqua calda; abbassalo per far partire la caldaia meno spesso.", "3 docce.")
       },
       {
         kind: "number",
@@ -1007,7 +1007,7 @@ function sectionSummaryText(sec, rows) {
     case "caldaia":
       return `Acqua ${italianValue(g2("climate.casale_acqua"))} \xB7 puffer ${italianValue(g2("number.casale_setpoint_boiler"))}`;
     case "partenze":
-      return sec.master?.on ? `Attiva: annulla la partenza se il boiler \xE8 gi\xE0 sopra ${italianValue(g2("input_number.caldaia_t_uso_acqua"))}` : "Disattivata: la caldaia parte sempre con il programma";
+      return sec.master?.on ? `Attiva: annulla la partenza se il boiler ha gi\xE0 ${bare(g2("input_number.caldaia_salvaguardia_docce_min"))} docce` : "Disattivata: la caldaia parte sempre con il programma";
     case "integrazione": {
       const blocco = g2("input_boolean.caldaia_integrazione_blocco_attivo");
       const forza = g2("input_boolean.caldaia_integrazione_forzatura_attiva");
@@ -1048,11 +1048,11 @@ function sectionNotes(sec, rows) {
     return [`Se nessuno \xE8 in casa da ${bare(min)} minuti (iPhone e Wi-Fi) la caldaia si spegne; al rientro riparte solo se c'\xE8 un programma attivo.${freddo}`];
   }
   if (sec.id === "partenze") {
-    const uso = g2("input_number.caldaia_t_uso_acqua");
+    const docce = g2("input_number.caldaia_salvaguardia_docce_min");
     const t3 = g2("input_number.caldaia_salvaguardia_t_puffer");
-    if (!sec.master?.on || uso?.value == null) return [];
+    if (!sec.master?.on || docce?.value == null) return [];
     const riparte = t3?.value != null ? ` Riparte quando il termostato chiede calore, o quando l'acqua sanitaria chiede calore con il puffer sotto ${bare(t3)} \xB0C.` : " Riparte quando il termostato chiede calore o l'acqua sanitaria si raffredda.";
-    return [`All'ora di un programma, se il boiler \xE8 gi\xE0 sopra ${bare(uso)} \xB0C e il termostato non chiede calore, la partenza viene annullata: si risparmia pellet.${riparte}`];
+    return [`All'ora di un programma, se il boiler ha gi\xE0 almeno ${bare(docce)} docce (conta anche la sonda bassa) e il termostato non chiede calore, la partenza viene annullata: si risparmia pellet.${riparte}`];
   }
   return [];
 }
@@ -3487,7 +3487,7 @@ function whyOffLine(i5) {
   if (!OFF_STATES.includes(raw) || raw === "UNAVAILABLE" || raw === "UNKNOWN" || raw === "") return null;
   if (i5.awayFlag) return { icon: "mdi:home-off", text: "\xC8 spenta perch\xE9 nessuno era in casa: riparte al rientro se c'\xE8 un programma attivo.", tone: "info" };
   if (i5.guardFlag)
-    return { icon: "mdi:shield-check", text: "Ho annullato una partenza inutile: il boiler era gi\xE0 caldo e il termostato non chiedeva calore.", tone: "info" };
+    return { icon: "mdi:shield-check", text: "Ho annullato una partenza inutile: il boiler aveva gi\xE0 abbastanza docce e il termostato non chiedeva calore.", tone: "info" };
   if (i5.boostActive) return null;
   if (i5.cronoOn === false)
     return { icon: "mdi:palm-tree", text: "Cronotermostato disattivato (vacanza): non parte da sola.", tone: "info" };
@@ -4059,7 +4059,7 @@ var ImpiantoOverviewCard = class extends i4 {
       <button class="guard ${on2 ? "on" : "off"}" @click=${() => this._toggleGuard()} aria-pressed=${on2}>
         <span class="gtxt">
           <b>Evita partenze inutili</b>
-          <small>${on2 ? flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze con il boiler gi\xE0 caldo e senza richiesta del termostato" : "disattivata: i programmi partono sempre"}</small>
+          <small>${on2 ? flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze se il boiler ha gi\xE0 abbastanza docce e il termostato non chiede calore" : "disattivata: i programmi partono sempre"}</small>
         </span>
         <span class="gsw"><i></i></span>
       </button>
@@ -6335,7 +6335,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.4.6";
+var VERSION = "0.4.7";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
