@@ -83,7 +83,13 @@ template:
         device_class: weight
         state_class: total_increasing
         icon: mdi:grain
-        availability: "{{ is_number(states('sensor.caldaia_pellet_consumato_combustione')) }}"
+        # SENZA UNO DEI DUE ADDENDI IL TOTALE NON ESISTE: ad ogni ricarica dei modelli o riavvio il sensore delle accensioni
+        # resta non disponibile per un attimo; prima il totale scendeva (le accensioni valevano 0) e subito dopo risaliva,
+        # e i contatori oggi/settimana/mese (utility_meter) contavano la risalita come consumo (+8,2, +9,8, +11,8 e
+        # +12,2 kg il 15, 16 e 19 ottobre: 42 kg in piu' sul mese). Cosi' il contatore ignora il momento di assenza.
+        availability: >
+          {{ is_number(states('sensor.caldaia_pellet_consumato_combustione'))
+             and is_number(states('sensor.caldaia_pellet_accensioni')) }}
         state: >
           {{ (states('sensor.caldaia_pellet_consumato_combustione') | float(0)
               + states('sensor.caldaia_pellet_accensioni') | float(0)) | round(2) }}

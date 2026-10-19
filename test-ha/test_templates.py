@@ -626,5 +626,19 @@ check("docce: tutto freddo e' zero", docce("30", "20"), "0")
 check("docce: tutto a 60 C con 190 L sono 9 docce", docce("60", "60", vol="190"), "9")
 check("docce: senza sonda bassa vale la alta", docce("44.6", "unavailable"), "6")
 
+
+# ---------------------------------------------------------------- pellet: il totale non esiste se manca un addendo (niente salti nei contatori)
+PEL = yaml.safe_load(open("ha-packages/caldaia_pellet.yaml"))
+_tot = next(e_ for t_ in PEL["template"] for e_ in t_.get("sensor", []) if e_["name"] == "Caldaia pellet stimato totale")
+def tot_disp(comb, acc):
+    return render(_tot["availability"], {"sensor.caldaia_pellet_consumato_combustione": comb, "sensor.caldaia_pellet_accensioni": acc})
+def tot_stato(comb, acc):
+    return render(_tot["state"], {"sensor.caldaia_pellet_consumato_combustione": comb, "sensor.caldaia_pellet_accensioni": acc})
+check("pellet: con entrambi gli addendi il totale e' disponibile", tot_disp("28.21", "11.8"), "True")
+check("pellet: senza le accensioni (ricarica) il totale non e' disponibile", tot_disp("28.21", "unavailable"), "False")
+check("pellet: senza le accensioni (sconosciute) il totale non e' disponibile", tot_disp("28.21", "unknown"), "False")
+check("pellet: senza la combustione il totale non e' disponibile", tot_disp("unknown", "11.8"), "False")
+check("pellet: il totale e' la somma", tot_stato("29.161", "12.2"), "41.36")
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)
