@@ -350,6 +350,8 @@ if (q.get("scroll")) setTimeout(() => { const b = document.querySelector("impian
 if (q.get("aiuto")) setTimeout(() => { document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".block.open .bb .i, .block.open .bh .i").click(); }, 900);
 if (q.get("programma_popup")) setTimeout(() => cards[0]._openSchedule(), 600);
 if (q.get("stufa_popup")) setTimeout(() => cards[0]._openStufa(), 1500);
+if (q.get("conferma")) setTimeout(() => (q.get("conferma") === "stufa" ? cards[0]._stufaPress() : cards[0]._press()), 1500);
+if (q.get("auto")) setTimeout(() => document.querySelector("impianto-confirm-dialog").shadowRoot.querySelector(q.get("auto") === "annulla" ? "button.cancel" : "button.ok").click(), 2300);
 if (q.get("stato_popup")) setTimeout(() => cards[0]._openInfo(), 200);
 if (q.get("altri")) setTimeout(() => cards[0]._openDetails(), 200);
 if (q.get("salva")) setTimeout(() => { const c = cards.find((x) => x.localName === "caldaia-schedule-card"); c._openSave(); if (q.get("salva") === "nuovo") c._saving = { target: "__new__", newName: "Inverno" }; }, 600);

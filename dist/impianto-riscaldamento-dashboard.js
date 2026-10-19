@@ -636,7 +636,7 @@ var SETTINGS_SECTIONS = [
     icon: "mdi:shield-check",
     title: "Salvaguardia accensioni",
     help: H2(
-      "Evita che la caldaia parta quando non serve: il puffer e il boiler sono gi\xE0 caldi e nessuno chiede riscaldamento.",
+      "Evita che la caldaia parta quando non serve: il boiler \xE8 gi\xE0 a temperatura d'uso e il termostato non chiede riscaldamento.",
       "Per non sprecare pellet nelle accensioni dei programmi quando l'acqua \xE8 gi\xE0 calda."
     ),
     fields: [
@@ -644,14 +644,22 @@ var SETTINGS_SECTIONS = [
         kind: "toggle",
         entity: "input_boolean.caldaia_salvaguardia_attiva",
         label: "Evita partenze inutili",
-        hint: "Annulla l'avvio della caldaia quando il puffer \xE8 gi\xE0 caldo.",
-        help: H2("Annulla la partenza di un programma se puffer e boiler sono gi\xE0 caldi e il termostato non chiede calore.", "Lascialo acceso: se serve, la caldaia riparte da sola quando il termostato chiede calore o l'acqua si raffredda.", "Acceso.")
+        hint: "Annulla l'avvio della caldaia quando il boiler \xE8 gi\xE0 caldo e il termostato non chiede calore.",
+        help: H2("Annulla la partenza di un programma se il boiler \xE8 gi\xE0 a temperatura d'uso e il termostato non chiede calore. Il puffer non conta: serve solo ai termosifoni e a integrare l'acqua sanitaria.", "Lascialo acceso: se serve, la caldaia riparte da sola quando il termostato chiede calore o l'acqua sanitaria si raffredda.", "Acceso.")
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_t_uso_acqua",
+        label: "Boiler gi\xE0 abbastanza caldo da",
+        hint: "Temperatura della parte alta del boiler oltre la quale l'acqua sanitaria \xE8 considerata pronta. Vale anche per \xABAcqua pronta in\xBB.",
+        help: H2("La temperatura d'uso dell'acqua calda, letta sulla sonda alta del boiler. Con il boiler sopra questa soglia la partenza di un programma viene annullata (se il termostato non chiede calore) e la scheda dice che l'acqua \xE8 pronta.", "Alzala se l'acqua con questa temperatura ti pare ancora fredda; abbassala per far partire la caldaia meno spesso.", "43 \xB0C.")
       },
       {
         kind: "number",
         entity: "input_number.caldaia_salvaguardia_t_puffer",
-        label: "Partenza inutile se il puffer \xE8 gi\xE0 sopra",
-        help: H2("La temperatura del puffer oltre la quale una partenza viene considerata inutile.", "Alzala se vuoi che la caldaia parta pi\xF9 spesso; abbassala per risparmiare.")
+        label: "Riparti per l'acqua calda se il puffer \xE8 sotto",
+        hint: "Dopo un'annullamento, se l'acqua sanitaria chiede calore e il puffer \xE8 sotto questa temperatura la caldaia riparte; sopra, ci pensa la pompa di integrazione.",
+        help: H2("La temperatura del puffer sotto la quale, dopo una partenza annullata, la caldaia riparte quando l'acqua sanitaria chiede calore.", "Alzala se vuoi che riparta prima; abbassala per lasciare lavorare pi\xF9 a lungo la pompa di integrazione.")
       }
     ]
   },
@@ -999,7 +1007,7 @@ function sectionSummaryText(sec, rows) {
     case "caldaia":
       return `Acqua ${italianValue(g2("climate.casale_acqua"))} \xB7 puffer ${italianValue(g2("number.casale_setpoint_boiler"))}`;
     case "partenze":
-      return sec.master?.on ? `Attiva: non parte se il puffer \xE8 gi\xE0 sopra ${italianValue(g2("input_number.caldaia_salvaguardia_t_puffer"))}` : "Disattivata: la caldaia parte sempre con il programma";
+      return sec.master?.on ? `Attiva: annulla la partenza se il boiler \xE8 gi\xE0 sopra ${italianValue(g2("input_number.caldaia_t_uso_acqua"))}` : "Disattivata: la caldaia parte sempre con il programma";
     case "integrazione": {
       const blocco = g2("input_boolean.caldaia_integrazione_blocco_attivo");
       const forza = g2("input_boolean.caldaia_integrazione_forzatura_attiva");
@@ -1040,9 +1048,11 @@ function sectionNotes(sec, rows) {
     return [`Se nessuno \xE8 in casa da ${bare(min)} minuti (iPhone e Wi-Fi) la caldaia si spegne; al rientro riparte solo se c'\xE8 un programma attivo.${freddo}`];
   }
   if (sec.id === "partenze") {
+    const uso = g2("input_number.caldaia_t_uso_acqua");
     const t3 = g2("input_number.caldaia_salvaguardia_t_puffer");
-    if (!sec.master?.on || t3?.value == null) return [];
-    return [`All'ora di un programma, se il puffer \xE8 gi\xE0 sopra ${bare(t3)} \xB0C e il termostato non chiede calore, la partenza viene annullata: si risparmia pellet.`];
+    if (!sec.master?.on || uso?.value == null) return [];
+    const riparte = t3?.value != null ? ` Riparte quando il termostato chiede calore, o quando l'acqua sanitaria chiede calore con il puffer sotto ${bare(t3)} \xB0C.` : " Riparte quando il termostato chiede calore o l'acqua sanitaria si raffredda.";
+    return [`All'ora di un programma, se il boiler \xE8 gi\xE0 sopra ${bare(uso)} \xB0C e il termostato non chiede calore, la partenza viene annullata: si risparmia pellet.${riparte}`];
   }
   return [];
 }
@@ -3139,6 +3149,143 @@ __decorateClass([
 ], ImpiantoCardDialog.prototype, "wide", 2);
 if (!customElements.get(TAG5)) customElements.define(TAG5, ImpiantoCardDialog);
 
+// src/confirm-dialog.ts
+var TAG6 = "impianto-confirm-dialog";
+var ImpiantoConfirmDialog = class extends i4 {
+  constructor() {
+    super(...arguments);
+    this.heading = "";
+    this.lines = [];
+    this.confirmLabel = "Conferma";
+    this.cancelLabel = "Annulla";
+    this.danger = false;
+    this._onKey = (e5) => {
+      if (e5.key === "Escape") this._close();
+    };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("keydown", this._onKey);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener("keydown", this._onKey);
+  }
+  firstUpdated() {
+    this.renderRoot.querySelector("button.cancel")?.focus();
+  }
+  _close() {
+    this.dispatchEvent(new CustomEvent("closed"));
+    this.remove();
+  }
+  _confirm() {
+    this.dispatchEvent(new CustomEvent("confirmed"));
+    this._close();
+  }
+  render() {
+    return b2`
+      <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
+        <div class="panel" role="alertdialog" aria-modal="true" aria-label=${this.heading}>
+          <div class="title">${this.heading}</div>
+          ${this.lines.map((l3) => b2`<p>${l3}</p>`)}
+          <div class="row">
+            <button class="cancel" @click=${() => this._close()}>${this.cancelLabel}</button>
+            <button class=${this.danger ? "ok danger" : "ok"} @click=${() => this._confirm()}>${this.confirmLabel}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  static {
+    this.styles = i`
+    :host {
+      position: fixed;
+      inset: 0;
+      z-index: 10001;
+      color: var(--primary-text-color, #212121);
+      font-family: var(--paper-font-body1_-_font-family, Roboto, Helvetica, Arial, sans-serif);
+    }
+    .backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .panel {
+      width: 100%;
+      max-width: 420px;
+      background: var(--card-background-color, #fff);
+      border-radius: 16px;
+      padding: 20px 20px 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      box-sizing: border-box;
+    }
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    p {
+      margin: 8px 0 0;
+      font-size: 15px;
+      line-height: 1.4;
+      color: var(--secondary-text-color, #727272);
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    button {
+      flex: 1;
+      min-height: 52px;
+      border-radius: 14px;
+      font: inherit;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+    }
+    .cancel {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.15));
+      color: inherit;
+    }
+    .ok {
+      background: var(--primary-color, #03a9f4);
+      border-color: transparent;
+      color: var(--text-primary-color, #fff);
+    }
+    .ok.danger {
+      background: #ef4444;
+    }
+    button:focus-visible {
+      outline: 3px solid var(--primary-text-color, #212121);
+      outline-offset: 2px;
+    }
+  `;
+  }
+};
+__decorateClass([
+  n4()
+], ImpiantoConfirmDialog.prototype, "heading", 2);
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoConfirmDialog.prototype, "lines", 2);
+__decorateClass([
+  n4()
+], ImpiantoConfirmDialog.prototype, "confirmLabel", 2);
+__decorateClass([
+  n4()
+], ImpiantoConfirmDialog.prototype, "cancelLabel", 2);
+__decorateClass([
+  n4({ type: Boolean })
+], ImpiantoConfirmDialog.prototype, "danger", 2);
+if (!customElements.get(TAG6)) customElements.define(TAG6, ImpiantoConfirmDialog);
+
 // src/plant-logic.ts
 var DEFAULT_MODEL = {
   volume: 190,
@@ -3340,7 +3487,7 @@ function whyOffLine(i5) {
   if (!OFF_STATES.includes(raw) || raw === "UNAVAILABLE" || raw === "UNKNOWN" || raw === "") return null;
   if (i5.awayFlag) return { icon: "mdi:home-off", text: "\xC8 spenta perch\xE9 nessuno era in casa: riparte al rientro se c'\xE8 un programma attivo.", tone: "info" };
   if (i5.guardFlag)
-    return { icon: "mdi:shield-check", text: "Ho annullato una partenza inutile: puffer e boiler erano gi\xE0 caldi.", tone: "info" };
+    return { icon: "mdi:shield-check", text: "Ho annullato una partenza inutile: il boiler era gi\xE0 caldo e il termostato non chiedeva calore.", tone: "info" };
   if (i5.boostActive) return null;
   if (i5.cronoOn === false)
     return { icon: "mdi:palm-tree", text: "Cronotermostato disattivato (vacanza): non parte da sola.", tone: "info" };
@@ -3524,11 +3671,9 @@ var ImpiantoOverviewCard = class extends i4 {
     super(...arguments);
     this._narrow = false;
     this._compact = false;
-    this._armed = false;
     this._width = 1e3;
     this._onResize = () => this._updateCompact();
     this._stufa = null;
-    this._stufaArmed = false;
     this._stufaLoadedAt = 0;
     this._stufaLoading = false;
     this._thermoKey = "";
@@ -3587,24 +3732,40 @@ var ImpiantoOverviewCard = class extends i4 {
     this._stufaDlg = void 0;
     this._scheduleDlg?.remove();
     this._scheduleDlg = void 0;
-    if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
+    this._confirm?.remove();
+    this._confirm = void 0;
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
-    if (this._armTimer) window.clearTimeout(this._armTimer);
   }
-  /** Primo tocco = conferma richiesta (4 secondi), secondo tocco = esegue. */
+  /** Finestra di conferma: il comando parte solo se la si conferma (un tocco inavvertito non accende niente). */
+  _ask(heading, lines, confirmLabel, danger, onYes) {
+    if (this._confirm) return;
+    const d3 = document.createElement("impianto-confirm-dialog");
+    d3.heading = heading;
+    d3.lines = lines;
+    d3.confirmLabel = confirmLabel;
+    d3.danger = danger;
+    d3.addEventListener("confirmed", onYes);
+    d3.addEventListener("closed", () => {
+      this._confirm = void 0;
+    });
+    document.body.appendChild(d3);
+    this._confirm = d3;
+  }
+  /** Accensione rapida (o suo annullamento): chiede conferma in una finestra. */
   _press() {
-    const model = boostButton(this._s(this._e.boost_state), this._armed);
+    const model = boostButton(this._s(this._e.boost_state), false);
     if (model.action === "none") return;
-    if (!this._armed) {
-      this._armed = true;
-      this._armTimer = window.setTimeout(() => this._armed = false, 4e3);
-      return;
-    }
-    this._armed = false;
-    if (this._armTimer) window.clearTimeout(this._armTimer);
     const script = model.action === "go" ? this._e.boost_start_script : this._e.boost_cancel_script;
-    void this.hass.callService("script", "turn_on", { entity_id: script });
+    const run = () => void this.hass.callService("script", "turn_on", { entity_id: script });
+    if (model.action === "go") {
+      const eta = this.hass.states[this._e.eta] ? this._n(this._e.eta) : null;
+      const lines = ["La caldaia si accende subito, anche fuori programma, e si spegne da sola quando l'acqua \xE8 calda."];
+      if (eta !== null && eta > 0) lines.push(`Acqua calda stimata tra circa ${etaText(eta)}.`);
+      this._ask("Avviare la caldaia?", lines, "Avvia", false, run);
+    } else {
+      this._ask("Spegnere la caldaia?", ["Annulla l'accensione rapida e spegne la caldaia."], "Spegni", true, run);
+    }
   }
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
@@ -3694,7 +3855,7 @@ var ImpiantoOverviewCard = class extends i4 {
     const solarOut = this._n(e5.coil_solar_out);
     const integIn = this._n(e5.coil_integ_in);
     const integOut = this._n(e5.coil_integ_out);
-    const btn = boostButton(this._s(e5.boost_state), this._armed);
+    const btn = boostButton(this._s(e5.boost_state), false);
     return b2`
       <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : this._compact ? "0 66 700 762" : "0 0 700 840"} role="img" aria-label="Boiler solare">
         <defs>
@@ -3772,7 +3933,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <text x="82" y="248" class="t2 s14" text-anchor="middle">Acqua pronta in</text>
         <text x="82" y="292" class="t1 b" font-size="34" text-anchor="middle">${etaText(eta)}</text>
         <text x="82" y="314" class="t2 s13" text-anchor="middle">${eta === 0 ? "gi\xE0 a temperatura" : eta === null ? "" : "stima media"}</text>
-        <g class=${btn.action === "none" ? "btn off" : this._armed ? "btn armed" : "btn"} role="button" tabindex=${btn.action === "none" ? "-1" : "0"}
+        <g class=${btn.action === "none" ? "btn off" : "btn"} role="button" tabindex=${btn.action === "none" ? "-1" : "0"}
           aria-label=${btn.label} @click=${() => this._press()} @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._press()}>
           <rect x="14" y="340" width="136" height="${btn.sub ? 78 : 64}" rx="14" class="btnbg" />
           <text x="82" y=${btn.sub ? 372 : 380} class="b" font-size="18" text-anchor="middle">${btn.label}</text>
@@ -3898,7 +4059,7 @@ var ImpiantoOverviewCard = class extends i4 {
       <button class="guard ${on2 ? "on" : "off"}" @click=${() => this._toggleGuard()} aria-pressed=${on2}>
         <span class="gtxt">
           <b>Evita partenze inutili</b>
-          <small>${on2 ? flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze con puffer e boiler gi\xE0 caldi" : "disattivata: i programmi partono sempre"}</small>
+          <small>${on2 ? flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze con il boiler gi\xE0 caldo e senza richiesta del termostato" : "disattivata: i programmi partono sempre"}</small>
         </span>
         <span class="gsw"><i></i></span>
       </button>
@@ -4112,21 +4273,16 @@ var ImpiantoOverviewCard = class extends i4 {
       this._stufaLoading = false;
     }
   }
-  /** Primo tocco = conferma (4 secondi), secondo tocco = comanda l'interruttore della stufa. */
+  /** Accensione o spegnimento della stufa: chiede conferma in una finestra e poi comanda l'interruttore. */
   _stufaPress() {
     const sw = this._stufa?.sources.switch;
     if (!sw) return;
     const on2 = this.hass.states[sw]?.state === "on" ? true : this.hass.states[sw]?.state === "off" ? false : null;
-    const btn = stufaButton(on2, this._stufaArmed);
+    const btn = stufaButton(on2, false);
     if (btn.action === "none") return;
-    if (!this._stufaArmed) {
-      this._stufaArmed = true;
-      this._stufaTimer = window.setTimeout(() => this._stufaArmed = false, 4e3);
-      return;
-    }
-    this._stufaArmed = false;
-    if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
-    void this.hass.callService("homeassistant", btn.action === "on" ? "turn_on" : "turn_off", { entity_id: sw });
+    const run = () => void this.hass.callService("homeassistant", btn.action === "on" ? "turn_on" : "turn_off", { entity_id: sw });
+    if (btn.action === "on") this._ask("Accendere la stufa?", ["Chiude l'interruttore: la stufa a pellet si accende e parte la sua sequenza di accensione."], "Accendi", false, run);
+    else this._ask("Spegnere la stufa?", ["Apre l'interruttore: la stufa a pellet inizia lo spegnimento."], "Spegni", true, run);
   }
   /** Popup con la programmazione settimanale della caldaia (caldaia-schedule-card), senza passare da altri pop-up della dashboard. */
   _openSchedule() {
@@ -4173,8 +4329,8 @@ var ImpiantoOverviewCard = class extends i4 {
     const modeRaw = info.entities.modo ? this.hass.states[info.entities.modo]?.state : void 0;
     const sw = info.sources.switch;
     const swRaw = sw ? this.hass.states[sw]?.state : void 0;
-    const btn = stufaButton(swRaw === "on" ? true : swRaw === "off" ? false : null, this._stufaArmed);
-    const cls = btn.action === "none" ? "sbtn off" : this._stufaArmed ? "sbtn armed" : swRaw === "on" ? "sbtn stop" : "sbtn";
+    const btn = stufaButton(swRaw === "on" ? true : swRaw === "off" ? false : null, false);
+    const cls = btn.action === "none" ? "sbtn off" : swRaw === "on" ? "sbtn stop" : "sbtn";
     return b2`
       <section class="stufa">
         <h3>${typeof this._config.stufa === "object" && this._config.stufa.title || info.title || "Stufa a pellet"}</h3>
@@ -5062,13 +5218,7 @@ __decorateClass([
 ], ImpiantoOverviewCard.prototype, "_compact", 2);
 __decorateClass([
   r5()
-], ImpiantoOverviewCard.prototype, "_armed", 2);
-__decorateClass([
-  r5()
 ], ImpiantoOverviewCard.prototype, "_stufa", 2);
-__decorateClass([
-  r5()
-], ImpiantoOverviewCard.prototype, "_stufaArmed", 2);
 customElements.define(CARD_TAG, ImpiantoOverviewCard);
 
 // src/schedule-logic.ts

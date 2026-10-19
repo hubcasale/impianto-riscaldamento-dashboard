@@ -11,6 +11,8 @@ import type { ImpiantoChartsDialog } from "./charts-dialog";
 import "./charts-dialog";
 import type { ImpiantoCardDialog } from "./card-dialog";
 import "./card-dialog";
+import type { ImpiantoConfirmDialog } from "./confirm-dialog";
+import "./confirm-dialog";
 import { summarize, type SummaryLine } from "./summary-logic";
 import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, sinceText, stoveLook, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
@@ -268,10 +270,9 @@ export class ImpiantoOverviewCard extends LitElement {
   @state() private _config!: PlantCardConfig;
   @state() private _narrow = false;
   @state() private _compact = false;
-  @state() private _armed = false;
+  private _confirm?: ImpiantoConfirmDialog;
   private _width = 1000;
   private _onResize = () => this._updateCompact();
-  private _armTimer?: number;
   private _ro?: ResizeObserver;
   private _dialog?: ImpiantoSettingsDialog;
   private _info?: ImpiantoInfoDialog;
@@ -280,10 +281,8 @@ export class ImpiantoOverviewCard extends LitElement {
   private _stufaDlg?: ImpiantoCardDialog;
   private _scheduleDlg?: ImpiantoCardDialog;
   @state() private _stufa: StufaInfoLite | null = null;
-  @state() private _stufaArmed = false;
   private _stufaLoadedAt = 0;
   private _stufaLoading = false;
-  private _stufaTimer?: number;
   private _thermo?: HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
   private _thermoKey = "";
 
@@ -348,25 +347,42 @@ export class ImpiantoOverviewCard extends LitElement {
     this._stufaDlg = undefined;
     this._scheduleDlg?.remove();
     this._scheduleDlg = undefined;
-    if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
+    this._confirm?.remove();
+    this._confirm = undefined;
     this._ro?.disconnect();
     window.removeEventListener("resize", this._onResize);
-    if (this._armTimer) window.clearTimeout(this._armTimer);
   }
 
-  /** Primo tocco = conferma richiesta (4 secondi), secondo tocco = esegue. */
+  /** Finestra di conferma: il comando parte solo se la si conferma (un tocco inavvertito non accende niente). */
+  private _ask(heading: string, lines: string[], confirmLabel: string, danger: boolean, onYes: () => void): void {
+    if (this._confirm) return;
+    const d = document.createElement("impianto-confirm-dialog") as ImpiantoConfirmDialog;
+    d.heading = heading;
+    d.lines = lines;
+    d.confirmLabel = confirmLabel;
+    d.danger = danger;
+    d.addEventListener("confirmed", onYes);
+    d.addEventListener("closed", () => {
+      this._confirm = undefined;
+    });
+    document.body.appendChild(d);
+    this._confirm = d;
+  }
+
+  /** Accensione rapida (o suo annullamento): chiede conferma in una finestra. */
   private _press(): void {
-    const model = boostButton(this._s(this._e.boost_state), this._armed);
+    const model = boostButton(this._s(this._e.boost_state), false);
     if (model.action === "none") return;
-    if (!this._armed) {
-      this._armed = true;
-      this._armTimer = window.setTimeout(() => (this._armed = false), 4000);
-      return;
-    }
-    this._armed = false;
-    if (this._armTimer) window.clearTimeout(this._armTimer);
     const script = model.action === "go" ? this._e.boost_start_script : this._e.boost_cancel_script;
-    void this.hass.callService("script", "turn_on", { entity_id: script });
+    const run = () => void this.hass.callService("script", "turn_on", { entity_id: script });
+    if (model.action === "go") {
+      const eta = this.hass.states[this._e.eta] ? this._n(this._e.eta) : null;
+      const lines = ["La caldaia si accende subito, anche fuori programma, e si spegne da sola quando l'acqua è calda."];
+      if (eta !== null && eta > 0) lines.push(`Acqua calda stimata tra circa ${etaText(eta)}.`);
+      this._ask("Avviare la caldaia?", lines, "Avvia", false, run);
+    } else {
+      this._ask("Spegnere la caldaia?", ["Annulla l'accensione rapida e spegne la caldaia."], "Spegni", true, run);
+    }
   }
 
   setConfig(config: PlantCardConfig): void {
@@ -468,7 +484,7 @@ export class ImpiantoOverviewCard extends LitElement {
     const solarOut = this._n(e.coil_solar_out);
     const integIn = this._n(e.coil_integ_in);
     const integOut = this._n(e.coil_integ_out);
-    const btn = boostButton(this._s(e.boost_state), this._armed);
+    const btn = boostButton(this._s(e.boost_state), false);
 
     return html`
       <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : this._compact ? "0 66 700 762" : "0 0 700 840"} role="img" aria-label="Boiler solare">
@@ -551,7 +567,7 @@ export class ImpiantoOverviewCard extends LitElement {
         <text x="82" y="248" class="t2 s14" text-anchor="middle">Acqua pronta in</text>
         <text x="82" y="292" class="t1 b" font-size="34" text-anchor="middle">${etaText(eta)}</text>
         <text x="82" y="314" class="t2 s13" text-anchor="middle">${eta === 0 ? "già a temperatura" : eta === null ? "" : "stima media"}</text>
-        <g class=${btn.action === "none" ? "btn off" : this._armed ? "btn armed" : "btn"} role="button" tabindex=${btn.action === "none" ? "-1" : "0"}
+        <g class=${btn.action === "none" ? "btn off" : "btn"} role="button" tabindex=${btn.action === "none" ? "-1" : "0"}
           aria-label=${btn.label} @click=${() => this._press()} @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._press()}>
           <rect x="14" y="340" width="136" height="${btn.sub ? 78 : 64}" rx="14" class="btnbg" />
           <text x="82" y=${btn.sub ? 372 : 380} class="b" font-size="18" text-anchor="middle">${btn.label}</text>
@@ -931,21 +947,16 @@ export class ImpiantoOverviewCard extends LitElement {
     }
   }
 
-  /** Primo tocco = conferma (4 secondi), secondo tocco = comanda l'interruttore della stufa. */
+  /** Accensione o spegnimento della stufa: chiede conferma in una finestra e poi comanda l'interruttore. */
   private _stufaPress(): void {
     const sw = this._stufa?.sources.switch;
     if (!sw) return;
     const on = this.hass.states[sw]?.state === "on" ? true : this.hass.states[sw]?.state === "off" ? false : null;
-    const btn = stufaButton(on, this._stufaArmed);
+    const btn = stufaButton(on, false);
     if (btn.action === "none") return;
-    if (!this._stufaArmed) {
-      this._stufaArmed = true;
-      this._stufaTimer = window.setTimeout(() => (this._stufaArmed = false), 4000);
-      return;
-    }
-    this._stufaArmed = false;
-    if (this._stufaTimer) window.clearTimeout(this._stufaTimer);
-    void this.hass.callService("homeassistant", btn.action === "on" ? "turn_on" : "turn_off", { entity_id: sw });
+    const run = () => void this.hass.callService("homeassistant", btn.action === "on" ? "turn_on" : "turn_off", { entity_id: sw });
+    if (btn.action === "on") this._ask("Accendere la stufa?", ["Chiude l'interruttore: la stufa a pellet si accende e parte la sua sequenza di accensione."], "Accendi", false, run);
+    else this._ask("Spegnere la stufa?", ["Apre l'interruttore: la stufa a pellet inizia lo spegnimento."], "Spegni", true, run);
   }
 
   /** Popup con la programmazione settimanale della caldaia (caldaia-schedule-card), senza passare da altri pop-up della dashboard. */
@@ -995,8 +1006,8 @@ export class ImpiantoOverviewCard extends LitElement {
     const modeRaw = info.entities.modo ? this.hass.states[info.entities.modo]?.state : undefined;
     const sw = info.sources.switch;
     const swRaw = sw ? this.hass.states[sw]?.state : undefined;
-    const btn = stufaButton(swRaw === "on" ? true : swRaw === "off" ? false : null, this._stufaArmed);
-    const cls = btn.action === "none" ? "sbtn off" : this._stufaArmed ? "sbtn armed" : swRaw === "on" ? "sbtn stop" : "sbtn";
+    const btn = stufaButton(swRaw === "on" ? true : swRaw === "off" ? false : null, false);
+    const cls = btn.action === "none" ? "sbtn off" : swRaw === "on" ? "sbtn stop" : "sbtn";
     return html`
       <section class="stufa">
         <h3>${(typeof this._config.stufa === "object" && this._config.stufa.title) || info.title || "Stufa a pellet"}</h3>

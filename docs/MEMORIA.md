@@ -42,7 +42,7 @@ del sistema, quali scelte sono state fatte e perché, e che cosa resta da verifi
 ## 3. Come funziona il sistema (vedi diagramma)
 
 **A. Accensione rapida (pulsante «Avvia caldaia»).** Funziona solo se la Polygon è **OFF**, senza allarme, con boiler
-(alto, corretto) sotto 45 °C, puffer sotto 50 °C e meno di 2 accensioni rapide oggi. Il primo tocco chiede conferma (4 s).
+(alto, corretto) sotto 45 °C, puffer sotto 50 °C e meno di 2 accensioni rapide oggi. Il tocco apre una finestra di conferma (dal 19/10/2026; prima era un secondo tocco entro 4 s).
 Imposta la caldaia in riscaldamento, segna l'inizio e conta l'accensione.
 
 **B. Spegnimento.** Ogni 2 minuti e a ogni ECO STOP: se l'accensione rapida è attiva e la caldaia è in **ECO STOP**,

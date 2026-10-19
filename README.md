@@ -108,7 +108,7 @@ Per forzarla o escluderla: `compact: true` / `compact: false`.
 
 **Programmazione della caldaia** (`schedule: false | { prefix, master, status, presets }`, predefinito attivo): nel titolo della scheda della Polygon c'è il pulsante **«Programma»**, che apre in un popup la scheda della programmazione settimanale (`caldaia-schedule-card`) senza passare da altri pop-up o pulsanti della dashboard. Un oggetto passa le opzioni alla scheda della programmazione; `schedule: false` toglie il pulsante.
 
-**Sintesi della stufa a pellet (prova)** (`stufa: true | { entry_id, title }`, predefinito spenta): se è installata l'integrazione [stufa-pellet-monitor](https://github.com/hubcasale/stufa-pellet-monitor), a destra della scheda della caldaia compare una sintesi della stufa: stato e da quanto dura, modo (programma, manuale, timer), potenza, il pulsante di **accensione manuale** dell'interruttore (primo tocco = conferma, secondo = esegue) e **«Scheda completa»**, che apre in un popup la scheda `stufa-pellet-card`, aggiornata in tempo reale. Il termostato resta intero sotto. Quando la scheda è più stretta di 1150 px (portatili piccoli, tablet in verticale, telefoni) la sintesi va sotto la caldaia, a tutta larghezza. Senza l'integrazione, o senza `stufa`, non cambia niente.
+**Sintesi della stufa a pellet (prova)** (`stufa: true | { entry_id, title }`, predefinito spenta): se è installata l'integrazione [stufa-pellet-monitor](https://github.com/hubcasale/stufa-pellet-monitor), a destra della scheda della caldaia compare una sintesi della stufa: stato e da quanto dura, modo (programma, manuale, timer), potenza, il pulsante di **accensione manuale** dell'interruttore (apre una finestra di conferma) e **«Scheda completa»**, che apre in un popup la scheda `stufa-pellet-card`, aggiornata in tempo reale. Il termostato resta intero sotto. Quando la scheda è più stretta di 1150 px (portatili piccoli, tablet in verticale, telefoni) la sintesi va sotto la caldaia, a tutta larghezza. Senza l'integrazione, o senza `stufa`, non cambia niente.
 
 ## `caldaia-schedule-card`
 
@@ -210,7 +210,7 @@ Nella finestra **Stato** la scheda spiega anche il sole: dietro le colline, libe
 ## Accensione rapida
 
 Sulla scheda panoramica, sotto la sonda alta, ci sono i minuti stimati per avere l'acqua a temperatura d'uso
-(0 se lo è già) e il pulsante. Il pulsante chiede una **conferma** (secondo tocco entro 4 secondi) e funziona solo se:
+(0 se lo è già) e il pulsante. Il pulsante apre una **finestra di conferma** («Avviare la caldaia?», con il tempo stimato per l'acqua calda; il focus parte su «Annulla») e il comando parte solo se premi «Avvia»; funziona solo se:
 la Polygon è spenta (OFF), non c'è allarme, la sonda alta stimata è sotto la temperatura d'uso (45 °C), il puffer non è
 già sopra la soglia (50 °C) e non si è superato il limite di accensioni rapide del giorno (2).
 
