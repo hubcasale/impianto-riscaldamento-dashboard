@@ -145,6 +145,31 @@ template:
           {% set dt = states('sensor.boiler_solare_temperatura_media') | float - tr %}
           {{ ([dt, 0] | max * states('input_number.boiler_solare_volume') | float / ([tu - tr, 1] | max)) | round(0) }}
 
+
+      # numero di docce disponibili, come lo stima la scheda: la meta' alta del volume alla temperatura della sonda alta, la
+      # meta' bassa a quella della sonda bassa; una zona conta solo se e' almeno a 38 C; una doccia = 40 L a 38 C miscelati con
+      # l'acqua di rete (litri = volume zona x (T - T rete) / (38 - T rete)). Usato dalla salvaguardia accensioni.
+      - name: Boiler solare - docce disponibili
+        unique_id: boiler_solare_docce_disponibili
+        unit_of_measurement: docce
+        state_class: measurement
+        icon: mdi:shower-head
+        availability: >
+          {{ is_number(states('sensor.boiler_solare_alto_stimato'))
+             and is_number(states('input_number.boiler_solare_volume'))
+             and is_number(states('input_number.boiler_solare_t_rete')) }}
+        state: >
+          {% set v = states('input_number.boiler_solare_volume') | float(0) %}
+          {% set w = states('input_number.boiler_solare_peso_alto') | float(50) / 100 %}
+          {% set tr = states('input_number.boiler_solare_t_rete') | float(15) %}
+          {% set alto = states('sensor.boiler_solare_alto_stimato') | float(0) %}
+          {% set basso = states('sensor.boiler_solare_basso_stimato') | float(alto) %}
+          {% set ns = namespace(litri=0) %}
+          {% for vol, t in [(v * w, alto), (v * (1 - w), basso)] %}
+            {% if t >= 38 %}{% set ns.litri = ns.litri + vol * (t - tr) / (38 - tr) %}{% endif %}
+          {% endfor %}
+          {{ (ns.litri / 40) | int }}
+
 automation:
   - id: boiler_solare_valori_iniziali
     alias: Boiler solare - valori iniziali

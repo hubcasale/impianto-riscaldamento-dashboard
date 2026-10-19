@@ -579,18 +579,31 @@ check("potenza: la temperatura del collettore non dipende dal fattore", round(c1
 check("potenza: sotto la soglia di irraggiamento (grezzo) e' zero", passo_collettore("45.0", "45.0", ta=24.0, g=40.0, el=40.0, az=240.0)["potenza"], 0.0)
 
 
-# ---------------------------------------------------------------- salvaguardia: la partenza si annulla col boiler caldo, il puffer non conta
+# ---------------------------------------------------------------- salvaguardia: la partenza si annulla con abbastanza docce, il puffer non conta
 SALV = yaml.safe_load(open("ha-packages/caldaia_salvaguardia.yaml"))
 _annulla = next(a for a in SALV["automation"] if a["id"] == "caldaia_salvaguardia_annulla_partenza")
 _cond = next(c["value_template"] for c in _annulla["actions"] if isinstance(c, dict) and c.get("condition") == "template")
-def annulla(alto, puffer="31.0", uso="43"):
-    return render(_cond, {"sensor.boiler_solare_alto_stimato": alto, "sensor.casale_temperatura_boiler": puffer, "input_number.caldaia_t_uso_acqua": uso})
-check("salvaguardia: boiler a 44,6 con puffer a 31 annulla la partenza", annulla("44.6"), "True")
-check("salvaguardia: boiler esattamente alla soglia annulla", annulla("43.0"), "True")
-check("salvaguardia: boiler sotto la soglia non annulla", annulla("42.9"), "False")
-check("salvaguardia: con la soglia a 45 il boiler a 44,6 non annulla", annulla("44.6", uso="45"), "False")
-check("salvaguardia: il puffer non conta (caldo o freddo)", annulla("46", puffer="62") == annulla("46", puffer="25") == "True", True)
-check("salvaguardia: sonda del boiler non disponibile non annulla", annulla("unavailable"), "False")
+def annulla(docce, minimo="3", puffer="31.0"):
+    return render(_cond, {"sensor.boiler_solare_docce_disponibili": docce, "input_number.caldaia_salvaguardia_docce_min": minimo, "sensor.casale_temperatura_boiler": puffer})
+check("salvaguardia: 5 docce con minimo 3 annulla la partenza", annulla("5"), "True")
+check("salvaguardia: esattamente le docce da garantire annulla", annulla("3"), "True")
+check("salvaguardia: una doccia in meno non annulla", annulla("2"), "False")
+check("salvaguardia: minimo 4 con 3 docce non annulla", annulla("3", minimo="4"), "False")
+check("salvaguardia: il puffer non conta (caldo o freddo)", annulla("5", puffer="62") == annulla("5", puffer="25") == "True", True)
+check("salvaguardia: sensore delle docce non disponibile non annulla", annulla("unavailable"), "False")
+
+# docce disponibili (stessa formula della scheda: zone alta e bassa, una zona conta se e' ad almeno 38 C, doccia da 40 L)
+BOI = yaml.safe_load(open("ha-packages/boiler_solare.yaml"))
+docce_tpl = next(e_ for t_ in BOI["template"] for e_ in t_.get("sensor", []) if e_["name"] == "Boiler solare - docce disponibili")["state"]
+def docce(alto, basso, vol="200", peso="50", rete="15"):
+    st_ = {"sensor.boiler_solare_alto_stimato": alto, "sensor.boiler_solare_basso_stimato": basso, "input_number.boiler_solare_volume": vol,
+           "input_number.boiler_solare_peso_alto": peso, "input_number.boiler_solare_t_rete": rete}
+    return render(docce_tpl, st_)
+check("docce: 44,6 sopra e 38,4 sotto sono 5 docce (come la scheda)", docce("44.6", "38.4"), "5")
+check("docce: 41,3 sopra e 35,0 sotto sono 2 docce (il fondo non conta)", docce("41.3", "35.0"), "2")
+check("docce: tutto freddo e' zero", docce("30", "20"), "0")
+check("docce: tutto a 60 C con 190 L sono 9 docce", docce("60", "60", vol="190"), "9")
+check("docce: senza sonda bassa vale la alta", docce("44.6", "unavailable"), "6")
 
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

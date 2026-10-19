@@ -52,7 +52,7 @@ richiesta senza spegnere. «Annulla» o spegnimento a mano chiudono la richiesta
 
 **C. Salvaguardia partenze inutili.** Quando la Polygon passa da OFF **o da ECO STOP** a WAIT/START (programma che parte, oppure riaccensione di Comfort Clima quando l'acqua della caldaia scende sotto set acqua meno isteresi, es. 65 − 15 = 50 °C), dopo **10 secondi** controlla: è un
 programma attivo o in partenza (±3 min), non un'accensione a mano o col pulsante? Il termostato non chiede calore?
-Boiler alto ≥ temperatura d'uso (`caldaia_t_uso_acqua`, 43 °C dal 19/10/2026)? Se sì, e il termostato non chiede calore, spegne la caldaia (partenza inutile); il puffer non conta più (prima serviva anche puffer ≥ soglia). Finché il programma è attivo la
+Docce disponibili nel boiler (`sensor.boiler_solare_docce_disponibili`, stessa stima della scheda: zona alta e bassa, doccia da 40 L a 38 °C) ≥ `caldaia_salvaguardia_docce_min` (3 dal 19/10/2026)? Se sì, e il termostato non chiede calore, spegne la caldaia (partenza inutile); il puffer non conta più (prima serviva puffer ≥ soglia e boiler alto ≥ 45 °C). `docce_min` ha `initial: 3`: dopo un riavvio di Home Assistant torna a 3. Finché il programma è attivo la
 **riaccende** se il termostato chiede riscaldamento o se l'acqua si raffredda con il puffer sotto 45 °C.
 Si disattiva con l'interruttore «Evita partenze inutili» nella scheda.
 
