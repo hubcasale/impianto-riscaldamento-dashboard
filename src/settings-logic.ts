@@ -108,6 +108,46 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
     ],
   },
   {
+    id: "acs",
+    group: "riscaldamento",
+    icon: "mdi:water-boiler",
+    title: "Richiesta di acqua calda",
+    help: H(
+      "Le temperature alte del boiler con cui Home Assistant decide che l'acqua calda sta finendo e chiede la caldaia. La richiesta riaccende il Polygon quando un programma è attivo.",
+      "Per far partire la caldaia prima (soglia più alta) o più tardi (soglia più bassa) quando il boiler si raffredda.",
+    ),
+    fields: [
+      {
+        kind: "number",
+        entity: "input_number.caldaia_acs_t_accendi",
+        label: "Chiedi la caldaia sotto",
+        hint: "Temperatura alta del boiler (la stessa di «Alto S3») sotto la quale parte la richiesta di acqua calda.",
+        help: H("Quando la temperatura alta del boiler scende sotto questo valore parte la richiesta di acqua calda, a meno che il sole stia scaldando il boiler.", "Alzala se vuoi che la caldaia parta prima e l'acqua non scenda; abbassala per consumare meno pellet e lasciare più spazio al solare.", "40 °C."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_acs_t_spegni",
+        label: "La richiesta finisce sopra",
+        hint: "Una volta partita, la richiesta resta finché la temperatura alta del boiler arriva a questo valore.",
+        help: H("La temperatura alta alla quale la richiesta di acqua calda finisce. Più è alta, più a lungo lavora la caldaia a ogni accensione.", "Abbassala se la caldaia scalda più di quanto serve; alzala se preferisci accensioni più rare e più lunghe.", "55 °C."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_acs_t_emergenza",
+        label: "Chiedi anche col sole sotto",
+        hint: "Se il sole sta scaldando il boiler la richiesta aspetta, ma sotto questa temperatura parte comunque.",
+        help: H("Con il sole che dà abbastanza potenza la richiesta di acqua calda aspetta. Sotto questa temperatura alta parte comunque.", "Alzala se non vuoi restare con l'acqua tiepida nelle giornate di sole incerto.", "36 °C."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_acs_potenza_solare_min",
+        label: "Potenza solare che fa attendere",
+        hint: "Con almeno questa potenza dal collettore la richiesta aspetta il sole.",
+        help: H("La potenza del solare termico (in kW) sopra la quale la richiesta di acqua calda aspetta, perché il sole sta già scaldando il boiler.", "Abbassala se vuoi che la caldaia aspetti il sole anche con poca potenza.", "1 kW."),
+      },
+    ],
+  },
+  {
     id: "integrazione",
     group: "pompe",
     icon: "mdi:pump",
@@ -542,6 +582,8 @@ export function sectionSummaryText(sec: Pick<SectionView, "id" | "master">, rows
       return sec.master?.on
         ? `Attiva: annulla la partenza se il boiler ha già ${bare(g("input_number.caldaia_salvaguardia_docce_min"))} docce`
         : "Disattivata: la caldaia parte sempre con il programma";
+    case "acs":
+      return `Richiesta sotto ${italianValue(g("input_number.caldaia_acs_t_accendi"))} · fine sopra ${italianValue(g("input_number.caldaia_acs_t_spegni"))}`;
     case "integrazione": {
       const blocco = g("input_boolean.caldaia_integrazione_blocco_attivo");
       const forza = g("input_boolean.caldaia_integrazione_forzatura_attiva");
@@ -582,6 +624,16 @@ export function sectionNotes(sec: Pick<SectionView, "id" | "master">, rows: RowV
     if (!sec.master?.on || min?.value == null) return [];
     const freddo = t?.value != null ? ` Con meno di ${bare(t)} °C fuori non la spegne, per non far raffreddare la casa.` : "";
     return [`Se nessuno è in casa da ${bare(min)} minuti (iPhone e Wi-Fi) la caldaia si spegne; al rientro riparte solo se c'è un programma attivo.${freddo}`];
+  }
+  if (sec.id === "acs") {
+    const on = g("input_number.caldaia_acs_t_accendi");
+    const off = g("input_number.caldaia_acs_t_spegni");
+    const em = g("input_number.caldaia_acs_t_emergenza");
+    const sole = g("input_number.caldaia_acs_potenza_solare_min");
+    if (on?.value == null) return [];
+    const fine = off?.value != null ? ` e resta finché arriva a ${bare(off)} °C` : "";
+    const sunNote = sole?.value != null ? ` Se il solare dà almeno ${bare(sole)} kW la richiesta aspetta${em?.value != null ? `, ma sotto ${bare(em)} °C parte lo stesso` : ""}.` : "";
+    return [`Quando la temperatura alta del boiler scende sotto ${bare(on)} °C parte la richiesta di acqua calda${fine}. Con un programma attivo e il puffer sotto la soglia della salvaguardia, la richiesta riaccende il Polygon.${sunNote}`];
   }
   if (sec.id === "partenze") {
     const docce = g("input_number.caldaia_salvaguardia_docce_min");

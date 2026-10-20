@@ -262,3 +262,24 @@ test("salvaguardia: riepilogo e frase con le docce da garantire, il puffer solo 
   assert.equal(off.summary, "Disattivata: la caldaia parte sempre con il programma");
   assert.deepEqual(off.notes, []);
 });
+
+test("richiesta di acqua calda: riepilogo e frase con le soglie scelte", () => {
+  const v = buildSettingsView({
+    "input_number.caldaia_acs_t_accendi": st("42", { min: 30, max: 60, step: 1, unit_of_measurement: "°C" }),
+    "input_number.caldaia_acs_t_spegni": st("55", { min: 35, max: 70, step: 1, unit_of_measurement: "°C" }),
+    "input_number.caldaia_acs_t_emergenza": st("36", { min: 25, max: 55, step: 1, unit_of_measurement: "°C" }),
+    "input_number.caldaia_acs_potenza_solare_min": st("1", { min: 0, max: 5, step: 0.1, unit_of_measurement: "kW" }),
+  });
+  const acs = v.find((x) => x.id === "acs")!;
+  assert.equal(acs.group, "riscaldamento");
+  assert.equal(acs.title, "Richiesta di acqua calda");
+  assert.equal(acs.summary, "Richiesta sotto 42 °C · fine sopra 55 °C");
+  assert.match(acs.notes[0], /sotto 42 °C parte la richiesta di acqua calda e resta finché arriva a 55 °C/);
+  assert.match(acs.notes[0], /almeno 1,0 kW la richiesta aspetta, ma sotto 36 °C parte lo stesso/);
+  assert.deepEqual(acs.rows.map((r) => r.entity), [
+    "input_number.caldaia_acs_t_accendi",
+    "input_number.caldaia_acs_t_spegni",
+    "input_number.caldaia_acs_t_emergenza",
+    "input_number.caldaia_acs_potenza_solare_min",
+  ]);
+});
