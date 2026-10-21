@@ -164,8 +164,18 @@ template:
         {% if taratura > 0 %}{{ taratura }}
         {% else %}{{ state_attr('sensor.solare_termico_t_collettore_stimata', 't_interna') | float(states('sensor.solare_termico_t_collettore_stimata') | float(none)) }}{% endif %}
       tau: "{{ states('input_number.solare_termico_tau') | float(150) }}"
+      # CON LA POMPA IN MARCIA il fluido porta via il calore: il collettore non e' piu' a regime ma poco sopra il fluido che
+      # arriva alla serpentina (sonda in ingresso, dopo i tubi). Ritarato il 21/10/2026 su due letture del display del
+      # regolatore: 15/10 13:20 collettore 44,2 con ingresso 37,8 e 418 W/m2 sul piano; 21/10 14:18 collettore 25,5 con
+      # ingresso 23,0 e 128 W/m2: differenza = 0,8 + 0,0134 x W/m2 (6,4 e 2,5 K). Senza questa correzione il modello a
+      # regime (31,4 oggi) restava 6 K sopra il valore letto. Il valore interno segue la misura, cosi' quando la pompa si
+      # ferma il collettore riparte da li' con la sua inerzia.
+      ing: "{{ states('sensor.solare_termico_solare_serpentina_ingresso') | float(none) }}"
+      t_pompa: "{{ (ing + 0.8 + 0.0134 * gp) if (pompa and ing is not none) else none }}"
       tc: >
-        {% if prev is none %}
+        {% if t_pompa is not none %}
+          {{ t_pompa }}
+        {% elif prev is none %}
           {{ tss }}
         {% else %}
           {{ prev + (tss - prev) * (1 - 2.718281828 ** (-1 / tau)) }}
@@ -196,6 +206,7 @@ template:
         attributes:
           t_regime: "{{ tss | float | round(1) }}"
           t_interna: "{{ tc | float | round(4) }}"
+          fonte: "{{ 'pompa in marcia (ingresso serpentina + correzione)' if t_pompa is not none else 'modello a regime con inerzia' }}"
 
       - name: Solare termico irraggiamento sul piano
         unique_id: solare_termico_irraggiamento_piano

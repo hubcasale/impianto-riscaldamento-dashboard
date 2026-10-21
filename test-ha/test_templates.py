@@ -532,7 +532,7 @@ ST_SENS = {e_["name"]: e_ for e_ in TR["sensor"]}
 STIMA = ST_SENS["Solare termico T collettore stimata"]
 
 
-def passo_collettore(stato_prec, attr_prec, ta=13.0, g=0.0, el=0.0, az=180.0, fattore="1.6", gti="0", pompa="off"):
+def passo_collettore(stato_prec, attr_prec, ta=13.0, g=0.0, el=0.0, az=180.0, fattore="1.6", gti="0", pompa="off", ing=None):
     """Un minuto del modello: valuta le variabili del trigger in ordine, come fa Home Assistant."""
     stati = {"sensor.temperatura_esterna_2_decimali": str(ta),
              "sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato": str(g),
@@ -546,6 +546,8 @@ def passo_collettore(stato_prec, attr_prec, ta=13.0, g=0.0, el=0.0, az=180.0, fa
              "sensor.solare_termico_t_collettore_stimata": stato_prec,
              "input_number.solare_fattore_stazione": fattore,
              "sensor.open_meteo_irraggiamento_previsto_sul_piano": gti, "binary_sensor.caldaia_pompa_collettore_attiva": pompa}
+    if ing is not None:
+        stati["sensor.solare_termico_solare_serpentina_ingresso"] = ing
     attrs = {("sun.sun", "elevation"): el, ("sun.sun", "azimuth"): az,
              ("sensor.solare_termico_t_collettore_stimata", "t_interna"): attr_prec}
     ctx = {}
@@ -612,6 +614,18 @@ buio = passo_collettore("44.0", "44.0", ta=22.6, g=30.0, el=1.0, az=270.0, gti="
 check("ombra: con il sole sotto i 3 gradi non si corregge", buio["ombra"], False)
 check("ombra: la regime sale con la correzione (la stima non crolla)", om["tss"] > sole["tss"] + 10, True)
 check("ombra: la potenza usa l'irraggiamento previsto", om["potenza"] > 0.3, True)
+
+# pompa in marcia: il collettore sta poco sopra il fluido in ingresso alla serpentina (0,8 + 0,0134 x W/m2 sul piano)
+# stazione 128 W/m2 sul piano -> g orizzontale che da' gp = 128: si usa g_poa direttamente dal risultato
+pp = passo_collettore("31.4", "31.4", ta=23.2, g=150.0, el=30.0, az=230.0, pompa="on", ing="23.0")
+check("pompa in marcia: il collettore e' l'ingresso piu' 0,8 piu' 0,0134 per W/m2", round(pp["tc"], 2), round(23.0 + 0.8 + 0.0134 * pp["gp"], 2))
+check("pompa in marcia: a 128 W/m2 e ingresso 23,0 il valore e' circa 25,5 (lettura reale)", round(23.0 + 0.8 + 0.0134 * 128, 1), 25.5)
+check("pompa in marcia: il valore e' molto piu' basso del modello a regime", pp["tc"] < pp["tss"] - 3, True)
+pf = passo_collettore("31.4", "31.4", ta=23.2, g=150.0, el=30.0, az=230.0, pompa="off", ing="23.0")
+check("pompa ferma: resta il modello con inerzia (l'ingresso non conta)", round(pf["tc"], 2), round(31.4 + (pf["tss"] - 31.4) * (1 - 2.718281828 ** (-1 / 120)), 2))
+ps = passo_collettore("31.4", "31.4", ta=23.2, g=150.0, el=30.0, az=230.0, pompa="on", ing=None)
+check("pompa in marcia senza sonda in ingresso: si torna al modello", round(ps["tc"], 2), round(pf["tc"], 2))
+check("pompa in marcia: il valore interno segue la misura (alla fermata riparte da li')", round(pp["tc"], 1) < 31.4, True)
 
 # docce disponibili (stessa formula della scheda: zone alta e bassa, una zona conta se e' ad almeno 38 C, doccia da 40 L)
 BOI = yaml.safe_load(open("ha-packages/boiler_solare.yaml"))
