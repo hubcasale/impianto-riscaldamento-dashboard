@@ -309,6 +309,8 @@ export class ImpiantoOverviewCard extends LitElement {
   private _stufaDlg?: ImpiantoCardDialog;
   private _scheduleDlg?: ImpiantoCardDialog;
   private _pelletDlg?: ImpiantoPelletDialog;
+  private _stufaCard?: HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
+  private _stufaCardKey = "";
   @state() private _stufa: StufaInfoLite | null = null;
   private _stufaLoadedAt = 0;
   private _stufaLoading = false;
@@ -1100,7 +1102,24 @@ export class ImpiantoOverviewCard extends LitElement {
   }
 
   /** Sintesi della stufa a pellet: stato, modo, potenza, accensione manuale e pulsante della scheda completa. */
+  /** Layout split: la scheda completa della stufa (stufa-pellet-card) incorporata, senza pulsante e popup. */
+  private _stufaEmbedded() {
+    if (!customElements.get("stufa-pellet-card")) return nothing;
+    const opt = this._config.stufa;
+    const cfg = typeof opt === "object" && opt !== null ? opt : {};
+    const key = JSON.stringify(cfg);
+    if (!this._stufaCard || this._stufaCardKey !== key) {
+      const el = document.createElement("stufa-pellet-card") as HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
+      el.setConfig({ type: "custom:stufa-pellet-card", ...(cfg.entry_id ? { entry_id: cfg.entry_id } : {}), ...(cfg.title ? { title: cfg.title } : {}) });
+      this._stufaCard = el;
+      this._stufaCardKey = key;
+    }
+    this._stufaCard.hass = this.hass;
+    return html`<div class="stufafull">${this._stufaCard}</div>`;
+  }
+
   private _renderStufa() {
+    if (this._config.stufa && this._config.layout === "split") return this._stufaEmbedded();
     const info = this._stufa;
     if (!this._config.stufa || !info) return nothing;
     const st = info.entities.stato ? this.hass.states[info.entities.stato] : undefined;
@@ -1159,7 +1178,7 @@ export class ImpiantoOverviewCard extends LitElement {
               ${this._renderBoiler()}
               ${thermo === nothing ? nothing : html`<div class="splitthermo">${thermo}</div>`}
             </div>
-            <div class="splitcols">${this._renderStove()}${stufa}</div>
+            <div class=${this._config.stufa && customElements.get("stufa-pellet-card") ? "splitcols duo" : "splitcols"}>${this._renderStove()}${stufa}</div>
           </div>
         </ha-card>
       `;
@@ -1651,6 +1670,9 @@ export class ImpiantoOverviewCard extends LitElement {
       min-width: 0;
       order: 3;
     }
+    .stufafull {
+      min-width: 0;
+    }
     @container (min-width: 1150px) {
       .layout.split {
         grid-template-columns: minmax(440px, 5fr) minmax(0, 8fr);
@@ -1664,6 +1686,12 @@ export class ImpiantoOverviewCard extends LitElement {
       }
       .layout.split > .splitleft > svg {
         order: 0;
+      }
+      /* con la scheda completa della stufa: caldaia e stufa affiancate, della stessa larghezza */
+      .splitcols.duo {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: start;
       }
       .splitthermo {
         order: 1;

@@ -4149,6 +4149,7 @@ var ImpiantoOverviewCard = class extends i4 {
     this._wide = false;
     this._width = 1e3;
     this._onResize = () => this._updateCompact();
+    this._stufaCardKey = "";
     this._stufa = null;
     this._stufaLoadedAt = 0;
     this._stufaLoading = false;
@@ -4863,7 +4864,23 @@ var ImpiantoOverviewCard = class extends i4 {
     this._stufaDlg = d3;
   }
   /** Sintesi della stufa a pellet: stato, modo, potenza, accensione manuale e pulsante della scheda completa. */
+  /** Layout split: la scheda completa della stufa (stufa-pellet-card) incorporata, senza pulsante e popup. */
+  _stufaEmbedded() {
+    if (!customElements.get("stufa-pellet-card")) return A;
+    const opt = this._config.stufa;
+    const cfg = typeof opt === "object" && opt !== null ? opt : {};
+    const key = JSON.stringify(cfg);
+    if (!this._stufaCard || this._stufaCardKey !== key) {
+      const el = document.createElement("stufa-pellet-card");
+      el.setConfig({ type: "custom:stufa-pellet-card", ...cfg.entry_id ? { entry_id: cfg.entry_id } : {}, ...cfg.title ? { title: cfg.title } : {} });
+      this._stufaCard = el;
+      this._stufaCardKey = key;
+    }
+    this._stufaCard.hass = this.hass;
+    return b2`<div class="stufafull">${this._stufaCard}</div>`;
+  }
   _renderStufa() {
+    if (this._config.stufa && this._config.layout === "split") return this._stufaEmbedded();
     const info = this._stufa;
     if (!this._config.stufa || !info) return A;
     const st = info.entities.stato ? this.hass.states[info.entities.stato] : void 0;
@@ -4915,7 +4932,7 @@ var ImpiantoOverviewCard = class extends i4 {
               ${this._renderBoiler()}
               ${thermo === A ? A : b2`<div class="splitthermo">${thermo}</div>`}
             </div>
-            <div class="splitcols">${this._renderStove()}${stufa}</div>
+            <div class=${this._config.stufa && customElements.get("stufa-pellet-card") ? "splitcols duo" : "splitcols"}>${this._renderStove()}${stufa}</div>
           </div>
         </ha-card>
       `;
@@ -5407,6 +5424,9 @@ var ImpiantoOverviewCard = class extends i4 {
       min-width: 0;
       order: 3;
     }
+    .stufafull {
+      min-width: 0;
+    }
     @container (min-width: 1150px) {
       .layout.split {
         grid-template-columns: minmax(440px, 5fr) minmax(0, 8fr);
@@ -5420,6 +5440,12 @@ var ImpiantoOverviewCard = class extends i4 {
       }
       .layout.split > .splitleft > svg {
         order: 0;
+      }
+      /* con la scheda completa della stufa: caldaia e stufa affiancate, della stessa larghezza */
+      .splitcols.duo {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: start;
       }
       .splitthermo {
         order: 1;
