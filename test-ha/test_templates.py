@@ -654,5 +654,24 @@ check("pellet: senza le accensioni (sconosciute) il totale non e' disponibile", 
 check("pellet: senza la combustione il totale non e' disponibile", tot_disp("unknown", "11.8"), "False")
 check("pellet: il totale e' la somma", tot_stato("29.161", "12.2"), "41.36")
 
+# ---------------------------------------------------------------- pellet nel serbatoio
+SERB = yaml.safe_load(open("ha-packages/caldaia_pellet_serbatoio.yaml"))
+serb_sens = {e_["name"]: e_ for t_ in SERB["template"] for e_ in t_.get("sensor", [])}
+serb_state = serb_sens["Caldaia pellet serbatoio"]["state"]
+serb_av = serb_sens["Caldaia pellet serbatoio"]["availability"]
+giorni_state = serb_sens["Caldaia pellet serbatoio giorni"]["state"]
+def serb(ref, tot, totref):
+    return {"input_number.caldaia_pellet_kg_riferimento": ref, "sensor.caldaia_pellet_stimato_totale": tot, "input_number.caldaia_pellet_totale_riferimento": totref}
+check("serbatoio: 105 kg al riferimento e nessun consumo", render(serb_state, serb("105", "59.27", "59.27")), "105.0")
+check("serbatoio: i chili consumati da allora si sottraggono", render(serb_state, serb("105", "65.27", "59.27")), "99.0")
+check("serbatoio: non scende sotto zero", render(serb_state, serb("10", "100", "59.27")), "0")
+check("serbatoio: non supera 120 kg", render(serb_state, serb("130", "59.27", "59.27")), "120")
+check("serbatoio: il totale che si azzera non aggiunge pellet", render(serb_state, serb("105", "10", "59.27")), "105.0")
+check("serbatoio: riferimento non impostato (totale 0) non disponibile", render(serb_av, serb("105", "60", "0")), "False")
+check("serbatoio: impostato e' disponibile", render(serb_av, serb("105", "60", "59.27")), "True")
+gs = {"sensor.caldaia_pellet_serbatoio": "105.0", "sensor.caldaia_pellet_settimana": "42"}
+check("serbatoio: giorni al consumo medio della settimana (42 kg / 7 = 6)", render(giorni_state, gs), "17.5")
+check("serbatoio: con la settimana incompleta si usano 6 kg al giorno", render(giorni_state, {**gs, "sensor.caldaia_pellet_settimana": "5"}), "17.5")
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

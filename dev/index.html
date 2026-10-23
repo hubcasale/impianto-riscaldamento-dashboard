@@ -153,6 +153,11 @@ nb("input_number.solare_termico_orientamento", 270, { min: 0, max: 360, step: 1,
 nb("input_number.solare_fattore_stazione", 1.6, { min: 1, max: 3, step: 0.01 });
 nb("input_number.solare_pannello_fattore_sereno", 1, { min: 0.5, max: 1.5, step: 0.01 });
 set("input_boolean.solare_orizzonte_attivo", "on");
+// serbatoio del pellet (?kg=105 chili rimasti)
+set("sensor.caldaia_pellet_stimato_totale", 62.3, { unit_of_measurement: "kg" });
+set("input_number.caldaia_pellet_totale_riferimento", 59.27, { min: 0, max: 100000, step: 0.01 });
+set("input_number.caldaia_pellet_kg_riferimento", (parseFloat(q.get("kg") || "108") ) + 3.03, { min: 0, max: 130, step: 0.1 });
+set("input_number.caldaia_pellet_sacco_kg", 15, { min: 5, max: 25, step: 1 });
 set("sensor.solare_termico_irraggiamento_sul_piano", 420, { unit_of_measurement: "W/m²" });
 set("sensor.open_meteo_irraggiamento_previsto_sul_piano", 380, { unit_of_measurement: "W/m²" });
 set("sensor.open_meteo_irraggiamento_osservato_dal_satellite", 400, { unit_of_measurement: "W/m²" });
@@ -337,7 +342,7 @@ const hass = {
 
 const wrap = document.getElementById("cards");
 for (const [tag, cfg] of [
-  ["impianto-overview-card", { type: "custom:impianto-overview-card", ...(q.get("stufa") ? { stufa: true } : {}), ...(q.get("senza_programma") ? { schedule: false } : {}) }],
+  ["impianto-overview-card", { type: "custom:impianto-overview-card", ...(q.get("stufa") ? { stufa: true } : {}), ...(q.get("layout") ? { layout: q.get("layout") } : {}), ...(q.get("senza_programma") ? { schedule: false } : {}) }],
   ["caldaia-schedule-card", { type: "custom:caldaia-schedule-card" }],
 ]) {
   const el = document.createElement(tag);
@@ -353,6 +358,7 @@ if (q.get("blocco")) setTimeout(() => { document.querySelector("impianto-setting
 if (q.get("scroll")) setTimeout(() => { const b = document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".body"); b.scrollTop = b.scrollHeight; }, 1000);
 if (q.get("aiuto")) setTimeout(() => { document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".block.open .bb .i, .block.open .bh .i").click(); }, 900);
 if (q.get("programma_popup")) setTimeout(() => cards[0]._openSchedule(), 600);
+if (q.get("pellet_popup")) setTimeout(() => cards[0]._openPellet(), 700);
 if (q.get("stufa_popup")) setTimeout(() => cards[0]._openStufa(), 1500);
 if (q.get("conferma")) setTimeout(() => (q.get("conferma") === "stufa" ? cards[0]._stufaPress() : cards[0]._press()), 1500);
 if (q.get("auto")) setTimeout(() => document.querySelector("impianto-confirm-dialog").shadowRoot.querySelector(q.get("auto") === "annulla" ? "button.cancel" : "button.ok").click(), 2300);

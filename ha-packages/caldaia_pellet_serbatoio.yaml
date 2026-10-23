@@ -1,0 +1,62 @@
+# Pellet nel serbatoio del Polygon: quanto ne resta e per quanti giorni basta.
+#
+# Come funziona: due valori di riferimento, scritti dalla scheda ogni volta che si versano dei sacchi o si misura il livello
+# (finestra «Pellet nel serbatoio», toccando il disegno del serbatoio nella scheda della caldaia):
+#   - input_number.caldaia_pellet_kg_riferimento: i chili nel serbatoio in quel momento;
+#   - input_number.caldaia_pellet_totale_riferimento: il totale stimato del consumo (sensor.caldaia_pellet_stimato_totale)
+#     nello stesso momento.
+# Pellet rimasto = chili di riferimento - (totale stimato adesso - totale stimato di riferimento), tra 0 e 120 kg.
+# Il serbatoio (misure del 23/10/2026) tiene 8 sacchi da 15 kg = 120 kg; 2,0 kg per cm nella parte alta (densita' 0,655 kg/l).
+# Finche' il totale di riferimento e' 0 il conteggio non e' ancora impostato (la scheda mostra un trattino).
+#
+# Entita': sensor.caldaia_pellet_serbatoio (kg), sensor.caldaia_pellet_serbatoio_giorni (giorni al consumo medio degli ultimi
+# giorni, 6 kg al giorno se non c'e' ancora un dato).
+
+input_number:
+  caldaia_pellet_kg_riferimento:
+    name: Pellet - chili nel serbatoio al riferimento
+    min: 0
+    max: 130
+    step: 0.1
+    unit_of_measurement: kg
+    mode: box
+  caldaia_pellet_totale_riferimento:
+    name: Pellet - totale stimato al riferimento
+    min: 0
+    max: 100000
+    step: 0.01
+    unit_of_measurement: kg
+    mode: box
+  caldaia_pellet_sacco_kg:
+    name: Pellet - peso di un sacco
+    min: 5
+    max: 25
+    step: 1
+    unit_of_measurement: kg
+    mode: box
+
+template:
+  - sensor:
+      - name: Caldaia pellet serbatoio
+        unique_id: caldaia_pellet_serbatoio
+        unit_of_measurement: kg
+        device_class: weight
+        state_class: measurement
+        icon: mdi:grain
+        availability: >
+          {{ is_number(states('sensor.caldaia_pellet_stimato_totale'))
+             and states('input_number.caldaia_pellet_totale_riferimento') | float(0) > 0 }}
+        state: >
+          {% set usato = [states('sensor.caldaia_pellet_stimato_totale') | float(0)
+                          - states('input_number.caldaia_pellet_totale_riferimento') | float(0), 0] | max %}
+          {{ ([[states('input_number.caldaia_pellet_kg_riferimento') | float(0) - usato, 0] | max, 120] | min) | round(1) }}
+
+      - name: Caldaia pellet serbatoio giorni
+        unique_id: caldaia_pellet_serbatoio_giorni
+        unit_of_measurement: d
+        icon: mdi:calendar-clock
+        availability: "{{ is_number(states('sensor.caldaia_pellet_serbatoio')) }}"
+        state: >
+          {% set w = states('sensor.caldaia_pellet_settimana') | float(0) / 7 %}
+          {% set al_giorno = w if w >= 2 else 6 %}
+          {{ (states('sensor.caldaia_pellet_serbatoio') | float(0) / al_giorno) | round(1) }}

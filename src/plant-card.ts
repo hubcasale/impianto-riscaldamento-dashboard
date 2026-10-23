@@ -9,6 +9,10 @@ import type { DetailGroup, ImpiantoDetailsDialog } from "./details-dialog";
 import "./details-dialog";
 import type { ImpiantoChartsDialog } from "./charts-dialog";
 import "./charts-dialog";
+import { HOPPER, afterBags, daysLeft, kgAtDepth, remainingKg } from "./hopper-logic";
+import { hopperSvg } from "./hopper-svg";
+import type { ImpiantoPelletDialog, PelletInfo } from "./pellet-dialog";
+import "./pellet-dialog";
 import type { ImpiantoCardDialog } from "./card-dialog";
 import "./card-dialog";
 import type { ImpiantoConfirmDialog } from "./confirm-dialog";
@@ -87,6 +91,12 @@ export interface PlantEntities {
   pellet_today: string;
   pellet_week: string;
   pellet_month: string;
+  /** totale stimato del pellet consumato (kg) e riferimento del serbatoio: chili e totale stimato nel momento dell'ultimo carico o misura */
+  pellet_total: string;
+  pellet_ref_kg: string;
+  pellet_ref_total: string;
+  /** peso di un sacco (kg) */
+  pellet_bag: string;
   /** temperatura misurata in ingresso alla serpentina solare del boiler (fluido caldo dal collettore) */
   coil_solar_in: string;
   /** temperatura misurata in uscita dalla serpentina solare (ritorno al collettore) */
@@ -170,6 +180,10 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   pellet_today: "sensor.caldaia_pellet_oggi",
   pellet_week: "sensor.caldaia_pellet_settimana",
   pellet_month: "sensor.caldaia_pellet_mese",
+  pellet_total: "sensor.caldaia_pellet_stimato_totale",
+  pellet_ref_kg: "input_number.caldaia_pellet_kg_riferimento",
+  pellet_ref_total: "input_number.caldaia_pellet_totale_riferimento",
+  pellet_bag: "input_number.caldaia_pellet_sacco_kg",
   coil_solar_in: "sensor.solare_termico_solare_serpentina_ingresso",
   coil_solar_out: "sensor.solare_termico_solare_serpentina_uscita",
   coil_integ_in: "sensor.solare_termico_integrazione_serpentina_ingresso",
@@ -213,6 +227,12 @@ export interface PlantCardConfig {
   charts?: boolean;
   /** "auto" (predefinito): compatta sugli schermi bassi (tablet); true/false per forzare */
   compact?: boolean | "auto";
+  /**
+   * "classic" (predefinito): boiler a sinistra, caldaia e termostato a destra.
+   * "split" (prova): boiler piu' piccolo a sinistra, caldaia e stufa a pellet affiancate della stessa larghezza a destra,
+   * termostato in basso a tutta larghezza e, nella caldaia, il disegno del serbatoio con il pellet rimasto.
+   */
+  layout?: "classic" | "split";
   /** false per nascondere il pulsante «Programmazione» della scheda della caldaia; un oggetto passa le opzioni alla scheda della programmazione (prefix, master, status, presets) */
   schedule?: boolean | Record<string, unknown>;
   /**
@@ -280,6 +300,7 @@ export class ImpiantoOverviewCard extends LitElement {
   private _details?: ImpiantoDetailsDialog;
   private _stufaDlg?: ImpiantoCardDialog;
   private _scheduleDlg?: ImpiantoCardDialog;
+  private _pelletDlg?: ImpiantoPelletDialog;
   @state() private _stufa: StufaInfoLite | null = null;
   private _stufaLoadedAt = 0;
   private _stufaLoading = false;
@@ -330,6 +351,7 @@ export class ImpiantoOverviewCard extends LitElement {
     if (changed.has("hass") && this._thermo) this._thermo.hass = this.hass;
     if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
     if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
+    if (changed.has("hass") && this._pelletDlg) this._pelletDlg.info = this._pelletInfo();
     if (this._config?.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 60000) void this._loadStufa();
   }
 
@@ -347,6 +369,8 @@ export class ImpiantoOverviewCard extends LitElement {
     this._stufaDlg = undefined;
     this._scheduleDlg?.remove();
     this._scheduleDlg = undefined;
+    this._pelletDlg?.remove();
+    this._pelletDlg = undefined;
     this._confirm?.remove();
     this._confirm = undefined;
     this._ro?.disconnect();
@@ -749,17 +773,13 @@ export class ImpiantoOverviewCard extends LitElement {
                 <ha-icon icon="mdi:calendar-clock"></ha-icon><span>Programma</span>
               </button>`}
         </div>
-        <div class="top">
-          ${this._renderStoveImage(look, pellet)}
+        <div class=${this._config.layout === "split" && this._pelletEnabled() ? "top withhopper" : "top"}>
+          ${this._renderHopper()}${this._renderStoveImage(look, pellet)}
           <div class="statecard">
-            <span class="tl">Stato caldaia</span>
-            <span class="statepill ${look}">${stateRaw ?? "–"}</span>
-            <span class="tl">Acqua caldaia</span>
-            <span class="water">${fmt(this._n(e.stove_water), 1)}<small> °C</small></span>
-            <span class="tl">Ultimo cambio stato</span>
-            <span class="since">${since ? `alle ${since}` : "–"}</span>
-            <span class="tl">Pellet</span>
-            <span class="pelletpill ${pellet.key}">${pellet.label}</span>
+            <span class="scp"><span class="tl">Stato caldaia</span><span class="statepill ${look}">${stateRaw ?? "–"}</span></span>
+            <span class="scp"><span class="tl">Acqua caldaia</span><span class="water">${fmt(this._n(e.stove_water), 1)}<small> °C</small></span></span>
+            <span class="scp"><span class="tl">Ultimo cambio stato</span><span class="since">${since ? `alle ${since}` : "–"}</span></span>
+            <span class="scp"><span class="tl">Pellet</span><span class="pelletpill ${pellet.key}">${pellet.label}</span></span>
           </div>
         </div>
         ${noAlarm ? nothing : html`<div class="alarmbar" role="alert"><b>Allarme</b><span>${alarmRaw}</span></div>`}
@@ -930,6 +950,73 @@ export class ImpiantoOverviewCard extends LitElement {
     this._info = d;
   }
 
+  // ---- pellet nel serbatoio: chili del riferimento meno il consumo stimato da allora --------------------------------
+
+  /** Il conteggio del serbatoio c'e' solo con i due valori di riferimento e il totale stimato. */
+  private _pelletEnabled(): boolean {
+    const e = this._e;
+    return !!(this.hass.states[e.pellet_ref_kg] && this.hass.states[e.pellet_ref_total] && this.hass.states[e.pellet_total]);
+  }
+
+  private _pelletKg(): number | null {
+    const e = this._e;
+    if (!this._pelletEnabled()) return null;
+    return remainingKg(this._n(e.pellet_ref_kg), this._n(e.pellet_total), this._n(e.pellet_ref_total));
+  }
+
+  /** Consumo medio al giorno: la stima della settimana divisa per 7, non meno di 2 kg (i primi giorni la settimana e' incompleta). */
+  private _pelletPerDay(): number {
+    const w = this._n(this._e.pellet_week);
+    return w !== null && w / 7 >= 2 ? w / 7 : 6;
+  }
+
+  private _pelletInfo(): PelletInfo {
+    return { kg: this._pelletKg(), perDay: this._pelletPerDay(), bagKg: this._n(this._e.pellet_bag) ?? HOPPER.bagKg };
+  }
+
+  /** Scrive il nuovo riferimento: i chili che ci sono adesso e il totale stimato di adesso. */
+  private async _pelletSetReference(kg: number): Promise<void> {
+    const e = this._e;
+    const total = this._n(e.pellet_total);
+    if (total === null) return;
+    const refMax = Number(this.hass.states[e.pellet_ref_kg]?.attributes?.max ?? 130);
+    await Promise.all([
+      this.hass.callService("input_number", "set_value", { entity_id: e.pellet_ref_kg, value: Math.round(Math.min(refMax, kg) * 10) / 10 }),
+      this.hass.callService("input_number", "set_value", { entity_id: e.pellet_ref_total, value: Math.round(total * 100) / 100 }),
+    ]);
+  }
+
+  private _openPellet(): void {
+    if (this._pelletDlg || !this._pelletEnabled()) return;
+    const d = document.createElement("impianto-pellet-dialog") as ImpiantoPelletDialog;
+    d.info = this._pelletInfo();
+    d.addEventListener("bags", (ev) => {
+      const kg = this._pelletKg();
+      const bag = this._pelletInfo().bagKg;
+      if (kg !== null) void this._pelletSetReference(afterBags(kg, (ev as CustomEvent<number>).detail, bag));
+    });
+    d.addEventListener("level", (ev) => void this._pelletSetReference(kgAtDepth((ev as CustomEvent<number>).detail)));
+    d.addEventListener("closed", () => {
+      this._pelletDlg = undefined;
+    });
+    document.body.appendChild(d);
+    this._pelletDlg = d;
+  }
+
+  /** Il disegno del serbatoio con i chili rimasti e l'autonomia; si tocca per aggiornare il conteggio. */
+  private _renderHopper() {
+    if (this._config.layout !== "split" || !this._pelletEnabled()) return nothing;
+    const kg = this._pelletKg();
+    const days = daysLeft(kg, this._pelletPerDay());
+    return html`
+      <button class="hopper" @click=${() => this._openPellet()} aria-label="Pellet nel serbatoio: aggiorna il conteggio">
+        ${hopperSvg(kg, "Serbatoio del pellet")}
+        <span class="hkg">${kg === null ? "–" : fmt(kg, 0)}<small> kg</small></span>
+        <span class="hdays">${days === null ? "" : `${days < 10 ? fmt(days, 1) : fmt(days, 0)} giorni`}</span>
+      </button>
+    `;
+  }
+
   /** Legge dall'integrazione stufa_pellet gli id delle entità; se non c'è la sintesi non compare. */
   private async _loadStufa(): Promise<void> {
     this._stufaLoading = true;
@@ -1035,15 +1122,30 @@ export class ImpiantoOverviewCard extends LitElement {
     if (!this._config || !this.hass) return nothing;
     const thermo = this._renderThermostat();
     const stufa = this._renderStufa();
-
+    const split = this._config.layout === "split";
+    const head = html`
+      ${this._config.settings === false
+        ? nothing
+        : html`<button class="gear" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
+            <ha-icon icon="mdi:cog-outline"></ha-icon>
+          </button>`}
+      ${this._config.title ? html`<div class="ctitle">${this._config.title}</div>` : nothing}
+    `;
+    if (split) {
+      return html`
+        <ha-card>
+          ${head}
+          <div class=${this._compact ? "layout split compact" : "layout split"}>
+            ${this._renderBoiler()}
+            <div class="splitcols">${this._renderStove()}${stufa}</div>
+            ${thermo === nothing ? nothing : html`<div class="splitthermo">${thermo}</div>`}
+          </div>
+        </ha-card>
+      `;
+    }
     return html`
       <ha-card>
-        ${this._config.settings === false
-          ? nothing
-          : html`<button class="gear" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
-              <ha-icon icon="mdi:cog-outline"></ha-icon>
-            </button>`}
-        ${this._config.title ? html`<div class="ctitle">${this._config.title}</div>` : nothing}
+        ${head}
         <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()}<div class="rightcol">${stufa === nothing ? this._renderStove() : html`<div class="stoverow">${this._renderStove()}${stufa}</div>`}${thermo}</div></div>
       </ha-card>
     `;
@@ -1506,6 +1608,117 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .compact .rightcol {
       gap: 6px;
+    }
+    /* prova: layout "split" (boiler piu' piccolo, caldaia e stufa della stessa larghezza, termostato in basso) */
+    .layout.split {
+      grid-template-columns: 1fr;
+    }
+    .splitcols {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .splitthermo {
+      min-width: 0;
+    }
+    @container (min-width: 1150px) {
+      .layout.split {
+        grid-template-columns: minmax(0, 4fr) minmax(0, 9fr);
+        align-items: start;
+      }
+      .splitcols {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: stretch;
+      }
+      .splitthermo {
+        grid-column: 1 / -1;
+      }
+      .layout.split svg.boiler {
+        max-height: max(340px, calc(100vh - 460px));
+        margin: 0 auto;
+      }
+    }
+    /* le coppie etichetta/valore dello stato: nel layout normale restano figli diretti della griglia */
+    .scp {
+      display: contents;
+    }
+    /* serbatoio del pellet a sinistra della caldaia: lo stato in due righe da due, per stare in meta' larghezza */
+    .top.withhopper .statecard,
+    .compact .top.withhopper .statecard {
+      display: grid;
+      grid-auto-flow: row;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: none;
+      justify-content: stretch;
+      gap: 6px 6px;
+      padding: 6px 6px;
+    }
+    .top.withhopper .scp {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
+    }
+    /* serbatoio del pellet a sinistra della caldaia */
+    .top.withhopper {
+      grid-template-columns: 62px minmax(80px, 1fr) minmax(120px, 1.7fr);
+      gap: 8px;
+      align-items: center;
+    }
+    .compact .top.withhopper {
+      grid-template-columns: 58px 80px 1fr;
+    }
+    /* sotto 1150 px la caldaia ha piu' spazio ma la scheda e' piu' stretta: serbatoio e figura sopra, stato sotto a tutta larghezza */
+    @container (max-width: 1149px) {
+      .top.withhopper,
+      .compact .top.withhopper {
+        grid-template-columns: 76px 1fr;
+        gap: 10px;
+      }
+      .top.withhopper .statecard,
+      .compact .top.withhopper .statecard {
+        grid-column: 1 / -1;
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .hopper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 2px;
+      background: none;
+      border: none;
+      color: var(--primary-text-color);
+      font: inherit;
+      cursor: pointer;
+      border-radius: 10px;
+    }
+    .hopper:hover {
+      background: var(--card-background-color);
+    }
+    .hopper-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .hkg {
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .hkg small {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--secondary-text-color);
+    }
+    .hdays {
+      font-size: 11px;
+      color: var(--secondary-text-color);
     }
     /* prova: sintesi della stufa a pellet a destra della scheda della caldaia (sotto 1150 px una sopra l'altra) */
     .stoverow {

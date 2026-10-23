@@ -3081,8 +3081,423 @@ __decorateClass([
 ], ImpiantoChartsDialog.prototype, "_computed", 2);
 if (!customElements.get(TAG4)) customElements.define(TAG4, ImpiantoChartsDialog);
 
+// src/hopper-logic.ts
+var HOPPER = {
+  depthCm: 56.5,
+  topH: 28,
+  topW: 54,
+  midH: 50,
+  midBottomW: 19,
+  lowH: 16,
+  lowBottomW: 7,
+  lowBottomD: 12,
+  rho: 0.655,
+  capacityKg: 120,
+  bagKg: 15
+};
+var HOPPER_HEIGHT = HOPPER.topH + HOPPER.midH + HOPPER.lowH;
+var TOP_CM2 = HOPPER.topW * HOPPER.depthCm;
+function lowArea(t3) {
+  const f3 = t3 / HOPPER.lowH;
+  const w2 = HOPPER.midBottomW + (HOPPER.lowBottomW - HOPPER.midBottomW) * f3;
+  const d3 = HOPPER.depthCm + (HOPPER.lowBottomD - HOPPER.depthCm) * f3;
+  return w2 * d3;
+}
+var LOW_TOTAL_CM3 = (() => {
+  const n5 = 400;
+  let s4 = 0;
+  for (let i5 = 0; i5 < n5; i5++) s4 += lowArea((i5 + 0.5) / n5 * HOPPER.lowH) * (HOPPER.lowH / n5);
+  return s4;
+})();
+var MID_TOTAL_CM3 = (HOPPER.topW + HOPPER.midBottomW) / 2 * HOPPER.depthCm * HOPPER.midH;
+var TOP_TOTAL_CM3 = TOP_CM2 * HOPPER.topH;
+function volumeBelow(depth) {
+  const d3 = Math.max(0, depth);
+  if (d3 <= HOPPER.topH) return MID_TOTAL_CM3 + LOW_TOTAL_CM3 + TOP_CM2 * (HOPPER.topH - d3);
+  const y3 = d3 - HOPPER.topH;
+  if (y3 <= HOPPER.midH) {
+    const dw = HOPPER.topW - HOPPER.midBottomW;
+    const k2 = dw / HOPPER.midH;
+    return HOPPER.depthCm * (HOPPER.topW * (HOPPER.midH - y3) - k2 / 2 * (HOPPER.midH * HOPPER.midH - y3 * y3)) + LOW_TOTAL_CM3;
+  }
+  const z2 = y3 - HOPPER.midH;
+  if (z2 >= HOPPER.lowH) return 0;
+  const n5 = 300;
+  let s4 = 0;
+  for (let i5 = 0; i5 < n5; i5++) s4 += lowArea(z2 + (i5 + 0.5) / n5 * (HOPPER.lowH - z2)) * ((HOPPER.lowH - z2) / n5);
+  return s4;
+}
+var DEAD_KG = (TOP_TOTAL_CM3 + MID_TOTAL_CM3 + LOW_TOTAL_CM3) / 1e3 * HOPPER.rho - HOPPER.capacityKg;
+function kgAtDepth(depthCm) {
+  return Math.min(HOPPER.capacityKg, Math.max(0, volumeBelow(depthCm) / 1e3 * HOPPER.rho - DEAD_KG));
+}
+function depthAtKg(kg) {
+  const k2 = Math.min(HOPPER.capacityKg, Math.max(0, kg));
+  let lo = 0;
+  let hi = HOPPER_HEIGHT;
+  for (let i5 = 0; i5 < 40; i5++) {
+    const mid = (lo + hi) / 2;
+    if (kgAtDepth(mid) > k2) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+function remainingKg(refKg, total, totalRef) {
+  if (refKg === null || total === null || totalRef === null || totalRef <= 0) return null;
+  const used = Math.max(0, total - totalRef);
+  return Math.min(HOPPER.capacityKg, Math.max(0, refKg - used));
+}
+function daysLeft(kg, kgPerDay) {
+  if (kg === null || kgPerDay === null || kgPerDay <= 0) return null;
+  return kg / kgPerDay;
+}
+function afterBags(currentKg, bags, bagKg = HOPPER.bagKg) {
+  return Math.min(HOPPER.capacityKg, Math.max(0, currentKg + bags * bagKg));
+}
+function hopperOutline() {
+  return [
+    [0, 0],
+    [HOPPER.topW, 0],
+    [HOPPER.topW, HOPPER.topH],
+    [HOPPER.midBottomW, HOPPER.topH + HOPPER.midH],
+    [HOPPER.lowBottomW, HOPPER_HEIGHT],
+    [0, HOPPER_HEIGHT]
+  ];
+}
+function levelColor(kg) {
+  if (kg === null) return "#64748b";
+  if (kg < 20) return "#ef4444";
+  if (kg < 40) return "#f59e0b";
+  return "#b7791f";
+}
+
+// src/hopper-svg.ts
+function widthAt(depth) {
+  const top = HOPPER.topH;
+  const mid = HOPPER.topH + HOPPER.midH;
+  if (depth <= top) return HOPPER.topW;
+  if (depth <= mid) return HOPPER.topW + (HOPPER.midBottomW - HOPPER.topW) * (depth - top) / HOPPER.midH;
+  return HOPPER.midBottomW + (HOPPER.lowBottomW - HOPPER.midBottomW) * (Math.min(depth, HOPPER_HEIGHT) - mid) / HOPPER.lowH;
+}
+function hopperSvg(kg, label) {
+  const pts = hopperOutline().map(([x2, y3]) => `${x2},${y3}`).join(" ");
+  const depth = kg === null ? HOPPER_HEIGHT : depthAtKg(kg);
+  const color = levelColor(kg);
+  return w`
+    <svg class="hopper-svg" viewBox="-3 -3 ${HOPPER.topW + 6} ${HOPPER_HEIGHT + 6}" role="img" aria-label=${label}>
+      <defs>
+        <clipPath id="hp-clip"><rect x="-3" y=${depth} width=${HOPPER.topW + 6} height=${HOPPER_HEIGHT + 6 - depth} /></clipPath>
+      </defs>
+      <polygon points=${pts} fill="var(--card-background-color, #1f2937)" stroke="none" />
+      ${kg === null ? w`` : w`<g clip-path="url(#hp-clip)"><polygon points=${pts} fill=${color} opacity="0.9" /></g>`}
+      ${kg === null ? w`` : w`<line x1="0" x2=${widthAt(depth)} y1=${depth} y2=${depth} stroke="rgba(255,255,255,0.6)" stroke-width="1" />`}
+      <polygon points=${pts} fill="none" stroke="var(--secondary-text-color, #94a3b8)" stroke-width="1.6" stroke-linejoin="round" />
+    </svg>
+  `;
+}
+
+// src/pellet-dialog.ts
+var TAG5 = "impianto-pellet-dialog";
+var fmt = (n5, d3 = 0) => n5.toFixed(d3).replace(".", ",");
+var ImpiantoPelletDialog = class extends i4 {
+  constructor() {
+    super(...arguments);
+    this.info = { kg: null, perDay: null, bagKg: HOPPER.bagKg };
+    this._bags = 1;
+    this._depth = "";
+    this._done = "";
+    this._onKey = (e5) => {
+      if (e5.key === "Escape") this._close();
+    };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("keydown", this._onKey);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener("keydown", this._onKey);
+  }
+  _close() {
+    this.dispatchEvent(new CustomEvent("closed"));
+    this.remove();
+  }
+  _step(dir) {
+    this._bags = Math.max(0.5, Math.min(8, this._bags + dir * 0.5));
+  }
+  _addBags() {
+    this.dispatchEvent(new CustomEvent("bags", { detail: this._bags }));
+    this._done = `Aggiunti ${fmt(this._bags, this._bags % 1 ? 1 : 0)} ${this._bags === 1 ? "sacco" : "sacchi"}.`;
+  }
+  _setLevel() {
+    const d3 = Number(this._depth.replace(",", "."));
+    if (!Number.isFinite(d3) || d3 < 0 || d3 > 94) return;
+    this.dispatchEvent(new CustomEvent("level", { detail: d3 }));
+    this._done = `Livello impostato a ${fmt(d3, 1)} cm: ${fmt(kgAtDepth(d3))} kg.`;
+    this._depth = "";
+  }
+  render() {
+    const { kg, perDay, bagKg } = this.info;
+    const days = kg !== null && perDay ? kg / perDay : null;
+    const after = kg !== null ? afterBags(kg, this._bags, bagKg) : null;
+    const d3 = Number(this._depth.replace(",", "."));
+    const levelOk = this._depth.trim() !== "" && Number.isFinite(d3) && d3 >= 0 && d3 <= 94;
+    return b2`
+      <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
+        <div class="panel" role="dialog" aria-modal="true" aria-label="Pellet nel serbatoio">
+          <div class="head">
+            <div class="title">Pellet nel serbatoio</div>
+            <button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button>
+          </div>
+          <div class="body">
+            <div class="top">
+              <div class="fig">${hopperSvg(kg, "Serbatoio del pellet")}</div>
+              <div class="num">
+                <div class="big">${kg === null ? "\u2013" : fmt(kg)}<span> kg</span></div>
+                <div class="sub">${kg === null ? "quantit\xE0 non nota" : `${fmt(kg / HOPPER.capacityKg * 100)} % di ${HOPPER.capacityKg} kg (${HOPPER.capacityKg / bagKg} sacchi)`}</div>
+                <div class="sub">${days === null ? "" : `circa ${fmt(days, days < 10 ? 1 : 0)} giorni al consumo di ${fmt(perDay ?? 0, 1)} kg al giorno`}</div>
+              </div>
+            </div>
+
+            ${kg === null ? b2`<div class="hint warn">Il conteggio non è ancora impostato: parti dal livello misurato (qui sotto), poi potrai aggiungere i sacchi.</div>` : A}
+            <div class="sec">Ho versato dei sacchi</div>
+            <div class="row">
+              <div class="stepper">
+                <button class="st" aria-label="Meno" @click=${() => this._step(-1)}>−</button>
+                <div class="sv">${fmt(this._bags, this._bags % 1 ? 1 : 0)}<span> ${this._bags === 1 ? "sacco" : "sacchi"} da ${bagKg} kg</span></div>
+                <button class="st" aria-label="Più" @click=${() => this._step(1)}>+</button>
+              </div>
+              <button class="btn primary" ?disabled=${kg === null} @click=${() => this._addBags()}>Aggiungi</button>
+            </div>
+            <div class="hint">${after === null ? "" : `Dopo il carico: ${fmt(after)} kg${kg !== null && kg + this._bags * bagKg > HOPPER.capacityKg ? " (il serbatoio \xE8 pieno)" : ""}.`}</div>
+
+            <div class="sec">Oppure ho misurato il livello</div>
+            <div class="row">
+              <label class="field">
+                <span>Quota del pellet dalla sommità (cm)</span>
+                <input type="text" inputmode="decimal" .value=${this._depth} placeholder="es. 7,5" @input=${(e5) => this._depth = e5.target.value} />
+              </label>
+              <button class="btn primary" ?disabled=${!levelOk} @click=${() => this._setLevel()}>Imposta</button>
+            </div>
+            <div class="hint">${levelOk ? `${fmt(d3, 1)} cm sono circa ${fmt(kgAtDepth(d3))} kg.` : "Misura dal bordo alto del serbatoio fino alla superficie del pellet, dopo averla livellata."}</div>
+
+            ${this._done ? b2`<div class="done">${this._done}</div>` : A}
+            <div class="note">Da qui in poi i chili rimasti diminuiscono con il consumo stimato dalla scheda. Aggiorna il conteggio ogni volta che riempi il serbatoio o misuri il livello.</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  static {
+    this.styles = i`
+    :host {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      color: var(--primary-text-color, #212121);
+      font-family: var(--paper-font-body1_-_font-family, Roboto, Helvetica, Arial, sans-serif);
+    }
+    .backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .panel {
+      background: var(--card-background-color, #fff);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 520px;
+      max-height: min(92vh, 720px);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+    }
+    .title {
+      font-size: 19px;
+      font-weight: 700;
+    }
+    .x {
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+    .body {
+      overflow-y: auto;
+      padding: 12px 18px 18px;
+    }
+    .top {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+    }
+    .fig {
+      flex: none;
+      width: 84px;
+    }
+    .hopper-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .big {
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .big span {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--secondary-text-color, #727272);
+    }
+    .sub {
+      font-size: 13.5px;
+      color: var(--secondary-text-color, #727272);
+      margin-top: 2px;
+    }
+    .sec {
+      margin: 18px 0 6px;
+      font-size: 12.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--primary-color, #03a9f4);
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .st {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      color: inherit;
+      font-size: 22px;
+      cursor: pointer;
+      padding: 0;
+    }
+    .sv {
+      min-width: 130px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: 600;
+    }
+    .sv span {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 400;
+      color: var(--secondary-text-color, #727272);
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      min-width: 160px;
+      font-size: 12.5px;
+      color: var(--secondary-text-color, #727272);
+    }
+    input {
+      min-height: 48px;
+      font-size: 18px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color, #212121);
+      box-sizing: border-box;
+    }
+    .btn {
+      min-height: 48px;
+      padding: 8px 20px;
+      border-radius: 12px;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      color: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn.primary {
+      background: var(--primary-color, #03a9f4);
+      color: #fff;
+      border-color: transparent;
+    }
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .hint.warn {
+      color: #f59e0b;
+      font-weight: 600;
+    }
+    .hint {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--secondary-text-color, #727272);
+      min-height: 18px;
+    }
+    .done {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(34, 197, 94, 0.16);
+      color: #22c55e;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .note {
+      margin-top: 14px;
+      font-size: 12.5px;
+      line-height: 1.4;
+      color: var(--secondary-text-color, #727272);
+    }
+  `;
+  }
+};
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoPelletDialog.prototype, "info", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletDialog.prototype, "_bags", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletDialog.prototype, "_depth", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletDialog.prototype, "_done", 2);
+if (!customElements.get(TAG5)) customElements.define(TAG5, ImpiantoPelletDialog);
+
 // src/card-dialog.ts
-var TAG5 = "impianto-card-dialog";
+var TAG6 = "impianto-card-dialog";
 var ImpiantoCardDialog = class extends i4 {
   constructor() {
     super(...arguments);
@@ -3199,10 +3614,10 @@ __decorateClass([
 __decorateClass([
   n4({ type: Boolean })
 ], ImpiantoCardDialog.prototype, "wide", 2);
-if (!customElements.get(TAG5)) customElements.define(TAG5, ImpiantoCardDialog);
+if (!customElements.get(TAG6)) customElements.define(TAG6, ImpiantoCardDialog);
 
 // src/confirm-dialog.ts
-var TAG6 = "impianto-confirm-dialog";
+var TAG7 = "impianto-confirm-dialog";
 var ImpiantoConfirmDialog = class extends i4 {
   constructor() {
     super(...arguments);
@@ -3336,7 +3751,7 @@ __decorateClass([
 __decorateClass([
   n4({ type: Boolean })
 ], ImpiantoConfirmDialog.prototype, "danger", 2);
-if (!customElements.get(TAG6)) customElements.define(TAG6, ImpiantoConfirmDialog);
+if (!customElements.get(TAG7)) customElements.define(TAG7, ImpiantoConfirmDialog);
 
 // src/plant-logic.ts
 var DEFAULT_MODEL = {
@@ -3399,7 +3814,7 @@ function tempColor(t3) {
   }
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
-function fmt(n5, decimals2 = 0) {
+function fmt2(n5, decimals2 = 0) {
   if (n5 === null || n5 === void 0 || Number.isNaN(n5)) return "\u2013";
   return n5.toLocaleString("it-IT", { minimumFractionDigits: decimals2, maximumFractionDigits: decimals2 });
 }
@@ -3518,13 +3933,13 @@ function stoveLine(i5) {
     };
   }
   if (raw === "ECO STOP") {
-    const dove = i5.setBoiler !== null ? ` Riparte quando il puffer scende a circa ${fmt(i5.setBoiler - RESTART_BELOW_SETPOINT)} \xB0C${i5.puffer !== null ? ` (ora ${fmt(i5.puffer)} \xB0C)` : ""}.` : "";
+    const dove = i5.setBoiler !== null ? ` Riparte quando il puffer scende a circa ${fmt2(i5.setBoiler - RESTART_BELOW_SETPOINT)} \xB0C${i5.puffer !== null ? ` (ora ${fmt2(i5.puffer)} \xB0C)` : ""}.` : "";
     return { icon: "mdi:pause-circle-outline", text: `Caldaia ferma in ECO STOP: l'acqua ha raggiunto la temperatura.${dove}`, tone: "info" };
   }
   if (look === "work")
     return {
       icon: "mdi:fire",
-      text: `Caldaia in lavoro${i5.power !== null ? ` al ${fmt(i5.power)} %` : ""}${i5.setWater !== null ? `: scalda l'acqua fino a ${fmt(i5.setWater)} \xB0C, poi va in ECO STOP` : ""}.`,
+      text: `Caldaia in lavoro${i5.power !== null ? ` al ${fmt2(i5.power)} %` : ""}${i5.setWater !== null ? `: scalda l'acqua fino a ${fmt2(i5.setWater)} \xB0C, poi va in ECO STOP` : ""}.`,
       tone: "ok"
     };
   if (look === "start" || look === "wait")
@@ -3550,8 +3965,8 @@ function whyOffLine(i5) {
   return null;
 }
 function pumpLine(i5) {
-  const p3 = i5.puffer !== null ? `${fmt(i5.puffer)} \xB0C` : "\u2013";
-  const b3 = i5.boilerTop !== null ? `${fmt(i5.boilerTop)} \xB0C` : "\u2013";
+  const p3 = i5.puffer !== null ? `${fmt2(i5.puffer)} \xB0C` : "\u2013";
+  const b3 = i5.boilerTop !== null ? `${fmt2(i5.boilerTop)} \xB0C` : "\u2013";
   if (i5.integrationPump === "running")
     return { icon: "mdi:pump", text: `Pompa di integrazione accesa: porta il calore del puffer (${p3}) al boiler (${b3}).`, tone: "ok" };
   if (i5.integrationPump === "blocked")
@@ -3562,20 +3977,20 @@ function solarLine(i5) {
   if (i5.collectorPumpOn === true)
     return {
       icon: "mdi:solar-power",
-      text: `Il solare sta scaldando il boiler${i5.collector !== null ? ` (collettore a ${fmt(i5.collector)} \xB0C)` : ""}.`,
+      text: `Il solare sta scaldando il boiler${i5.collector !== null ? ` (collettore a ${fmt2(i5.collector)} \xB0C)` : ""}.`,
       tone: "ok"
     };
   if (i5.collectorPumpOn === false && i5.collector !== null)
-    return { icon: "mdi:weather-sunny-off", text: `Il solare \xE8 fermo (collettore a ${fmt(i5.collector)} \xB0C).`, tone: "info" };
+    return { icon: "mdi:weather-sunny-off", text: `Il solare \xE8 fermo (collettore a ${fmt2(i5.collector)} \xB0C).`, tone: "info" };
   return null;
 }
 function sunLine(i5) {
   if (i5.sunElevation !== null && i5.sunElevation > 0 && i5.sunAboveHorizon === false) {
-    const h3 = i5.horizonElev !== null ? ` (da quella parte il terreno arriva a ${fmt(i5.horizonElev)}\xB0)` : "";
+    const h3 = i5.horizonElev !== null ? ` (da quella parte il terreno arriva a ${fmt2(i5.horizonElev)}\xB0)` : "";
     return { icon: "mdi:image-filter-hdr", text: `Il sole \xE8 dietro le colline${h3}: niente luce diretta sul collettore.`, tone: "info" };
   }
   if (i5.allskyOk !== true || i5.sunFree === null || i5.allskyCloud === null) return null;
-  const c4 = `${fmt(i5.allskyCloud)} %`;
+  const c4 = `${fmt2(i5.allskyCloud)} %`;
   if (i5.sunFree && i5.allskyCloud >= 50)
     return {
       icon: "mdi:weather-partly-cloudy",
@@ -3615,7 +4030,7 @@ function summarize(i5) {
   for (const l3 of [whyOffLine(i5), pumpLine(i5), solarLine(i5), sunLine(i5), awayLine(i5)]) if (l3) lines.push(l3);
   if (i5.etaMinutes !== null) {
     lines.push(
-      i5.etaMinutes > 0 ? { icon: "mdi:water-boiler", text: `L'acqua calda sar\xE0 pronta tra circa ${fmt(i5.etaMinutes)} min.`, tone: "info" } : { icon: "mdi:water-boiler", text: "L'acqua calda \xE8 gi\xE0 a temperatura d'uso.", tone: "ok" }
+      i5.etaMinutes > 0 ? { icon: "mdi:water-boiler", text: `L'acqua calda sar\xE0 pronta tra circa ${fmt2(i5.etaMinutes)} min.`, tone: "info" } : { icon: "mdi:water-boiler", text: "L'acqua calda \xE8 gi\xE0 a temperatura d'uso.", tone: "ok" }
     );
   }
   return lines;
@@ -3667,6 +4082,10 @@ var DEFAULT_ENTITIES = {
   pellet_today: "sensor.caldaia_pellet_oggi",
   pellet_week: "sensor.caldaia_pellet_settimana",
   pellet_month: "sensor.caldaia_pellet_mese",
+  pellet_total: "sensor.caldaia_pellet_stimato_totale",
+  pellet_ref_kg: "input_number.caldaia_pellet_kg_riferimento",
+  pellet_ref_total: "input_number.caldaia_pellet_totale_riferimento",
+  pellet_bag: "input_number.caldaia_pellet_sacco_kg",
   coil_solar_in: "sensor.solare_termico_solare_serpentina_ingresso",
   coil_solar_out: "sensor.solare_termico_solare_serpentina_uscita",
   coil_integ_in: "sensor.solare_termico_integrazione_serpentina_ingresso",
@@ -3768,6 +4187,7 @@ var ImpiantoOverviewCard = class extends i4 {
     if (changed.has("hass") && this._thermo) this._thermo.hass = this.hass;
     if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
     if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
+    if (changed.has("hass") && this._pelletDlg) this._pelletDlg.info = this._pelletInfo();
     if (this._config?.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 6e4) void this._loadStufa();
   }
   disconnectedCallback() {
@@ -3784,6 +4204,8 @@ var ImpiantoOverviewCard = class extends i4 {
     this._stufaDlg = void 0;
     this._scheduleDlg?.remove();
     this._scheduleDlg = void 0;
+    this._pelletDlg?.remove();
+    this._pelletDlg = void 0;
     this._confirm?.remove();
     this._confirm = void 0;
     this._ro?.disconnect();
@@ -3939,8 +4361,8 @@ var ImpiantoOverviewCard = class extends i4 {
           <path d="M440 268 H520 V315 H575" class="pipe warm thin" />
           <path d="M685 215 H700" class="pipe hot thin" />
           <path d="M685 300 H700" class="pipe warm thin" />
-          <text x="452" y="198" class="tv">${integIn !== null ? `${fmt(integIn, 1)} \xB0C` : ""}</text>
-          <text x="452" y="260" class="tv">${integOut !== null ? `${fmt(integOut, 1)} \xB0C` : ""}</text>
+          <text x="452" y="198" class="tv">${integIn !== null ? `${fmt2(integIn, 1)} \xB0C` : ""}</text>
+          <text x="452" y="260" class="tv">${integOut !== null ? `${fmt2(integOut, 1)} \xB0C` : ""}</text>
         </g>
 
         <!-- boiler -->
@@ -3963,7 +4385,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <!-- scheda centrale -->
         <rect x="236" y="338" width="168" height="176" rx="22" class="pill big" />
         <text x="320" y="372" class="t2 s14" text-anchor="middle">Uscita acqua calda</text>
-        <text x="320" y="434" class="t1 b" font-size="50" text-anchor="middle">${fmt(outlet, 1)}<tspan font-size="24" dy="-16"> °C</tspan></text>
+        <text x="320" y="434" class="t1 b" font-size="50" text-anchor="middle">${fmt2(outlet, 1)}<tspan font-size="24" dy="-16"> °C</tspan></text>
         <line x1="262" y1="456" x2="378" y2="456" class="sep" />
         <text x="320" y="490" class="t1 b" font-size="22" text-anchor="middle">${showers === null ? "(\u2013)" : `(\u2248 ${showers} ${showers === 1 ? "doccia" : "docce"})`}</text>
 
@@ -3972,13 +4394,13 @@ var ImpiantoOverviewCard = class extends i4 {
         <line x1="214" y1="168" x2="150" y2="168" class="lead" />
         <rect x="14" y="132" width="136" height="72" rx="14" class="card hi" />
         <text x="82" y="156" class="t2 s14" text-anchor="middle">Alto (S3)</text>
-        <text x="82" y="190" class="b" font-size="27" text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
+        <text x="82" y="190" class="b" font-size="27" text-anchor="middle" fill="#ef4444">${fmt2(top, 1)} °C</text>
 
         <circle cx="222" cy="676" r="8" class="probe" />
         <line x1="214" y1="676" x2="150" y2="676" class="lead" />
         <rect x="14" y="640" width="136" height="72" rx="14" class="card lo" />
         <text x="82" y="664" class="t2 s14" text-anchor="middle">Basso (S2)</text>
-        <text x="82" y="698" class="b" font-size="27" text-anchor="middle" fill="#3b82f6">${fmt(bottom, 1)} °C</text>
+        <text x="82" y="698" class="b" font-size="27" text-anchor="middle" fill="#3b82f6">${fmt2(bottom, 1)} °C</text>
 
         <!-- stima e pulsante -->
         <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
@@ -4008,7 +4430,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <!-- solare -->
         <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
         <text x="82" y="752" class="t2 s14" text-anchor="middle">Solare</text>
-        <text x="82" y="786" class="b" font-size="24" text-anchor="middle" fill="#22c55e">${fmt(solarKw, 1)} kW</text>
+        <text x="82" y="786" class="b" font-size="24" text-anchor="middle" fill="#22c55e">${fmt2(solarKw, 1)} kW</text>
 
         <text x="532" y="80" class="b s14" fill="#ef4444">Acqua calda</text>
         <text x="532" y="98" class="t2 s13">verso utenze</text>
@@ -4022,17 +4444,17 @@ var ImpiantoOverviewCard = class extends i4 {
           <path d="M598 500 H520 V560 H440" class="pipe hot thin" />
           <path d="M440 656 H548 V552 H598" class="pipe cold thin" />
           ${collectorOn ? w`<path d="M598 500 H520 V560 H440" class="coilflow" /><path d="M440 656 H548 V552 H598" class="coilflow" />` : A}
-          <text x="448" y="548" class="tv">${solarIn !== null ? `${fmt(solarIn, 1)} \xB0C` : ""}</text>
-          <text x="448" y="644" class="tv">${solarOut !== null ? `${fmt(solarOut, 1)} \xB0C` : ""}</text>
+          <text x="448" y="548" class="tv">${solarIn !== null ? `${fmt2(solarIn, 1)} \xB0C` : ""}</text>
+          <text x="448" y="644" class="tv">${solarOut !== null ? `${fmt2(solarOut, 1)} \xB0C` : ""}</text>
           ${this._panelShape(panel, panelFill)}
         </g>
       </svg>
       ${this._narrow ? w`<svg class="boiler mini" viewBox="0 0 640 330" role="img" aria-label="Puffer e pannello solare">
             <g transform="translate(-480 -140)">${this._pufferShape(puffer, pufferEstimated)}</g>
-            <text x="150" y="236" class="tv">${integIn !== null ? `\u2192 ${fmt(integIn, 1)} \xB0C` : ""}</text>
-            <text x="150" y="266" class="tv">${integOut !== null ? `\u2190 ${fmt(integOut, 1)} \xB0C` : ""}</text>
+            <text x="150" y="236" class="tv">${integIn !== null ? `\u2192 ${fmt2(integIn, 1)} \xB0C` : ""}</text>
+            <text x="150" y="266" class="tv">${integOut !== null ? `\u2190 ${fmt2(integOut, 1)} \xB0C` : ""}</text>
             <g transform="translate(-160 -420)">${this._panelShape(panel, panelFill)}</g>
-            <text x="470" y="318" class="tv" text-anchor="middle">${solarIn !== null ? `\u2192 ${fmt(solarIn, 1)} \xB0C` : ""}   ${solarOut !== null ? `\u2190 ${fmt(solarOut, 1)} \xB0C` : ""}</text>
+            <text x="470" y="318" class="tv" text-anchor="middle">${solarIn !== null ? `\u2192 ${fmt2(solarIn, 1)} \xB0C` : ""}   ${solarOut !== null ? `\u2190 ${fmt2(solarOut, 1)} \xB0C` : ""}</text>
           </svg>` : A}
     `;
   }
@@ -4042,7 +4464,7 @@ var ImpiantoOverviewCard = class extends i4 {
       <text x="630" y="158" class="t1 b s15" text-anchor="middle">Puffer 50 L</text>
       <rect x="575" y="170" width="110" height="170" rx="26" fill="url(#puffer)" class="outline" />
       <rect x="587" y="224" width="86" height="64" rx="14" class="pill big" />
-      <text x="630" y="${estimated ? 258 : 264}" class="t1 b val" text-anchor="middle">${fmt(puffer, 0)} °C</text>
+      <text x="630" y="${estimated ? 258 : 264}" class="t1 b val" text-anchor="middle">${fmt2(puffer, 0)} °C</text>
       ${estimated ? w`<text x="630" y="279" class="t2 s13" text-anchor="middle">stima sonda</text>` : A}`;
   }
   /** La sagoma del pannello con i suoi testi, con le coordinate del disegno largo (al centro x = 630). */
@@ -4056,10 +4478,10 @@ var ImpiantoOverviewCard = class extends i4 {
       </g>
       <polygon points="616,462 640,462 612,568 592,568" fill="#fff" opacity="0.16" />
       <line x1="618" y1="568" x2="612" y2="586" class="panelleg" /><line x1="666" y1="568" x2="672" y2="586" class="panelleg" />
-      <text x="630" y="618" class="t1 b val" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt(panel.value, 0)} \xB0C`}</text>
+      <text x="630" y="618" class="t1 b val" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt2(panel.value, 0)} \xB0C`}</text>
       <text x="630" y="640" class="t2 s15" text-anchor="middle">${panel.caption}</text>
-      ${panel.maxPredicted !== null ? w`<text x="630" y="668" class="b s15" text-anchor="middle" fill="#f59e0b">max prevista ${fmt(panel.maxPredicted, 0)} °C</text>` : A}
-      ${panel.maxToday !== null ? w`<text x="630" y="690" class="t2 s15" text-anchor="middle">raggiunta oggi ${fmt(panel.maxToday, 0)} °C</text>` : A}`;
+      ${panel.maxPredicted !== null ? w`<text x="630" y="668" class="b s15" text-anchor="middle" fill="#f59e0b">max prevista ${fmt2(panel.maxPredicted, 0)} °C</text>` : A}
+      ${panel.maxToday !== null ? w`<text x="630" y="690" class="t2 s15" text-anchor="middle">raggiunta oggi ${fmt2(panel.maxToday, 0)} °C</text>` : A}`;
   }
   // ---- caldaia -----------------------------------------------------------
   _flame(cx, cy, k2, opacity = 1) {
@@ -4135,32 +4557,28 @@ var ImpiantoOverviewCard = class extends i4 {
                 <ha-icon icon="mdi:calendar-clock"></ha-icon><span>Programma</span>
               </button>`}
         </div>
-        <div class="top">
-          ${this._renderStoveImage(look, pellet)}
+        <div class=${this._config.layout === "split" && this._pelletEnabled() ? "top withhopper" : "top"}>
+          ${this._renderHopper()}${this._renderStoveImage(look, pellet)}
           <div class="statecard">
-            <span class="tl">Stato caldaia</span>
-            <span class="statepill ${look}">${stateRaw ?? "\u2013"}</span>
-            <span class="tl">Acqua caldaia</span>
-            <span class="water">${fmt(this._n(e5.stove_water), 1)}<small> °C</small></span>
-            <span class="tl">Ultimo cambio stato</span>
-            <span class="since">${since ? `alle ${since}` : "\u2013"}</span>
-            <span class="tl">Pellet</span>
-            <span class="pelletpill ${pellet.key}">${pellet.label}</span>
+            <span class="scp"><span class="tl">Stato caldaia</span><span class="statepill ${look}">${stateRaw ?? "\u2013"}</span></span>
+            <span class="scp"><span class="tl">Acqua caldaia</span><span class="water">${fmt2(this._n(e5.stove_water), 1)}<small> °C</small></span></span>
+            <span class="scp"><span class="tl">Ultimo cambio stato</span><span class="since">${since ? `alle ${since}` : "\u2013"}</span></span>
+            <span class="scp"><span class="tl">Pellet</span><span class="pelletpill ${pellet.key}">${pellet.label}</span></span>
           </div>
         </div>
         ${noAlarm ? A : b2`<div class="alarmbar" role="alert"><b>Allarme</b><span>${alarmRaw}</span></div>`}
         <div class="tiles">
-          ${this._tile("Puffer 50 L", `${fmt(this._n(this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer), 1)} \xB0C${this.hass.states[e5.puffer_effective]?.attributes?.fonte === "sonda ingresso" ? " (stima)" : ""}`, "#f59e0b")}
-          ${this._tile("Set boiler", `${fmt(this._n(e5.set_boiler), 0)} \xB0C`)}
-          ${this._tile("Set acqua", `${fmt(this._n(e5.set_water), 0)} \xB0C`)}
-          ${this._tile("Potenza reale", `${fmt(this._n(e5.power), 0)} %`)}
+          ${this._tile("Puffer 50 L", `${fmt2(this._n(this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer), 1)} \xB0C${this.hass.states[e5.puffer_effective]?.attributes?.fonte === "sonda ingresso" ? " (stima)" : ""}`, "#f59e0b")}
+          ${this._tile("Set boiler", `${fmt2(this._n(e5.set_boiler), 0)} \xB0C`)}
+          ${this._tile("Set acqua", `${fmt2(this._n(e5.set_water), 0)} \xB0C`)}
+          ${this._tile("Potenza reale", `${fmt2(this._n(e5.power), 0)} %`)}
         </div>
         <div class="counters">
           <span class="tl">Oggi</span>
           <div>
-            <b>${fmt(this._n(e5.starts_today), 0)} accensioni</b>
-            <b>${fmt(work, 1)} h in lavoro</b>
-            <b>${fmt(this._n(e5.standby_today), 0)} stand-by</b>
+            <b>${fmt2(this._n(e5.starts_today), 0)} accensioni</b>
+            <b>${fmt2(work, 1)} h in lavoro</b>
+            <b>${fmt2(this._n(e5.standby_today), 0)} stand-by</b>
           </div>
           <button class="more" @click=${() => this._openDetails()} aria-label="Altri dati della caldaia">Altri dati ▸</button>
         </div>
@@ -4184,18 +4602,18 @@ var ImpiantoOverviewCard = class extends i4 {
       {
         title: "Combustione",
         tiles: [
-          { label: "Fumi", value: `${fmt(this._n(e5.smoke), 0)} \xB0C` },
-          { label: "Fiamma", value: `${fmt(this._n(e5.flame), 0)} \xB0C` },
-          { label: "Estrattore fumi", value: `${fmt(this._n(e5.extractor), 0)} giri` },
-          { label: "Pressione braciere", value: fmt(this._n(e5.brazier_pressure), 1) }
+          { label: "Fumi", value: `${fmt2(this._n(e5.smoke), 0)} \xB0C` },
+          { label: "Fiamma", value: `${fmt2(this._n(e5.flame), 0)} \xB0C` },
+          { label: "Estrattore fumi", value: `${fmt2(this._n(e5.extractor), 0)} giri` },
+          { label: "Pressione braciere", value: fmt2(this._n(e5.brazier_pressure), 1) }
         ]
       },
       {
         title: "Acqua e circolatore",
         tiles: [
-          { label: "Pressione acqua", value: `${fmt(this._n(e5.water_pressure), 1)} bar` },
+          { label: "Pressione acqua", value: `${fmt2(this._n(e5.water_pressure), 1)} bar` },
           { label: "Circolatore", value: pump === void 0 ? "\u2013" : pumpOn ? "ON" : "OFF", color: pumpOn ? "#22c55e" : void 0 },
-          { label: "Accensioni ieri", value: fmt(this._n(e5.starts_yesterday), 0) },
+          { label: "Accensioni ieri", value: fmt2(this._n(e5.starts_yesterday), 0) },
           { label: "Allarme", value: noAlarm ? "nessuno" : alarmRaw, color: noAlarm ? "#22c55e" : "#ef4444" }
         ]
       }
@@ -4204,9 +4622,9 @@ var ImpiantoOverviewCard = class extends i4 {
       groups.push({
         title: "Pellet (stima dal modello di consumo)",
         tiles: [
-          { label: "Oggi", value: `${fmt(this._n(e5.pellet_today), 1)} kg` },
-          { label: "Settimana", value: `${fmt(this._n(e5.pellet_week), 1)} kg` },
-          { label: "Mese", value: `${fmt(this._n(e5.pellet_month), 0)} kg` }
+          { label: "Oggi", value: `${fmt2(this._n(e5.pellet_today), 1)} kg` },
+          { label: "Settimana", value: `${fmt2(this._n(e5.pellet_week), 1)} kg` },
+          { label: "Mese", value: `${fmt2(this._n(e5.pellet_month), 0)} kg` }
         ]
       });
     }
@@ -4309,6 +4727,65 @@ var ImpiantoOverviewCard = class extends i4 {
     document.body.appendChild(d3);
     this._info = d3;
   }
+  // ---- pellet nel serbatoio: chili del riferimento meno il consumo stimato da allora --------------------------------
+  /** Il conteggio del serbatoio c'e' solo con i due valori di riferimento e il totale stimato. */
+  _pelletEnabled() {
+    const e5 = this._e;
+    return !!(this.hass.states[e5.pellet_ref_kg] && this.hass.states[e5.pellet_ref_total] && this.hass.states[e5.pellet_total]);
+  }
+  _pelletKg() {
+    const e5 = this._e;
+    if (!this._pelletEnabled()) return null;
+    return remainingKg(this._n(e5.pellet_ref_kg), this._n(e5.pellet_total), this._n(e5.pellet_ref_total));
+  }
+  /** Consumo medio al giorno: la stima della settimana divisa per 7, non meno di 2 kg (i primi giorni la settimana e' incompleta). */
+  _pelletPerDay() {
+    const w2 = this._n(this._e.pellet_week);
+    return w2 !== null && w2 / 7 >= 2 ? w2 / 7 : 6;
+  }
+  _pelletInfo() {
+    return { kg: this._pelletKg(), perDay: this._pelletPerDay(), bagKg: this._n(this._e.pellet_bag) ?? HOPPER.bagKg };
+  }
+  /** Scrive il nuovo riferimento: i chili che ci sono adesso e il totale stimato di adesso. */
+  async _pelletSetReference(kg) {
+    const e5 = this._e;
+    const total = this._n(e5.pellet_total);
+    if (total === null) return;
+    const refMax = Number(this.hass.states[e5.pellet_ref_kg]?.attributes?.max ?? 130);
+    await Promise.all([
+      this.hass.callService("input_number", "set_value", { entity_id: e5.pellet_ref_kg, value: Math.round(Math.min(refMax, kg) * 10) / 10 }),
+      this.hass.callService("input_number", "set_value", { entity_id: e5.pellet_ref_total, value: Math.round(total * 100) / 100 })
+    ]);
+  }
+  _openPellet() {
+    if (this._pelletDlg || !this._pelletEnabled()) return;
+    const d3 = document.createElement("impianto-pellet-dialog");
+    d3.info = this._pelletInfo();
+    d3.addEventListener("bags", (ev) => {
+      const kg = this._pelletKg();
+      const bag = this._pelletInfo().bagKg;
+      if (kg !== null) void this._pelletSetReference(afterBags(kg, ev.detail, bag));
+    });
+    d3.addEventListener("level", (ev) => void this._pelletSetReference(kgAtDepth(ev.detail)));
+    d3.addEventListener("closed", () => {
+      this._pelletDlg = void 0;
+    });
+    document.body.appendChild(d3);
+    this._pelletDlg = d3;
+  }
+  /** Il disegno del serbatoio con i chili rimasti e l'autonomia; si tocca per aggiornare il conteggio. */
+  _renderHopper() {
+    if (this._config.layout !== "split" || !this._pelletEnabled()) return A;
+    const kg = this._pelletKg();
+    const days = daysLeft(kg, this._pelletPerDay());
+    return b2`
+      <button class="hopper" @click=${() => this._openPellet()} aria-label="Pellet nel serbatoio: aggiorna il conteggio">
+        ${hopperSvg(kg, "Serbatoio del pellet")}
+        <span class="hkg">${kg === null ? "\u2013" : fmt2(kg, 0)}<small> kg</small></span>
+        <span class="hdays">${days === null ? "" : `${days < 10 ? fmt2(days, 1) : fmt2(days, 0)} giorni`}</span>
+      </button>
+    `;
+  }
   /** Legge dall'integrazione stufa_pellet gli id delle entità; se non c'è la sintesi non compare. */
   async _loadStufa() {
     this._stufaLoading = true;
@@ -4392,7 +4869,7 @@ var ImpiantoOverviewCard = class extends i4 {
             <span class="since">${since}</span>
           </div>
           ${modeRaw && STUFA_MODE_LABEL[modeRaw] ? b2`<div class="sumrow"><span class="tl">Modo</span><b>${STUFA_MODE_LABEL[modeRaw]}</b></div>` : A}
-          <div class="sumrow"><span class="tl">Potenza</span><b>${power === null ? "\u2013" : `${fmt(power, power % 1 ? 1 : 0)} W`}</b></div>
+          <div class="sumrow"><span class="tl">Potenza</span><b>${power === null ? "\u2013" : `${fmt2(power, power % 1 ? 1 : 0)} W`}</b></div>
         </div>
         ${sw ? b2`<button class=${cls} ?disabled=${btn.action === "none"} @click=${() => this._stufaPress()}>
               <span>${btn.label}</span>${btn.sub ? b2`<small>${btn.sub}</small>` : A}
@@ -4405,12 +4882,28 @@ var ImpiantoOverviewCard = class extends i4 {
     if (!this._config || !this.hass) return A;
     const thermo = this._renderThermostat();
     const stufa = this._renderStufa();
+    const split = this._config.layout === "split";
+    const head = b2`
+      ${this._config.settings === false ? A : b2`<button class="gear" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
+            <ha-icon icon="mdi:cog-outline"></ha-icon>
+          </button>`}
+      ${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}
+    `;
+    if (split) {
+      return b2`
+        <ha-card>
+          ${head}
+          <div class=${this._compact ? "layout split compact" : "layout split"}>
+            ${this._renderBoiler()}
+            <div class="splitcols">${this._renderStove()}${stufa}</div>
+            ${thermo === A ? A : b2`<div class="splitthermo">${thermo}</div>`}
+          </div>
+        </ha-card>
+      `;
+    }
     return b2`
       <ha-card>
-        ${this._config.settings === false ? A : b2`<button class="gear" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
-              <ha-icon icon="mdi:cog-outline"></ha-icon>
-            </button>`}
-        ${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}
+        ${head}
         <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()}<div class="rightcol">${stufa === A ? this._renderStove() : b2`<div class="stoverow">${this._renderStove()}${stufa}</div>`}${thermo}</div></div>
       </ha-card>
     `;
@@ -4873,6 +5366,117 @@ var ImpiantoOverviewCard = class extends i4 {
     }
     .compact .rightcol {
       gap: 6px;
+    }
+    /* prova: layout "split" (boiler piu' piccolo, caldaia e stufa della stessa larghezza, termostato in basso) */
+    .layout.split {
+      grid-template-columns: 1fr;
+    }
+    .splitcols {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .splitthermo {
+      min-width: 0;
+    }
+    @container (min-width: 1150px) {
+      .layout.split {
+        grid-template-columns: minmax(0, 4fr) minmax(0, 9fr);
+        align-items: start;
+      }
+      .splitcols {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: stretch;
+      }
+      .splitthermo {
+        grid-column: 1 / -1;
+      }
+      .layout.split svg.boiler {
+        max-height: max(340px, calc(100vh - 460px));
+        margin: 0 auto;
+      }
+    }
+    /* le coppie etichetta/valore dello stato: nel layout normale restano figli diretti della griglia */
+    .scp {
+      display: contents;
+    }
+    /* serbatoio del pellet a sinistra della caldaia: lo stato in due righe da due, per stare in meta' larghezza */
+    .top.withhopper .statecard,
+    .compact .top.withhopper .statecard {
+      display: grid;
+      grid-auto-flow: row;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: none;
+      justify-content: stretch;
+      gap: 6px 6px;
+      padding: 6px 6px;
+    }
+    .top.withhopper .scp {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
+    }
+    /* serbatoio del pellet a sinistra della caldaia */
+    .top.withhopper {
+      grid-template-columns: 62px minmax(80px, 1fr) minmax(120px, 1.7fr);
+      gap: 8px;
+      align-items: center;
+    }
+    .compact .top.withhopper {
+      grid-template-columns: 58px 80px 1fr;
+    }
+    /* sotto 1150 px la caldaia ha piu' spazio ma la scheda e' piu' stretta: serbatoio e figura sopra, stato sotto a tutta larghezza */
+    @container (max-width: 1149px) {
+      .top.withhopper,
+      .compact .top.withhopper {
+        grid-template-columns: 76px 1fr;
+        gap: 10px;
+      }
+      .top.withhopper .statecard,
+      .compact .top.withhopper .statecard {
+        grid-column: 1 / -1;
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .hopper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 2px;
+      background: none;
+      border: none;
+      color: var(--primary-text-color);
+      font: inherit;
+      cursor: pointer;
+      border-radius: 10px;
+    }
+    .hopper:hover {
+      background: var(--card-background-color);
+    }
+    .hopper-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .hkg {
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .hkg small {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--secondary-text-color);
+    }
+    .hdays {
+      font-size: 11px;
+      color: var(--secondary-text-color);
     }
     /* prova: sintesi della stufa a pellet a destra della scheda della caldaia (sotto 1150 px una sopra l'altra) */
     .stoverow {
