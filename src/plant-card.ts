@@ -10,7 +10,7 @@ import "./details-dialog";
 import type { ImpiantoChartsDialog } from "./charts-dialog";
 import "./charts-dialog";
 import { HOPPER, afterBags, daysLeft, kgAtDepth, remainingKg } from "./hopper-logic";
-import { hopperSvg } from "./hopper-svg";
+import { hopperShape } from "./hopper-svg";
 import type { ImpiantoPelletDialog, PelletInfo } from "./pellet-dialog";
 import "./pellet-dialog";
 import type { ImpiantoCardDialog } from "./card-dialog";
@@ -783,6 +783,8 @@ export class ImpiantoOverviewCard extends LitElement {
     const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown";
     const work = this._n(e.work_hours_today);
     const pellet = pelletStatus(this._yes(e.pellet_reserve), this._yes(e.pellet_empty), this._yes(e.pellet_open));
+    // layout split con il conteggio del pellet: stato e acqua nella figura, ultimo cambio in alto, pellet sul serbatoio
+    const inline = this._config.layout === "split" && this._pelletEnabled();
 
     return html`
       <section class="stove">
@@ -794,14 +796,16 @@ export class ImpiantoOverviewCard extends LitElement {
                 <ha-icon icon="mdi:calendar-clock"></ha-icon><span>Programma</span>
               </button>`}
         </div>
-        <div class=${this._config.layout === "split" && this._pelletEnabled() ? "top withhopper" : "top"}>
-          ${this._renderHopper()}${this._renderStoveImage(look, pellet)}
-          <div class="statecard">
-            <span class="scp"><span class="tl">Stato caldaia</span><span class="statepill ${look}">${stateRaw ?? "–"}</span></span>
-            <span class="scp"><span class="tl">Acqua caldaia</span><span class="water">${fmt(this._n(e.stove_water), 1)}<small> °C</small></span></span>
-            <span class="scp"><span class="tl">Ultimo cambio stato</span><span class="since">${since ? `alle ${since}` : "–"}</span></span>
-            <span class="scp"><span class="tl">Pellet</span><span class="pelletpill ${pellet.key}">${pellet.label}</span></span>
-          </div>
+        <div class=${inline ? "top figure" : "top"}>
+          ${inline
+            ? this._renderPolygonFigure(look, pellet, { state: stateRaw ?? "–", water: this._n(e.stove_water), since })
+            : html`${this._renderStoveImage(look, pellet)}
+                <div class="statecard">
+                  <span class="scp"><span class="tl">Stato caldaia</span><span class="statepill ${look}">${stateRaw ?? "–"}</span></span>
+                  <span class="scp"><span class="tl">Acqua caldaia</span><span class="water">${fmt(this._n(e.stove_water), 1)}<small> °C</small></span></span>
+                  <span class="scp"><span class="tl">Ultimo cambio stato</span><span class="since">${since ? `alle ${since}` : "–"}</span></span>
+                  <span class="scp"><span class="tl">Pellet</span><span class="pelletpill ${pellet.key}">${pellet.label}</span></span>
+                </div>`}
         </div>
         ${noAlarm ? nothing : html`<div class="alarmbar" role="alert"><b>Allarme</b><span>${alarmRaw}</span></div>`}
         <div class="tiles">
@@ -1024,17 +1028,61 @@ export class ImpiantoOverviewCard extends LitElement {
     this._pelletDlg = d;
   }
 
-  /** Il disegno del serbatoio con i chili rimasti e l'autonomia; si tocca per aggiornare il conteggio. */
-  private _renderHopper() {
-    if (this._config.layout !== "split" || !this._pelletEnabled()) return nothing;
+  /**
+   * Layout split: la caldaia Polygon come nella foto (armadio del serbatoio a sinistra, corpo della caldaia a destra).
+   * Nell'armadio il serbatoio del pellet riempito fino ai chili rimasti (si tocca per aggiornare il conteggio); nel corpo la
+   * finestra con la fiamma, in alto l'ultimo cambio di stato, in basso lo stato e la temperatura dell'acqua.
+   */
+  private _renderPolygonFigure(look: StoveLook, pellet: ReturnType<typeof pelletStatus>, d: { state: string; water: number | null; since: string | null }) {
     const kg = this._pelletKg();
     const days = daysLeft(kg, this._pelletPerDay());
+    const glow = look === "work" ? 0.55 : look === "start" ? 0.3 : 0;
+    const flame =
+      look === "work"
+        ? this._flame(272, 152, 0.7)
+        : look === "start"
+          ? this._flame(272, 152, 0.28)
+          : look === "stopping"
+            ? this._flame(272, 152, 0.15, 0.55)
+            : nothing;
+    const pelletFill = HOPPER_FILL[pellet.key];
+    const stateFont = d.state.length > 5 ? 10.5 : 14;
     return html`
-      <button class="hopper" @click=${() => this._openPellet()} aria-label="Pellet nel serbatoio: aggiorna il conteggio">
-        ${hopperSvg(kg, "Serbatoio del pellet")}
-        <span class="hkg">${kg === null ? "–" : fmt(kg, 0)}<small> kg</small></span>
-        <span class="hdays">${days === null ? "" : `${days < 10 ? fmt(days, 1) : fmt(days, 0)} giorni`}</span>
-      </button>
+      <svg class="polyfig ${look}" viewBox="0 0 360 262" role="img" aria-label="Caldaia a pellet Polygon">
+        <defs>
+          <linearGradient id="pf-corpo" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2b2b31" /><stop offset="0.6" stop-color="#1c1c21" /><stop offset="1" stop-color="#141418" /></linearGradient>
+          <linearGradient id="pf-armadio" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#26262b" /><stop offset="1" stop-color="#1a1a1f" /></linearGradient>
+          <linearGradient id="pf-vetro" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#05080f" /><stop offset="1" stop-color="#1e293b" /></linearGradient>
+          <radialGradient id="pf-bagliore" cx="0.5" cy="0.9" r="0.7"><stop offset="0" stop-color="#f97316" stop-opacity=${glow} /><stop offset="1" stop-color="#f97316" stop-opacity="0" /></radialGradient>
+          <linearGradient id="fiamma" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#f59e0b" /><stop offset="0.55" stop-color="#f97316" /><stop offset="1" stop-color="#dc2626" /></linearGradient>
+        </defs>
+        <!-- corpo della caldaia (a destra, piu' alto) -->
+        <rect x="196" y="6" width="152" height="224" rx="5" fill="url(#pf-corpo)" stroke="#3b3b44" stroke-width="1.5" />
+        <rect x="206" y="14" width="132" height="22" rx="11" fill="#334155" />
+        <text x="272" y="29.5" font-size="11.5" font-weight="700" text-anchor="middle" fill="#e2e8f0">${d.since ? `ultimo cambio ${d.since}` : "ultimo cambio –"}</text>
+        <text x="272" y="58" font-size="14" font-weight="600" letter-spacing="3" text-anchor="middle" fill="#cbd5e1">POLYGON</text>
+        <rect x="212" y="70" width="120" height="104" rx="10" fill="url(#pf-vetro)" stroke="#94a3b8" stroke-width="2.5" />
+        <rect x="212" y="70" width="120" height="104" rx="10" fill="url(#pf-bagliore)" />
+        <g class="flicker">${flame}</g>
+        <rect class="sp ${look}" x="206" y="188" width="62" height="28" rx="14" />
+        <text class="spt ${look}" x="237" y="207" font-size=${stateFont} font-weight="700" text-anchor="middle">${d.state}</text>
+        <text x="342" y="208" font-size="19" font-weight="700" text-anchor="end" fill="#f1f5f9">${fmt(d.water, 1)}<tspan font-size="11" font-weight="500" fill="#94a3b8"> °C</tspan></text>
+        <!-- armadio del serbatoio (a sinistra) -->
+        <g class="cabinet" role="button" tabindex="0" aria-label="Pellet nel serbatoio: aggiorna il conteggio" @click=${() => this._openPellet()} @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openPellet()}>
+          <rect x="10" y="56" width="178" height="174" rx="4" fill="url(#pf-armadio)" stroke="#3b3b44" stroke-width="1.5" />
+          <rect x="10" y="56" width="178" height="9" rx="3" fill="#0f0f13" />
+          <polygon points="22,72 96,72 60,120" fill="rgba(148,163,184,0.07)" /><polygon points="96,72 176,72 140,128 60,120" fill="rgba(148,163,184,0.04)" />
+          <polygon points="22,72 60,120 28,176" fill="rgba(148,163,184,0.05)" /><polygon points="60,120 140,128 100,190 28,176" fill="rgba(148,163,184,0.08)" />
+          <polygon points="140,128 176,72 176,180 100,190" fill="rgba(148,163,184,0.05)" /><polygon points="28,176 100,190 70,222 24,222" fill="rgba(148,163,184,0.06)" />
+          <g transform="translate(26 74) scale(1.46)">${hopperShape(kg, "pf-clip")}</g>
+          <text x="124" y="124" font-size="28" font-weight="700" fill="#f1f5f9">${kg === null ? "–" : fmt(kg, 0)}<tspan font-size="13" font-weight="500" fill="#94a3b8"> kg</tspan></text>
+          <text x="124" y="146" font-size="13" fill="#94a3b8">${days === null ? "" : `${days < 10 ? fmt(days, 1) : fmt(days, 0)} giorni`}</text>
+          <text x="124" y="166" font-size="10.5" fill="#94a3b8">pellet</text>
+          <rect x="124" y="171" width="58" height="20" rx="10" fill=${pelletFill} />
+          <text x="153" y="185.5" font-size="11" font-weight="700" text-anchor="middle" fill="#ffffff">${pellet.label}</text>
+        </g>
+        <rect x="14" y="230" width="22" height="8" rx="2" fill="#0f0f13" /><rect x="320" y="230" width="22" height="8" rx="2" fill="#0f0f13" />
+      </svg>
     `;
   }
 
@@ -1738,88 +1786,62 @@ export class ImpiantoOverviewCard extends LitElement {
     .scp {
       display: contents;
     }
-    /* serbatoio del pellet a sinistra della caldaia: lo stato in due righe da due, per stare in meta' larghezza */
-    .top.withhopper .statecard,
-    .compact .top.withhopper .statecard {
-      display: grid;
-      grid-auto-flow: row;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: none;
-      justify-content: stretch;
-      gap: 6px 6px;
-      padding: 6px 6px;
-    }
-    .top.withhopper .scp {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      min-width: 0;
-    }
-    /* serbatoio del pellet a sinistra della caldaia */
-    .top.withhopper {
-      grid-template-columns: 62px minmax(80px, 1fr) minmax(120px, 1.7fr);
-      gap: 8px;
-      align-items: center;
-    }
-    .compact .top.withhopper {
-      grid-template-columns: 58px 80px 1fr;
-    }
-    /* schermo largo e non compatto: serbatoio e figura piu' grandi */
-    @container (min-width: 1150px) {
-      .top.withhopper {
-        grid-template-columns: 96px minmax(100px, 200px) minmax(0, 1fr);
-        gap: 14px;
-      }
-    }
-    /* sotto 1150 px la caldaia ha piu' spazio ma la scheda e' piu' stretta: serbatoio e figura sopra, stato sotto a tutta larghezza */
-    @container (max-width: 1149px) {
-      .top.withhopper,
-      .compact .top.withhopper {
-        grid-template-columns: 76px 1fr;
-        gap: 10px;
-      }
-      .top.withhopper .statecard,
-      .compact .top.withhopper .statecard {
-        grid-column: 1 / -1;
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    .hopper {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      padding: 4px 2px;
-      background: none;
-      border: none;
-      color: var(--primary-text-color);
-      font: inherit;
-      cursor: pointer;
-      border-radius: 10px;
-    }
-    .hopper:hover {
-      background: var(--card-background-color);
-    }
-    .hopper-svg {
-      width: 100%;
-      height: auto;
+    /* figura Polygon del layout split */
+    .top.figure {
       display: block;
     }
-    .hkg {
-      font-size: 17px;
-      font-weight: 700;
-      line-height: 1.1;
+    .polyfig {
+      display: block;
+      width: 100%;
+      max-width: 520px;
+      margin: 0 auto;
+      height: auto;
     }
-    .hkg small {
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--secondary-text-color);
+    .polyfig .cabinet {
+      cursor: pointer;
+      outline: none;
     }
-    .hdays {
-      font-size: 11px;
-      color: var(--secondary-text-color);
+    .polyfig .cabinet:hover rect:first-child,
+    .polyfig .cabinet:focus-visible rect:first-child {
+      stroke: var(--primary-color, #03a9f4);
+    }
+    .polyfig .flicker {
+      transform-origin: 272px 152px;
+    }
+    .polyfig.work .flicker,
+    .polyfig.start .flicker {
+      animation: flicker 1.6s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .polyfig .flicker {
+        animation: none !important;
+      }
+    }
+    .sp {
+      fill: rgba(148, 163, 184, 0.28);
+    }
+    .sp.work {
+      fill: rgba(34, 197, 94, 0.28);
+    }
+    .sp.start,
+    .sp.wait {
+      fill: rgba(245, 158, 11, 0.3);
+    }
+    .sp.stopping {
+      fill: rgba(96, 165, 250, 0.3);
+    }
+    .spt {
+      fill: #cbd5e1;
+    }
+    .spt.work {
+      fill: #4ade80;
+    }
+    .spt.start,
+    .spt.wait {
+      fill: #fbbf24;
+    }
+    .spt.stopping {
+      fill: #93c5fd;
     }
     /* prova: sintesi della stufa a pellet a destra della scheda della caldaia (sotto 1150 px una sopra l'altra) */
     .stoverow {

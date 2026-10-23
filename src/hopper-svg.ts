@@ -10,6 +10,22 @@ function widthAt(depth: number): number {
   return HOPPER.midBottomW + ((HOPPER.lowBottomW - HOPPER.midBottomW) * (Math.min(depth, HOPPER_HEIGHT) - mid)) / HOPPER.lowH;
 }
 
+/** Il serbatoio e il suo riempimento come frammento (coordinate in cm, origine in alto a sinistra), da inserire in un altro disegno. */
+export function hopperShape(kg: number | null, clipId: string) {
+  const pts = hopperOutline()
+    .map(([x, y]) => `${x},${y}`)
+    .join(" ");
+  const depth = kg === null ? HOPPER_HEIGHT : depthAtKg(kg);
+  const color = levelColor(kg);
+  return svg`
+    <defs><clipPath id=${clipId}><rect x="-3" y=${depth} width=${HOPPER.topW + 6} height=${HOPPER_HEIGHT + 6 - depth} /></clipPath></defs>
+    <polygon points=${pts} fill="rgba(8,10,14,0.55)" stroke="none" />
+    ${kg === null ? svg`` : svg`<g clip-path=${`url(#${clipId})`}><polygon points=${pts} fill=${color} opacity="0.92" /></g>`}
+    ${kg === null ? svg`` : svg`<line x1="0" x2=${widthAt(depth)} y1=${depth} y2=${depth} stroke="rgba(255,255,255,0.6)" stroke-width="1" />`}
+    <polygon points=${pts} fill="none" stroke="rgba(226,232,240,0.9)" stroke-width="1.6" stroke-linejoin="round" />
+  `;
+}
+
 /**
  * Disegno del serbatoio del pellet (stessa forma di quello vero, visto da davanti): il lato sinistro e' verticale, quello
  * destro obliquo. Il riempimento sale fino alla quota che corrisponde ai chili rimasti. `kg` nullo = quantita' sconosciuta.
