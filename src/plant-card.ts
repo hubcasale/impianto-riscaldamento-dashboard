@@ -267,6 +267,12 @@ const FLAME_PATH =
 /** Percorsi delle due serpentine nel disegno del boiler (integrazione in alto, solare in basso). */
 const COIL_INTEGRATION = "M238 200 H398 M398 200 q14 12 0 24 H238 q-14 12 0 24 H398 q14 12 0 24 H238";
 const COIL_SOLAR = "M238 560 H398 M398 560 q14 12 0 24 H238 q-14 12 0 24 H398 q14 12 0 24 H238 q-14 12 0 24 H398";
+/** versione corta (layout split): un solo giro per serpentina; la solare parte piu' in alto della differenza di altezza tolta sopra */
+const COIL_INTEGRATION_SHORT = "M238 200 H398 M398 200 q14 12 0 24 H238";
+const COIL_SOLAR_SHORT = "M238 512 H398 M398 512 q14 12 0 24 H238";
+/** quanto si accorcia il boiler: sopra (integrazione 2 corse in meno) e sotto (solare 3 corse in meno) */
+const SHORT_D1 = 48;
+const SHORT_D2 = 72;
 
 const HOPPER_FILL: Record<string, string> = {
   ok: "#15803d",
@@ -290,6 +296,8 @@ export class ImpiantoOverviewCard extends LitElement {
   @state() private _config!: PlantCardConfig;
   @state() private _narrow = false;
   @state() private _compact = false;
+  /** scheda larga almeno 1150 px (layout split a colonne) */
+  @state() private _wide = false;
   private _confirm?: ImpiantoConfirmDialog;
   private _width = 1000;
   private _onResize = () => this._updateCompact();
@@ -315,6 +323,8 @@ export class ImpiantoOverviewCard extends LitElement {
       this._width = w;
       const narrow = w < 560;
       if (narrow !== this._narrow) this._narrow = narrow;
+      const wide = w >= 1150;
+      if (wide !== this._wide) this._wide = wide;
       this._updateCompact();
     });
     this._ro.observe(this);
@@ -509,9 +519,20 @@ export class ImpiantoOverviewCard extends LitElement {
     const integIn = this._n(e.coil_integ_in);
     const integOut = this._n(e.coil_integ_out);
     const btn = boostButton(this._s(e.boost_state), false);
+    // layout split a schede larghe: boiler piu' corto, con un solo giro per serpentina
+    const short = this._config.layout === "split" && this._wide && !this._narrow;
+    const d1 = short ? SHORT_D1 : 0;
+    const d12 = short ? SHORT_D1 + SHORT_D2 : 0;
+    const coilI = short ? COIL_INTEGRATION_SHORT : COIL_INTEGRATION;
+    const coilS = short ? COIL_SOLAR_SHORT : COIL_SOLAR;
+    const viewBox = this._narrow ? "0 0 640 840" : this._compact ? `0 66 700 ${762 - d12}` : `0 0 700 ${840 - d12}`;
+    const s2y = short ? 536 : 640;
+    const kwy = short ? 616 : 728;
+    const panIn = short ? "M598 440 H520 V512 H440" : "M598 500 H520 V560 H440";
+    const panOut = short ? "M440 536 H548 V492 H598" : "M440 656 H548 V552 H598";
 
     return html`
-      <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${this._narrow ? "0 0 640 840" : this._compact ? "0 66 700 762" : "0 0 700 840"} role="img" aria-label="Boiler solare">
+      <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${viewBox} role="img" aria-label="Boiler solare">
         <defs>
           <linearGradient id="acqua" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color=${cTop} />
@@ -535,43 +556,43 @@ export class ImpiantoOverviewCard extends LitElement {
 
         <!-- tubi -->
         <path d="M420 135 H520 V95" class="pipe hot" />
-        <path d="M420 745 H520 V775" class="pipe cold" />
+        <path d="M420 ${745 - d12} H520 V${775 - d12}" class="pipe cold" />
         <g class="pufgroup">
           <path d="M440 208 H575" class="pipe hot thin" />
-          <path d="M440 268 H520 V315 H575" class="pipe warm thin" />
+          <path d="M440 ${short ? 236 : 268} H520 V315 H575" class="pipe warm thin" />
           <path d="M685 215 H700" class="pipe hot thin" />
           <path d="M685 300 H700" class="pipe warm thin" />
           <text x="452" y="198" class="tv">${integIn !== null ? `${fmt(integIn, 1)} °C` : ""}</text>
-          <text x="452" y="260" class="tv">${integOut !== null ? `${fmt(integOut, 1)} °C` : ""}</text>
+          <text x="452" y=${short ? 228 : 260} class="tv">${integOut !== null ? `${fmt(integOut, 1)} °C` : ""}</text>
         </g>
 
         <!-- boiler -->
-        <rect x="200" y="100" width="240" height="660" rx="52" fill="url(#iso)" class="outline" />
-        <rect x="222" y="122" width="196" height="616" rx="38" fill="url(#acqua)" />
+        <rect x="200" y="100" width="240" height=${660 - d12} rx="52" fill="url(#iso)" class="outline" />
+        <rect x="222" y="122" width="196" height=${616 - d12} rx="38" fill="url(#acqua)" />
         <g class="coil">
-          <path d=${COIL_INTEGRATION} stroke="#7c3aed" />
-          <path d=${COIL_SOLAR} stroke="#15803d" />
+          <path d=${coilI} stroke="#7c3aed" />
+          <path d=${coilS} stroke="#15803d" />
         </g>
-        ${pumpOn ? svg`<path d=${COIL_INTEGRATION} class="coilflow" />` : nothing}
-        ${collectorOn ? svg`<path d=${COIL_SOLAR} class="coilflow" />` : nothing}
+        ${pumpOn ? svg`<path d=${coilI} class="coilflow" />` : nothing}
+        ${collectorOn ? svg`<path d=${coilS} class="coilflow" />` : nothing}
         <rect x="246" y="150" width="160" height="26" rx="13" class="pill" />
         <text x="326" y="168" class="s14 b" text-anchor="middle" fill="#a78bfa">Integrazione (caldaia)</text>
         ${integrationPill.key === "idle"
           ? nothing
-          : svg`<rect x="244" y="284" width="164" height="22" rx="11" class="pill" /><circle cx="260" cy="295" r="4.5" fill=${integrationPill.key === "blocked" ? "#f59e0b" : "#22c55e"} class=${integrationPill.key === "blocked" ? "" : "pulse"} /><text x="336" y="299.5" class="s13 b" text-anchor="middle" fill=${integrationPill.key === "blocked" ? "#f59e0b" : "#22c55e"}>${integrationPill.label}</text>`}
+          : svg`<rect x="244" y=${284 - d1} width="164" height="22" rx="11" class="pill" /><circle cx="260" cy=${295 - d1} r="4.5" fill=${integrationPill.key === "blocked" ? "#f59e0b" : "#22c55e"} class=${integrationPill.key === "blocked" ? "" : "pulse"} /><text x="336" y=${299.5 - d1} class="s13 b" text-anchor="middle" fill=${integrationPill.key === "blocked" ? "#f59e0b" : "#22c55e"}>${integrationPill.label}</text>`}
         ${collectorOn
-          ? svg`<rect x="250" y="676" width="152" height="22" rx="11" class="pill" /><circle cx="266" cy="687" r="4.5" fill="#22c55e" class="pulse" /><text x="334" y="691.5" class="s13 b" text-anchor="middle" fill="#22c55e">${collectorPill.label}</text>`
+          ? svg`<rect x="250" y=${676 - d12} width="152" height="22" rx="11" class="pill" /><circle cx="266" cy=${687 - d12} r="4.5" fill="#22c55e" class="pulse" /><text x="334" y=${691.5 - d12} class="s13 b" text-anchor="middle" fill="#22c55e">${collectorPill.label}</text>`
           : nothing}
-        <rect x="266" y="522" width="120" height="26" rx="13" class="pill" />
-        <text x="326" y="540" class="s14 b" text-anchor="middle" fill="#4ade80">Solare</text>
-        <rect x="222" y="122" width="196" height="616" rx="38" fill="url(#lucido)" />
+        <rect x="266" y=${522 - d1} width="120" height="26" rx="13" class="pill" />
+        <text x="326" y=${540 - d1} class="s14 b" text-anchor="middle" fill="#4ade80">Solare</text>
+        <rect x="222" y="122" width="196" height=${616 - d12} rx="38" fill="url(#lucido)" />
 
         <!-- scheda centrale -->
-        <rect x="236" y="338" width="168" height="176" rx="22" class="pill big" />
-        <text x="320" y="372" class="t2 s14" text-anchor="middle">Uscita acqua calda</text>
-        <text x="320" y="434" class="t1 b" font-size="50" text-anchor="middle">${fmt(outlet, 1)}<tspan font-size="24" dy="-16"> °C</tspan></text>
-        <line x1="262" y1="456" x2="378" y2="456" class="sep" />
-        <text x="320" y="490" class="t1 b" font-size="22" text-anchor="middle">${showers === null ? "(–)" : `(≈ ${showers} ${showers === 1 ? "doccia" : "docce"})`}</text>
+        <rect x="236" y=${338 - d1} width="168" height="176" rx="22" class="pill big" />
+        <text x="320" y=${372 - d1} class="t2 s14" text-anchor="middle">Uscita acqua calda</text>
+        <text x="320" y=${434 - d1} class="t1 b" font-size="50" text-anchor="middle">${fmt(outlet, 1)}<tspan font-size="24" dy="-16"> °C</tspan></text>
+        <line x1="262" y1=${456 - d1} x2="378" y2=${456 - d1} class="sep" />
+        <text x="320" y=${490 - d1} class="t1 b" font-size="22" text-anchor="middle">${showers === null ? "(–)" : `(≈ ${showers} ${showers === 1 ? "doccia" : "docce"})`}</text>
 
         <!-- sonde -->
         <circle cx="222" cy="168" r="8" class="probe" />
@@ -580,11 +601,11 @@ export class ImpiantoOverviewCard extends LitElement {
         <text x="82" y="156" class="t2 s14" text-anchor="middle">Alto (S3)</text>
         <text x="82" y="190" class="b" font-size="27" text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
 
-        <circle cx="222" cy="676" r="8" class="probe" />
-        <line x1="214" y1="676" x2="150" y2="676" class="lead" />
-        <rect x="14" y="640" width="136" height="72" rx="14" class="card lo" />
-        <text x="82" y="664" class="t2 s14" text-anchor="middle">Basso (S2)</text>
-        <text x="82" y="698" class="b" font-size="27" text-anchor="middle" fill="#3b82f6">${fmt(bottom, 1)} °C</text>
+        <circle cx="222" cy=${676 - d12} r="8" class="probe" />
+        <line x1="214" y1=${676 - d12} x2="150" y2=${676 - d12} class="lead" />
+        <rect x="14" y=${s2y} width="136" height="72" rx="14" class="card lo" />
+        <text x="82" y=${s2y + 24} class="t2 s14" text-anchor="middle">Basso (S2)</text>
+        <text x="82" y=${s2y + 58} class="b" font-size="27" text-anchor="middle" fill="#3b82f6">${fmt(bottom, 1)} °C</text>
 
         <!-- stima e pulsante -->
         <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
@@ -616,27 +637,25 @@ export class ImpiantoOverviewCard extends LitElement {
             </g>`}
 
         <!-- solare -->
-        <rect x="14" y="728" width="136" height="72" rx="14" class="card sun" />
-        <text x="82" y="752" class="t2 s14" text-anchor="middle">Solare</text>
-        <text x="82" y="786" class="b" font-size="24" text-anchor="middle" fill="#22c55e">${fmt(solarKw, 1)} kW</text>
+        <rect x="14" y=${kwy} width="136" height="72" rx="14" class="card sun" />
+        <text x="82" y=${kwy + 24} class="t2 s14" text-anchor="middle">Solare</text>
+        <text x="82" y=${kwy + 58} class="b" font-size="24" text-anchor="middle" fill="#22c55e">${fmt(solarKw, 1)} kW</text>
 
         <text x="532" y="80" class="b s14" fill="#ef4444">Acqua calda</text>
         <text x="532" y="98" class="t2 s13">verso utenze</text>
-        <text x="532" y="796" class="b s14" fill="#3b82f6">Acqua fredda</text>
-        <text x="532" y="814" class="t2 s13">dalla rete</text>
+        <text x="532" y=${796 - d12} class="b s14" fill="#3b82f6">Acqua fredda</text>
+        <text x="532" y=${814 - d12} class="t2 s13">dalla rete</text>
 
         <g class="pufgroup">${this._pufferShape(puffer, pufferEstimated)}</g>
 
         <!-- pannello solare e circuito del collettore -->
         <g class="pufgroup pannello">
-          <path d="M598 500 H520 V560 H440" class="pipe hot thin" />
-          <path d="M440 656 H548 V552 H598" class="pipe cold thin" />
-          ${collectorOn
-            ? svg`<path d="M598 500 H520 V560 H440" class="coilflow" /><path d="M440 656 H548 V552 H598" class="coilflow" />`
-            : nothing}
-          <text x="448" y="548" class="tv">${solarIn !== null ? `${fmt(solarIn, 1)} °C` : ""}</text>
-          <text x="448" y="644" class="tv">${solarOut !== null ? `${fmt(solarOut, 1)} °C` : ""}</text>
-          ${this._panelShape(panel, panelFill)}
+          <path d=${panIn} class="pipe hot thin" />
+          <path d=${panOut} class="pipe cold thin" />
+          ${collectorOn ? svg`<path d=${panIn} class="coilflow" /><path d=${panOut} class="coilflow" />` : nothing}
+          <text x="448" y=${short ? 504 : 548} class="tv">${solarIn !== null ? `${fmt(solarIn, 1)} °C` : ""}</text>
+          <text x="448" y=${short ? 528 : 644} class="tv">${solarOut !== null ? `${fmt(solarOut, 1)} °C` : ""}</text>
+          <g transform=${short ? "translate(0 -60)" : "translate(0 0)"}>${this._panelShape(panel, panelFill)}</g>
         </g>
       </svg>
       ${this._narrow
@@ -1136,9 +1155,11 @@ export class ImpiantoOverviewCard extends LitElement {
         <ha-card>
           ${head}
           <div class=${this._compact ? "layout split compact" : "layout split"}>
-            ${this._renderBoiler()}
+            <div class="splitleft">
+              ${this._renderBoiler()}
+              ${thermo === nothing ? nothing : html`<div class="splitthermo">${thermo}</div>`}
+            </div>
             <div class="splitcols">${this._renderStove()}${stufa}</div>
-            ${thermo === nothing ? nothing : html`<div class="splitthermo">${thermo}</div>`}
           </div>
         </ha-card>
       `;
@@ -1609,34 +1630,79 @@ export class ImpiantoOverviewCard extends LitElement {
     .compact .rightcol {
       gap: 6px;
     }
-    /* prova: layout "split" (boiler piu' piccolo, caldaia e stufa della stessa larghezza, termostato in basso) */
+    /* prova: layout "split" (boiler piu' corto con il termostato sotto, caldaia e stufa una sopra l'altra) */
     .layout.split {
       grid-template-columns: 1fr;
+    }
+    .splitleft {
+      display: contents;
+    }
+    .layout.split > .splitleft > svg {
+      order: 1;
     }
     .splitcols {
       display: flex;
       flex-direction: column;
       gap: 10px;
       min-width: 0;
+      order: 2;
     }
     .splitthermo {
       min-width: 0;
+      order: 3;
     }
     @container (min-width: 1150px) {
       .layout.split {
-        grid-template-columns: minmax(0, 4fr) minmax(0, 9fr);
+        grid-template-columns: minmax(440px, 5fr) minmax(0, 8fr);
         align-items: start;
       }
-      .splitcols {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        align-items: stretch;
+      .splitleft {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+      }
+      .layout.split > .splitleft > svg {
+        order: 0;
       }
       .splitthermo {
-        grid-column: 1 / -1;
+        order: 1;
+      }
+      .splitcols {
+        order: 0;
+      }
+      /* la stufa, una sotto la caldaia: bassa e larga, con stato e dati a sinistra e i due pulsanti a destra */
+      .layout.split .stufa {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr;
+        grid-template-areas:
+          "titolo titolo"
+          "dati accendi"
+          "dati scheda";
+        gap: 8px 14px;
+        align-items: center;
+      }
+      .layout.split .stufa h3 {
+        grid-area: titolo;
+      }
+      .layout.split .stufa .mid {
+        grid-area: dati;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 10px;
+        align-items: center;
+      }
+      .layout.split .stufa .mid .sumstate {
+        grid-row: span 2;
+      }
+      .layout.split .stufa .sbtn {
+        grid-area: accendi;
+      }
+      .layout.split .stufa .more.full {
+        grid-area: scheda;
       }
       .layout.split svg.boiler {
-        max-height: max(340px, calc(100vh - 460px));
+        max-height: max(350px, calc(100vh - 450px));
         margin: 0 auto;
       }
     }
@@ -1670,6 +1736,13 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .compact .top.withhopper {
       grid-template-columns: 58px 80px 1fr;
+    }
+    /* schermo largo e non compatto: serbatoio e figura piu' grandi */
+    @container (min-width: 1150px) {
+      .top.withhopper {
+        grid-template-columns: 96px minmax(100px, 200px) minmax(0, 1fr);
+        gap: 14px;
+      }
     }
     /* sotto 1150 px la caldaia ha piu' spazio ma la scheda e' piu' stretta: serbatoio e figura sopra, stato sotto a tutta larghezza */
     @container (max-width: 1149px) {
