@@ -32,6 +32,7 @@ input_number:
     min: 5
     max: 25
     step: 1
+    initial: 15
     unit_of_measurement: kg
     mode: box
 
