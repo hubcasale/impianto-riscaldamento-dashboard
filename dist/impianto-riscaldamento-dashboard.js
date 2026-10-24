@@ -4159,10 +4159,30 @@ var ImpiantoOverviewCard = class extends i4 {
     this._narrow = false;
     this._wide = false;
     this._stufaCardKey = "";
+    this._fit = 1;
+    this._fitTargets = [];
     this._stufa = null;
     this._stufaLoadedAt = 0;
     this._stufaLoading = false;
     this._thermoKey = "";
+    /**
+     * Layout split a schede larghe: l'altezza della riga la decide la scheda della caldaia. La scheda completa della stufa, se e'
+     * piu' alta, si rimpicciolisce in proporzione (non sotto il 60 %) invece di allungare la riga.
+     */
+    this._fitStufa = () => {
+      const panel = this.renderRoot.querySelector(".stufapanel.fit");
+      const box = panel?.querySelector(".stufafull");
+      const card = this._stufaCard;
+      if (!panel || !box || !card) return;
+      const avail = panel.clientHeight;
+      const natural = card.offsetHeight;
+      if (!avail || !natural) return;
+      const fit = Math.max(0.6, Math.min(1, avail / natural));
+      if (Math.abs(fit - this._fit) > 5e-3) {
+        this._fit = fit;
+        box.style.setProperty("--fit", String(fit));
+      }
+    };
   }
   connectedCallback() {
     super.connectedCallback();
@@ -4196,6 +4216,7 @@ var ImpiantoOverviewCard = class extends i4 {
     if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
     if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
     if (changed.has("hass") && this._pelletDlg) this._pelletDlg.info = this._pelletInfo();
+    if (this._config?.layout === "split") this._observeFit();
     if (this._config?.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 6e4) void this._loadStufa();
   }
   disconnectedCallback() {
@@ -4214,6 +4235,8 @@ var ImpiantoOverviewCard = class extends i4 {
     this._scheduleDlg = void 0;
     this._pelletDlg?.remove();
     this._pelletDlg = void 0;
+    this._fitRO?.disconnect();
+    this._fitTargets = [];
     this._confirm?.remove();
     this._confirm = void 0;
     this._ro?.disconnect();
@@ -4844,6 +4867,18 @@ var ImpiantoOverviewCard = class extends i4 {
       </svg>
     `;
   }
+  /** Rimisura quando cambiano la scheda della caldaia, la scheda della stufa o il pannello. */
+  _observeFit() {
+    const targets = [this.renderRoot.querySelector(".stove"), this.renderRoot.querySelector(".stufapanel.fit"), this._stufaCard].filter((x2) => !!x2);
+    const same = targets.length === this._fitTargets.length && targets.every((t3, i5) => t3 === this._fitTargets[i5]);
+    if (!same) {
+      this._fitRO?.disconnect();
+      this._fitRO = new ResizeObserver(() => this._fitStufa());
+      for (const t3 of targets) this._fitRO.observe(t3);
+      this._fitTargets = targets;
+    }
+    this._fitStufa();
+  }
   /** Legge dall'integrazione stufa_pellet gli id delle entità; se non c'è la sintesi non compare. */
   async _loadStufa() {
     this._stufaLoading = true;
@@ -4917,7 +4952,7 @@ var ImpiantoOverviewCard = class extends i4 {
       this._stufaCardKey = key;
     }
     this._stufaCard.hass = this.hass;
-    return b2`<div class="stufapanel"><div class="stufafull">${this._stufaCard}</div></div>`;
+    return b2`<div class=${this._config.layout === "split" && this._wide ? "stufapanel fit" : "stufapanel"}><div class="stufafull">${this._stufaCard}</div></div>`;
   }
   _renderStufa() {
     if (this._config.stufa && this._config.layout === "split") return this._stufaEmbedded();
@@ -5469,6 +5504,18 @@ var ImpiantoOverviewCard = class extends i4 {
       overflow: hidden;
       min-width: 0;
     }
+    .stufapanel.fit {
+      position: relative;
+    }
+    /* a schede larghe la scheda della stufa non allunga la riga: sta nel pannello, scalata se serve (--fit) */
+    .stufapanel.fit .stufafull {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: calc(100% / var(--fit, 1));
+      transform: scale(var(--fit, 1));
+      transform-origin: top left;
+    }
     .stufafull {
       min-width: 0;
       --ha-card-background: transparent;
@@ -5705,9 +5752,19 @@ var ImpiantoOverviewCard = class extends i4 {
       gap: 8px;
       margin-top: 12px;
     }
+    /* scheda della caldaia stretta: le quattro tessere restano in una riga, con carattere piu' piccolo */
     @container (max-width: 520px) {
       .tiles {
-        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+      }
+      .tile {
+        padding: 6px 8px;
+      }
+      .tile .tl {
+        font-size: 10.5px;
+      }
+      .tile .tv {
+        font-size: 15px;
       }
     }
     .tile {

@@ -306,6 +306,9 @@ export class ImpiantoOverviewCard extends LitElement {
   private _pelletDlg?: ImpiantoPelletDialog;
   private _stufaCard?: HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
   private _stufaCardKey = "";
+  private _fit = 1;
+  private _fitRO?: ResizeObserver;
+  private _fitTargets: Element[] = [];
   @state() private _stufa: StufaInfoLite | null = null;
   private _stufaLoadedAt = 0;
   private _stufaLoading = false;
@@ -349,6 +352,7 @@ export class ImpiantoOverviewCard extends LitElement {
     if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
     if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
     if (changed.has("hass") && this._pelletDlg) this._pelletDlg.info = this._pelletInfo();
+    if (this._config?.layout === "split") this._observeFit();
     if (this._config?.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 60000) void this._loadStufa();
   }
 
@@ -368,6 +372,8 @@ export class ImpiantoOverviewCard extends LitElement {
     this._scheduleDlg = undefined;
     this._pelletDlg?.remove();
     this._pelletDlg = undefined;
+    this._fitRO?.disconnect();
+    this._fitTargets = [];
     this._confirm?.remove();
     this._confirm = undefined;
     this._ro?.disconnect();
@@ -1077,6 +1083,38 @@ export class ImpiantoOverviewCard extends LitElement {
     `;
   }
 
+  /**
+   * Layout split a schede larghe: l'altezza della riga la decide la scheda della caldaia. La scheda completa della stufa, se e'
+   * piu' alta, si rimpicciolisce in proporzione (non sotto il 60 %) invece di allungare la riga.
+   */
+  private _fitStufa = (): void => {
+    const panel = this.renderRoot.querySelector<HTMLElement>(".stufapanel.fit");
+    const box = panel?.querySelector<HTMLElement>(".stufafull");
+    const card = this._stufaCard;
+    if (!panel || !box || !card) return;
+    const avail = panel.clientHeight;
+    const natural = card.offsetHeight;
+    if (!avail || !natural) return;
+    const fit = Math.max(0.6, Math.min(1, avail / natural));
+    if (Math.abs(fit - this._fit) > 0.005) {
+      this._fit = fit;
+      box.style.setProperty("--fit", String(fit));
+    }
+  };
+
+  /** Rimisura quando cambiano la scheda della caldaia, la scheda della stufa o il pannello. */
+  private _observeFit(): void {
+    const targets = [this.renderRoot.querySelector(".stove"), this.renderRoot.querySelector(".stufapanel.fit"), this._stufaCard].filter((x): x is Element => !!x);
+    const same = targets.length === this._fitTargets.length && targets.every((t, i) => t === this._fitTargets[i]);
+    if (!same) {
+      this._fitRO?.disconnect();
+      this._fitRO = new ResizeObserver(() => this._fitStufa());
+      for (const t of targets) this._fitRO.observe(t);
+      this._fitTargets = targets;
+    }
+    this._fitStufa();
+  }
+
   /** Legge dall'integrazione stufa_pellet gli id delle entità; se non c'è la sintesi non compare. */
   private async _loadStufa(): Promise<void> {
     this._stufaLoading = true;
@@ -1154,7 +1192,7 @@ export class ImpiantoOverviewCard extends LitElement {
       this._stufaCardKey = key;
     }
     this._stufaCard.hass = this.hass;
-    return html`<div class="stufapanel"><div class="stufafull">${this._stufaCard}</div></div>`;
+    return html`<div class=${this._config.layout === "split" && this._wide ? "stufapanel fit" : "stufapanel"}><div class="stufafull">${this._stufaCard}</div></div>`;
   }
 
   private _renderStufa() {
@@ -1712,6 +1750,18 @@ export class ImpiantoOverviewCard extends LitElement {
       overflow: hidden;
       min-width: 0;
     }
+    .stufapanel.fit {
+      position: relative;
+    }
+    /* a schede larghe la scheda della stufa non allunga la riga: sta nel pannello, scalata se serve (--fit) */
+    .stufapanel.fit .stufafull {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: calc(100% / var(--fit, 1));
+      transform: scale(var(--fit, 1));
+      transform-origin: top left;
+    }
     .stufafull {
       min-width: 0;
       --ha-card-background: transparent;
@@ -1948,9 +1998,19 @@ export class ImpiantoOverviewCard extends LitElement {
       gap: 8px;
       margin-top: 12px;
     }
+    /* scheda della caldaia stretta: le quattro tessere restano in una riga, con carattere piu' piccolo */
     @container (max-width: 520px) {
       .tiles {
-        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+      }
+      .tile {
+        padding: 6px 8px;
+      }
+      .tile .tl {
+        font-size: 10.5px;
+      }
+      .tile .tv {
+        font-size: 15px;
       }
     }
     .tile {

@@ -359,6 +359,7 @@ if (q.get("scroll")) setTimeout(() => { const b = document.querySelector("impian
 if (q.get("aiuto")) setTimeout(() => { document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".block.open .bb .i, .block.open .bh .i").click(); }, 900);
 if (q.get("programma_popup")) setTimeout(() => cards[0]._openSchedule(), 600);
 if (q.get("pellet_popup")) setTimeout(() => cards[0]._openPellet(), 700);
+if (q.get("stufa_alta")) setTimeout(() => { const c = cards[0]._stufaCard; if (c) c.style.minHeight = q.get("stufa_alta") + "px"; }, 2500);
 if (q.get("stufa_popup")) setTimeout(() => cards[0]._openStufa(), 1500);
 if (q.get("conferma")) setTimeout(() => (q.get("conferma") === "stufa" ? cards[0]._stufaPress() : cards[0]._press()), 1500);
 if (q.get("auto")) setTimeout(() => document.querySelector("impianto-confirm-dialog").shadowRoot.querySelector(q.get("auto") === "annulla" ? "button.cancel" : "button.ok").click(), 2300);
