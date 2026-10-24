@@ -225,8 +225,6 @@ export interface PlantCardConfig {
   summary?: boolean;
   /** false per nascondere il pulsante "Grafici" */
   charts?: boolean;
-  /** "auto" (predefinito): compatta sugli schermi bassi (tablet); true/false per forzare */
-  compact?: boolean | "auto";
   /**
    * "classic" (predefinito): boiler a sinistra, caldaia e termostato a destra.
    * "split" (prova): boiler piu' piccolo a sinistra, caldaia e stufa a pellet affiancate della stessa larghezza a destra,
@@ -295,12 +293,9 @@ export class ImpiantoOverviewCard extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @state() private _config!: PlantCardConfig;
   @state() private _narrow = false;
-  @state() private _compact = false;
   /** scheda larga almeno 1150 px (layout split a colonne) */
   @state() private _wide = false;
   private _confirm?: ImpiantoConfirmDialog;
-  private _width = 1000;
-  private _onResize = () => this._updateCompact();
   private _ro?: ResizeObserver;
   private _dialog?: ImpiantoSettingsDialog;
   private _info?: ImpiantoInfoDialog;
@@ -322,24 +317,14 @@ export class ImpiantoOverviewCard extends LitElement {
     // su schermi stretti (telefono) lo schema del boiler perde il puffer per restare leggibile
     this._ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width ?? 1000;
-      this._width = w;
       const narrow = w < 560;
       if (narrow !== this._narrow) this._narrow = narrow;
       const wide = w >= 1150;
       if (wide !== this._wide) this._wide = wide;
-      this._updateCompact();
     });
     this._ro.observe(this);
-    window.addEventListener("resize", this._onResize);
     // il termostato arriva da un'altra integrazione: se il suo file si carica dopo la scheda, ridisegna
     void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
-  }
-
-  /** Compatta se richiesto, oppure (auto) quando c'è spazio in larghezza ma lo schermo è basso. */
-  private _updateCompact(): void {
-    const opt = this._config?.compact ?? "auto";
-    const compact = opt === true || (opt === "auto" && this._width >= 900 && window.innerHeight < 850);
-    if (compact !== this._compact) this._compact = compact;
   }
 
   /** Apre la finestra delle preferenze (si aggiunge alla pagina, non sta dentro la scheda). */
@@ -386,7 +371,6 @@ export class ImpiantoOverviewCard extends LitElement {
     this._confirm?.remove();
     this._confirm = undefined;
     this._ro?.disconnect();
-    window.removeEventListener("resize", this._onResize);
   }
 
   /** Finestra di conferma: il comando parte solo se la si conferma (un tocco inavvertito non accende niente). */
@@ -424,7 +408,6 @@ export class ImpiantoOverviewCard extends LitElement {
   setConfig(config: PlantCardConfig): void {
     if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
     this._config = config;
-    this._updateCompact();
   }
 
   getCardSize(): number {
@@ -527,7 +510,7 @@ export class ImpiantoOverviewCard extends LitElement {
     const d12 = short ? SHORT_D1 + SHORT_D2 : 0;
     const coilI = short ? COIL_INTEGRATION_SHORT : COIL_INTEGRATION;
     const coilS = short ? COIL_SOLAR_SHORT : COIL_SOLAR;
-    const viewBox = this._narrow ? "0 0 640 840" : this._compact ? `0 66 700 ${762 - d12}` : `0 0 700 ${840 - d12}`;
+    const viewBox = this._narrow ? "0 0 640 840" : `0 0 700 ${840 - d12}`;
     const s2y = short ? 536 : 640;
     const kwy = short ? 616 : 728;
     const panIn = short ? "M598 440 H520 V512 H440" : "M598 500 H520 V560 H440";
@@ -1220,7 +1203,7 @@ export class ImpiantoOverviewCard extends LitElement {
       return html`
         <ha-card>
           ${head}
-          <div class=${this._compact ? "layout split compact" : "layout split"}>
+          <div class="layout split">
             <div class="splitleft">
               ${this._renderBoiler()}
               ${thermo === nothing ? nothing : html`<div class="splitthermo">${thermo}</div>`}
@@ -1233,7 +1216,7 @@ export class ImpiantoOverviewCard extends LitElement {
     return html`
       <ha-card>
         ${head}
-        <div class=${this._compact ? "layout compact" : "layout"}>${this._renderBoiler()}<div class="rightcol">${stufa === nothing ? this._renderStove() : html`<div class="stoverow">${this._renderStove()}${stufa}</div>`}${thermo}</div></div>
+        <div class="layout">${this._renderBoiler()}<div class="rightcol">${stufa === nothing ? this._renderStove() : html`<div class="stoverow">${this._renderStove()}${stufa}</div>`}${thermo}</div></div>
       </ha-card>
     `;
   }
@@ -1507,6 +1490,8 @@ export class ImpiantoOverviewCard extends LitElement {
       border-radius: 20px;
       padding: 14px;
       border: 1px solid var(--divider-color);
+      /* le regole di larghezza (tessere su due colonne) guardano la scheda della caldaia, non l'intera scheda */
+      container-type: inline-size;
     }
     .stove h3 {
       margin: 0;
@@ -1693,9 +1678,6 @@ export class ImpiantoOverviewCard extends LitElement {
       gap: 10px;
       min-width: 0;
     }
-    .compact .rightcol {
-      gap: 6px;
-    }
     /* prova: layout "split" (boiler piu' corto con il termostato sotto, caldaia e stufa una sopra l'altra) */
     .layout.split {
       grid-template-columns: 1fr;
@@ -1777,7 +1759,6 @@ export class ImpiantoOverviewCard extends LitElement {
         grid-area: scheda;
       }
       .layout.split svg.boiler {
-        max-height: max(350px, calc(100vh - 450px));
         margin: 0 auto;
       }
     }
@@ -2059,116 +2040,6 @@ export class ImpiantoOverviewCard extends LitElement {
       color: #22c55e;
     }
     .look {
-      display: none;
-    }
-    /* modalità compatta: tutto in una schermata di tablet, senza togliere dati */
-    .compact svg.boiler {
-      max-height: calc(100vh - 182px);
-    }
-    .compact .stove {
-      padding: 8px 10px;
-      border-radius: 16px;
-    }
-    .compact .stove h3 {
-      font-size: 14px;
-    }
-    .compact .shead {
-      margin: 0 0 4px;
-    }
-    .compact .top {
-      grid-template-columns: 92px 1fr;
-      gap: 8px;
-      align-items: center;
-    }
-    .compact .stoveimg {
-      max-width: 92px;
-    }
-    /* stato, acqua e ultimo cambio su una riga: tre colonne, etichetta sopra e valore sotto */
-    .compact .statecard {
-      display: grid;
-      grid-auto-flow: column;
-      grid-template-rows: auto auto;
-      justify-content: space-around;
-      align-items: center;
-      column-gap: 12px;
-      row-gap: 2px;
-      padding: 6px 8px;
-    }
-    .compact .pelletpill {
-      font-size: 13px;
-      padding: 1px 10px;
-    }
-    .compact .statecard .tl {
-      font-size: 11px;
-      text-align: center;
-    }
-    .compact .statecard > * {
-      margin: 0;
-      text-align: center;
-      justify-self: center;
-    }
-    .compact .statepill {
-      font-size: 15px;
-      padding: 2px 12px;
-    }
-    .compact .water {
-      font-size: 22px;
-    }
-    .compact .since {
-      font-size: 13px;
-    }
-    .compact .legendbar {
-      display: none;
-    }
-    .compact .tiles {
-      grid-template-columns: repeat(4, 1fr);
-      gap: 4px;
-      margin-top: 6px;
-    }
-    .compact .tile {
-      padding: 2px 7px;
-      border-radius: 8px;
-    }
-    .compact .tile .tl {
-      font-size: 10.5px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .compact .tv {
-      font-size: 14px;
-    }
-    .compact .counters {
-      margin-top: 6px;
-      padding: 3px 10px;
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-    }
-    .compact .counters > div {
-      font-size: 13px;
-      gap: 2px 14px;
-    }
-    .compact .chips {
-      margin-top: 6px;
-      gap: 6px;
-    }
-    .compact .chip {
-      flex-direction: row;
-      justify-content: center;
-      gap: 6px;
-      padding: 2px 4px;
-      border-radius: 14px;
-    }
-    .compact .chip b {
-      font-size: 13px;
-    }
-    .compact .guard {
-      margin-top: 6px;
-      padding: 4px 12px;
-      border-radius: 12px;
-    }
-    .compact .guard small {
       display: none;
     }
     .guard {
