@@ -1039,11 +1039,11 @@ export class ImpiantoOverviewCard extends LitElement {
     const glow = look === "work" ? 0.55 : look === "start" ? 0.3 : 0;
     const flame =
       look === "work"
-        ? this._flame(272, 152, 0.7)
+        ? this._flame(272, 156, 0.82)
         : look === "start"
-          ? this._flame(272, 152, 0.28)
+          ? this._flame(272, 156, 0.32)
           : look === "stopping"
-            ? this._flame(272, 152, 0.15, 0.55)
+            ? this._flame(272, 156, 0.18, 0.55)
             : nothing;
     const pelletFill = HOPPER_FILL[pellet.key];
     const stateFont = d.state.length > 5 ? 10.5 : 14;
@@ -1060,9 +1060,8 @@ export class ImpiantoOverviewCard extends LitElement {
         <rect x="196" y="6" width="152" height="224" rx="5" fill="url(#pf-corpo)" stroke="#3b3b44" stroke-width="1.5" />
         <rect x="206" y="14" width="132" height="22" rx="11" fill="#334155" />
         <text x="272" y="29.5" font-size="11.5" font-weight="700" text-anchor="middle" fill="#e2e8f0">${d.since ? `ultimo cambio ${d.since}` : "ultimo cambio –"}</text>
-        <text x="272" y="58" font-size="14" font-weight="600" letter-spacing="3" text-anchor="middle" fill="#cbd5e1">POLYGON</text>
-        <rect x="212" y="70" width="120" height="104" rx="10" fill="url(#pf-vetro)" stroke="#94a3b8" stroke-width="2.5" />
-        <rect x="212" y="70" width="120" height="104" rx="10" fill="url(#pf-bagliore)" />
+        <rect x="212" y="48" width="120" height="126" rx="10" fill="url(#pf-vetro)" stroke="#94a3b8" stroke-width="2.5" />
+        <rect x="212" y="48" width="120" height="126" rx="10" fill="url(#pf-bagliore)" />
         <g class="flicker">${flame}</g>
         <rect class="sp ${look}" x="206" y="188" width="62" height="28" rx="14" />
         <text class="spt ${look}" x="237" y="207" font-size=${stateFont} font-weight="700" text-anchor="middle">${d.state}</text>
@@ -1806,7 +1805,7 @@ export class ImpiantoOverviewCard extends LitElement {
       stroke: var(--primary-color, #03a9f4);
     }
     .polyfig .flicker {
-      transform-origin: 272px 152px;
+      transform-origin: 272px 156px;
     }
     .polyfig.work .flicker,
     .polyfig.start .flicker {

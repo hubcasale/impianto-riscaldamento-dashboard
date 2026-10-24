@@ -4813,7 +4813,7 @@ var ImpiantoOverviewCard = class extends i4 {
     const kg = this._pelletKg();
     const days = daysLeft(kg, this._pelletPerDay());
     const glow = look === "work" ? 0.55 : look === "start" ? 0.3 : 0;
-    const flame = look === "work" ? this._flame(272, 152, 0.7) : look === "start" ? this._flame(272, 152, 0.28) : look === "stopping" ? this._flame(272, 152, 0.15, 0.55) : A;
+    const flame = look === "work" ? this._flame(272, 156, 0.82) : look === "start" ? this._flame(272, 156, 0.32) : look === "stopping" ? this._flame(272, 156, 0.18, 0.55) : A;
     const pelletFill = HOPPER_FILL[pellet.key];
     const stateFont = d3.state.length > 5 ? 10.5 : 14;
     return b2`
@@ -4829,9 +4829,8 @@ var ImpiantoOverviewCard = class extends i4 {
         <rect x="196" y="6" width="152" height="224" rx="5" fill="url(#pf-corpo)" stroke="#3b3b44" stroke-width="1.5" />
         <rect x="206" y="14" width="132" height="22" rx="11" fill="#334155" />
         <text x="272" y="29.5" font-size="11.5" font-weight="700" text-anchor="middle" fill="#e2e8f0">${d3.since ? `ultimo cambio ${d3.since}` : "ultimo cambio \u2013"}</text>
-        <text x="272" y="58" font-size="14" font-weight="600" letter-spacing="3" text-anchor="middle" fill="#cbd5e1">POLYGON</text>
-        <rect x="212" y="70" width="120" height="104" rx="10" fill="url(#pf-vetro)" stroke="#94a3b8" stroke-width="2.5" />
-        <rect x="212" y="70" width="120" height="104" rx="10" fill="url(#pf-bagliore)" />
+        <rect x="212" y="48" width="120" height="126" rx="10" fill="url(#pf-vetro)" stroke="#94a3b8" stroke-width="2.5" />
+        <rect x="212" y="48" width="120" height="126" rx="10" fill="url(#pf-bagliore)" />
         <g class="flicker">${flame}</g>
         <rect class="sp ${look}" x="206" y="188" width="62" height="28" rx="14" />
         <text class="spt ${look}" x="237" y="207" font-size=${stateFont} font-weight="700" text-anchor="middle">${d3.state}</text>
@@ -5562,7 +5561,7 @@ var ImpiantoOverviewCard = class extends i4 {
       stroke: var(--primary-color, #03a9f4);
     }
     .polyfig .flicker {
-      transform-origin: 272px 152px;
+      transform-origin: 272px 156px;
     }
     .polyfig.work .flicker,
     .polyfig.start .flicker {
@@ -7115,7 +7114,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.4.9";
+var VERSION = "0.4.10";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
