@@ -1184,10 +1184,11 @@ export class ImpiantoOverviewCard extends LitElement {
     if (!customElements.get("stufa-pellet-card")) return nothing;
     const opt = this._config.stufa;
     const cfg = typeof opt === "object" && opt !== null ? opt : {};
-    const key = JSON.stringify(cfg);
+    const key = JSON.stringify(cfg) + this._config.layout;
     if (!this._stufaCard || this._stufaCardKey !== key) {
       const el = document.createElement("stufa-pellet-card") as HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
-      el.setConfig({ type: "custom:stufa-pellet-card", ...(cfg.entry_id ? { entry_id: cfg.entry_id } : {}), ...(cfg.title ? { title: cfg.title } : {}) });
+      // nel layout split la scheda sta accanto a boiler e caldaia, della stessa altezza: versione compatta
+      el.setConfig({ type: "custom:stufa-pellet-card", ...(this._config.layout === "split" ? { compact: true } : {}), ...(cfg.entry_id ? { entry_id: cfg.entry_id } : {}), ...(cfg.title ? { title: cfg.title } : {}) });
       this._stufaCard = el;
       this._stufaCardKey = key;
     }
@@ -1269,6 +1270,68 @@ export class ImpiantoOverviewCard extends LitElement {
       padding: 12px;
       color: var(--primary-text-color);
       position: relative;
+    }
+    /* layout split: la scheda della caldaia in versione compatta (tessere in una riga, contatori, richieste e salvaguardia piu' stretti) */
+    .layout.split .stove {
+      padding: 10px 12px;
+      border-radius: 20px;
+    }
+    .layout.split .stove h3 {
+      font-size: 15px;
+    }
+    .layout.split .shead {
+      margin: 0 0 6px;
+    }
+    .layout.split .tiles {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .layout.split .tile {
+      padding: 3px 7px;
+      border-radius: 8px;
+    }
+    .layout.split .tile .tl {
+      font-size: 10.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .layout.split .tile .tv {
+      font-size: 14px;
+    }
+    .layout.split .counters {
+      margin-top: 6px;
+      padding: 3px 10px;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .layout.split .counters > div {
+      font-size: 13px;
+      gap: 2px 14px;
+    }
+    .layout.split .chips {
+      margin-top: 6px;
+      gap: 6px;
+    }
+    .layout.split .chip {
+      flex-direction: row;
+      justify-content: center;
+      gap: 6px;
+      padding: 2px 4px;
+      border-radius: 14px;
+    }
+    .layout.split .chip b {
+      font-size: 13px;
+    }
+    .layout.split .guard {
+      margin-top: 6px;
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
+    .layout.split .guard small {
+      display: none;
     }
     /* pulsanti nel titolo della scheda della caldaia: programmazione e preferenze */
     .hbtns {
