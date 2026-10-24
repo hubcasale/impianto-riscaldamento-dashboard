@@ -4570,9 +4570,14 @@ var ImpiantoOverviewCard = class extends i4 {
       <section class="stove">
         <div class="shead">
           <h3>Caldaia a pellet (Polygon)</h3>
-          ${this._config.schedule === false ? A : b2`<button class="progbtn" @click=${() => this._openSchedule()} aria-label="Programmazione settimanale della caldaia">
-                <ha-icon icon="mdi:calendar-clock"></ha-icon><span>Programma</span>
-              </button>`}
+          ${this._config.schedule === false && this._config.settings === false ? A : b2`<div class="hbtns">
+                ${this._config.schedule === false ? A : b2`<button class="progbtn" @click=${() => this._openSchedule()} aria-label="Programmazione settimanale della caldaia">
+                      <ha-icon icon="mdi:calendar-clock"></ha-icon><span>Programma</span>
+                    </button>`}
+                ${this._config.settings === false ? A : b2`<button class="gearbtn" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
+                      <ha-icon icon="mdi:cog-outline"></ha-icon>
+                    </button>`}
+              </div>`}
         </div>
         <div class=${inline ? "top figure" : "top"}>
           ${inline ? this._renderPolygonFigure(look, pellet, { state: stateRaw ?? "\u2013", water: this._n(e5.stove_water), since }) : b2`${this._renderStoveImage(look, pellet)}
@@ -4829,11 +4834,11 @@ var ImpiantoOverviewCard = class extends i4 {
           <polygon points="22,72 60,120 28,176" fill="rgba(148,163,184,0.05)" /><polygon points="60,120 140,128 100,190 28,176" fill="rgba(148,163,184,0.08)" />
           <polygon points="140,128 176,72 176,180 100,190" fill="rgba(148,163,184,0.05)" /><polygon points="28,176 100,190 70,222 24,222" fill="rgba(148,163,184,0.06)" />
           <g transform="translate(26 74) scale(1.46)">${hopperShape(kg, "pf-clip")}</g>
-          <text x="124" y="124" font-size="28" font-weight="700" fill="#f1f5f9">${kg === null ? "\u2013" : fmt2(kg, 0)}<tspan font-size="13" font-weight="500" fill="#94a3b8"> kg</tspan></text>
-          <text x="124" y="146" font-size="13" fill="#94a3b8">${days === null ? "" : `${days < 10 ? fmt2(days, 1) : fmt2(days, 0)} giorni`}</text>
-          <text x="124" y="166" font-size="10.5" fill="#94a3b8">pellet</text>
-          <rect x="124" y="171" width="58" height="20" rx="10" fill=${pelletFill} />
-          <text x="153" y="185.5" font-size="11" font-weight="700" text-anchor="middle" fill="#ffffff">${pellet.label}</text>
+          <text x="98" y="152" font-size="28" font-weight="700" fill="#f1f5f9">${kg === null ? "\u2013" : fmt2(kg, 0)}<tspan font-size="13" font-weight="500" fill="#94a3b8"> kg</tspan></text>
+          <text x="84" y="172" font-size="13" fill="#94a3b8">${days === null ? "" : `${days < 10 ? fmt2(days, 1) : fmt2(days, 0)} giorni`}</text>
+          <text x="72" y="192" font-size="10.5" fill="#94a3b8">pellet</text>
+          <rect x="72" y="197" width="58" height="20" rx="10" fill=${pelletFill} />
+          <text x="101" y="211.5" font-size="11" font-weight="700" text-anchor="middle" fill="#ffffff">${pellet.label}</text>
         </g>
         <rect x="14" y="230" width="22" height="8" rx="2" fill="#0f0f13" /><rect x="320" y="230" width="22" height="8" rx="2" fill="#0f0f13" />
       </svg>
@@ -4912,7 +4917,7 @@ var ImpiantoOverviewCard = class extends i4 {
       this._stufaCardKey = key;
     }
     this._stufaCard.hass = this.hass;
-    return b2`<div class="stufafull">${this._stufaCard}</div>`;
+    return b2`<div class="stufapanel"><div class="stufafull">${this._stufaCard}</div></div>`;
   }
   _renderStufa() {
     if (this._config.stufa && this._config.layout === "split") return this._stufaEmbedded();
@@ -4952,22 +4957,16 @@ var ImpiantoOverviewCard = class extends i4 {
     const thermo = this._renderThermostat();
     const stufa = this._renderStufa();
     const split = this._config.layout === "split";
-    const head = b2`
-      ${this._config.settings === false ? A : b2`<button class="gear" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
-            <ha-icon icon="mdi:cog-outline"></ha-icon>
-          </button>`}
-      ${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}
-    `;
+    const head = b2`${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}`;
     if (split) {
       return b2`
         <ha-card>
           ${head}
           <div class="layout split">
-            <div class="splitleft">
-              ${this._renderBoiler()}
-              ${thermo === A ? A : b2`<div class="splitthermo">${thermo}</div>`}
-            </div>
-            <div class=${this._config.stufa && customElements.get("stufa-pellet-card") ? "splitcols duo" : "splitcols"}>${this._renderStove()}${stufa}</div>
+            <section class="boilerpanel">${this._renderBoiler()}</section>
+            ${this._renderStove()}
+            ${stufa}
+            ${thermo === A ? A : b2`<div class="splitthermo">${thermo}</div>`}
           </div>
         </ha-card>
       `;
@@ -4990,24 +4989,32 @@ var ImpiantoOverviewCard = class extends i4 {
       color: var(--primary-text-color);
       position: relative;
     }
-    .gear {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      z-index: 2;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      border: none;
-      background: transparent;
-      color: var(--secondary-text-color);
-      cursor: pointer;
+    /* pulsanti nel titolo della scheda della caldaia: programmazione e preferenze */
+    .hbtns {
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 8px;
+      flex: none;
     }
-    .gear:hover {
-      background: var(--secondary-background-color);
+    .gearbtn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      min-height: 36px;
+      margin: -10px 0;
+      padding: 0;
+      border-radius: 12px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--secondary-text-color);
+      cursor: pointer;
+    }
+    .gearbtn ha-icon {
+      --mdc-icon-size: 20px;
+    }
+    .gearbtn:hover {
+      border-color: var(--primary-color, #03a9f4);
       color: var(--primary-text-color);
     }
     .ctitle {
@@ -5263,7 +5270,7 @@ var ImpiantoOverviewCard = class extends i4 {
       gap: 8px;
       margin: 0 0 12px;
     }
-    .shead:has(.progbtn) {
+    .shead:has(.hbtns) {
       justify-content: space-between;
     }
     /* pulsante alto 36 px senza alzare la riga del titolo */
@@ -5437,85 +5444,45 @@ var ImpiantoOverviewCard = class extends i4 {
       gap: 10px;
       min-width: 0;
     }
-    /* prova: layout "split" (boiler piu' corto con il termostato sotto, caldaia e stufa una sopra l'altra) */
+    /* prova: layout "split": boiler, caldaia e stufa in tre schede alte uguali, termostato in una striscia sotto */
     .layout.split {
       grid-template-columns: 1fr;
     }
-    .splitleft {
-      display: contents;
-    }
-    .layout.split > .splitleft > svg {
-      order: 1;
-    }
-    .splitcols {
+    .boilerpanel {
+      background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color);
+      border-radius: 20px;
+      padding: 14px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      justify-content: center;
       min-width: 0;
-      order: 2;
     }
     .splitthermo {
       min-width: 0;
-      order: 3;
+    }
+    /* scheda completa della stufa: stesso sfondo, bordo e angoli delle altre schede; le tessere prendono il colore delle tessere della caldaia */
+    .stufapanel {
+      background: var(--secondary-background-color);
+      border: 1px solid var(--divider-color);
+      border-radius: 20px;
+      overflow: hidden;
+      min-width: 0;
     }
     .stufafull {
       min-width: 0;
+      --ha-card-background: transparent;
+      --ha-card-box-shadow: none;
+      --ha-card-border-width: 0px;
+      --secondary-background-color: var(--card-background-color);
     }
     @container (min-width: 1150px) {
       .layout.split {
-        grid-template-columns: minmax(440px, 5fr) minmax(0, 8fr);
-        align-items: start;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr);
+        align-items: stretch;
       }
-      .splitleft {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        min-width: 0;
-      }
-      .layout.split > .splitleft > svg {
-        order: 0;
-      }
-      /* con la scheda completa della stufa: caldaia e stufa affiancate, della stessa larghezza */
-      .splitcols.duo {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        align-items: start;
-      }
-      .splitthermo {
-        order: 1;
-      }
-      .splitcols {
-        order: 0;
-      }
-      /* la stufa, una sotto la caldaia: bassa e larga, con stato e dati a sinistra e i due pulsanti a destra */
-      .layout.split .stufa {
-        display: grid;
-        grid-template-columns: 1.3fr 1fr;
-        grid-template-areas:
-          "titolo titolo"
-          "dati accendi"
-          "dati scheda";
-        gap: 8px 14px;
-        align-items: center;
-      }
-      .layout.split .stufa h3 {
-        grid-area: titolo;
-      }
-      .layout.split .stufa .mid {
-        grid-area: dati;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 6px 10px;
-        align-items: center;
-      }
-      .layout.split .stufa .mid .sumstate {
-        grid-row: span 2;
-      }
-      .layout.split .stufa .sbtn {
-        grid-area: accendi;
-      }
-      .layout.split .stufa .more.full {
-        grid-area: scheda;
+      .layout.split > .splitthermo {
+        grid-column: 1 / -1;
       }
       .layout.split svg.boiler {
         margin: 0 auto;
