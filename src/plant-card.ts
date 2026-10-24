@@ -742,26 +742,6 @@ export class ImpiantoOverviewCard extends LitElement {
     return html`<div class="chip ${v ? "yes" : ""}"><span>${label}</span><b>${v === null ? "–" : v ? "SÌ" : "NO"}</b></div>`;
   }
 
-  private _toggleGuard(): void {
-    void this.hass.callService("input_boolean", "toggle", { entity_id: this._e.guard });
-  }
-
-  private _renderGuard() {
-    const e = this._e;
-    if (!this.hass.states[e.guard]) return nothing;
-    const on = this._s(e.guard) === "on";
-    const flagged = this._s(e.guard_flag) === "on";
-    return html`
-      <button class="guard ${on ? "on" : "off"}" @click=${() => this._toggleGuard()} aria-pressed=${on}>
-        <span class="gtxt">
-          <b>Evita partenze inutili</b>
-          <small>${on ? (flagged ? "ha annullato una partenza, resta in guardia" : "attiva: annulla le partenze se il boiler ha già abbastanza docce e il termostato non chiede calore") : "disattivata: i programmi partono sempre"}</small>
-        </span>
-        <span class="gsw"><i></i></span>
-      </button>
-    `;
-  }
-
   private _renderStove() {
     const e = this._e;
     const stateRaw = this._s(e.stove_state);
@@ -825,7 +805,6 @@ export class ImpiantoOverviewCard extends LitElement {
           ${this._chip("Richiesta ACS", this._yes(e.request_acs))} ${this._chip("Riscaldamento", this._yes(e.request_heating))}
           ${this._chip("Consenso suggerito", this._yes(e.consent))}
         </div>
-        ${this._renderGuard()}
         <p class="look">${LOOK_LABEL[look]}</p>
       </section>
     `;
@@ -1324,14 +1303,6 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .layout.split .chip b {
       font-size: 13px;
-    }
-    .layout.split .guard {
-      margin-top: 6px;
-      padding: 4px 12px;
-      border-radius: 12px;
-    }
-    .layout.split .guard small {
-      display: none;
     }
     /* pulsanti nel titolo della scheda della caldaia: programmazione e preferenze */
     .hbtns {
@@ -2133,56 +2104,6 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .look {
       display: none;
-    }
-    .guard {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      width: 100%;
-      margin-top: 12px;
-      padding: 10px 14px;
-      border-radius: 14px;
-      border: 1px solid var(--divider-color);
-      background: var(--card-background-color);
-      color: var(--primary-text-color);
-      font: inherit;
-      text-align: left;
-      cursor: pointer;
-    }
-    .guard .gtxt {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
-    .guard small {
-      color: var(--secondary-text-color);
-      font-size: 12px;
-    }
-    .guard .gsw {
-      flex: none;
-      width: 44px;
-      height: 24px;
-      border-radius: 12px;
-      background: var(--disabled-text-color, #9e9e9e);
-      position: relative;
-      transition: background 0.2s;
-    }
-    .guard .gsw i {
-      position: absolute;
-      top: 3px;
-      left: 3px;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: #fff;
-      transition: left 0.2s;
-    }
-    .guard.on .gsw {
-      background: #22c55e;
-    }
-    .guard.on .gsw i {
-      left: 23px;
     }
   `;
 }
