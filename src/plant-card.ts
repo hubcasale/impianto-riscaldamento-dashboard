@@ -1072,7 +1072,9 @@ export class ImpiantoOverviewCard extends LitElement {
     const card = this._stufaCard;
     if (!panel || !box || !card) return;
     const avail = panel.clientHeight;
-    const natural = card.offsetHeight;
+    // altezza del contenuto: se sta nel pannello e' uguale all'altezza del pannello (le sezioni si distribuiscono), altrimenti e' maggiore
+    const pad = card.shadowRoot?.querySelector<HTMLElement>(".pad");
+    const natural = pad ? pad.scrollHeight : card.offsetHeight;
     if (!avail || !natural) return;
     const fit = Math.max(0.6, Math.min(1, avail / natural));
     if (Math.abs(fit - this._fit) > 0.005) {
@@ -1793,6 +1795,7 @@ export class ImpiantoOverviewCard extends LitElement {
       top: 0;
       left: 0;
       width: calc(100% / var(--fit, 1));
+      height: calc(100% / var(--fit, 1));
       transform: scale(var(--fit, 1));
       transform-origin: top left;
     }
