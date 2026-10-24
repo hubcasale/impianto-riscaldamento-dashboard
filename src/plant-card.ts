@@ -17,6 +17,7 @@ import type { ImpiantoCardDialog } from "./card-dialog";
 import "./card-dialog";
 import type { ImpiantoConfirmDialog } from "./confirm-dialog";
 import "./confirm-dialog";
+import { SECTIONS_USER_KEY, SECTION_KEYS, defaultSections, normalizeSections, sectionsToStore, toggleSection, visibleKeys, type SectionKey, type Sections } from "./sections-logic";
 import { summarize, type SummaryLine } from "./summary-logic";
 import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, sinceText, stoveLook, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
@@ -240,6 +241,11 @@ export interface PlantCardConfig {
    * pulsante che apre la scheda completa in un popup. `true`, oppure `{ entry_id, title }` se hai più stufe.
    */
   stufa?: boolean | { entry_id?: string; title?: string };
+  /**
+   * Quali sezioni mostrare di partenza (la scelta di ogni utente, fatta dalle preferenze, ha la precedenza): elenco di
+   * "boiler", "caldaia", "stufa", "termostato". Se manca, sono tutte visibili.
+   */
+  show?: SectionKey[];
   /** false per nascondere il termostato ambiente (compare se è installata l'integrazione termostato_riscaldamento); entry_id se hai più termostati */
   thermostat?: boolean | { entry_id?: string; title?: string };
   entities?: Partial<PlantEntities>;
@@ -311,6 +317,9 @@ export class ImpiantoOverviewCard extends LitElement {
   private _fit = 1;
   private _fitRO?: ResizeObserver;
   private _fitTargets: Element[] = [];
+  @state() private _sections: Sections = defaultSections();
+  private _sectionsStored: unknown = null;
+  private _sectionsLoading = false;
   @state() private _stufa: StufaInfoLite | null = null;
   private _stufaLoadedAt = 0;
   private _stufaLoading = false;
@@ -337,6 +346,9 @@ export class ImpiantoOverviewCard extends LitElement {
     if (this._dialog) return;
     const d = document.createElement("impianto-settings-dialog") as ImpiantoSettingsDialog;
     d.hass = this.hass;
+    d.sections = this._effectiveSections();
+    d.available = this._availableSections();
+    d.addEventListener("sections-toggle", (ev) => this._toggleSectionKey((ev as CustomEvent<SectionKey>).detail));
     d.addEventListener("closed", () => {
       this._dialog = undefined;
     });
@@ -344,8 +356,60 @@ export class ImpiantoOverviewCard extends LitElement {
     this._dialog = d;
   }
 
+  /** Le sezioni che questa scheda puo' mostrare (la stufa e il termostato dipendono dalla configurazione). */
+  private _availableSections(): SectionKey[] {
+    return SECTION_KEYS.filter((k) => (k === "stufa" ? !!this._config.stufa : k === "termostato" ? this._config.thermostat !== false : true));
+  }
+
+  /** Scelta dell'utente limitata alle sezioni disponibili; ne resta sempre almeno una. */
+  private _effectiveSections(): Sections {
+    const av = this._availableSections();
+    const eff = { ...this._sections };
+    for (const k of SECTION_KEYS) if (!av.includes(k)) eff[k] = false;
+    if (!visibleKeys(eff).length) eff.boiler = true;
+    return eff;
+  }
+
+  private _toggleSectionKey(key: SectionKey): void {
+    const next = toggleSection(this._effectiveSections(), key);
+    this._sections = { ...this._sections, [key]: next[key] };
+    if (this._dialog) {
+      this._dialog.sections = this._effectiveSections();
+      this._dialog.available = this._availableSections();
+    }
+    void this._saveSections();
+  }
+
+  private _wsCall(msg: Record<string, unknown>): Promise<{ value?: unknown } | null> {
+    const cw = this.hass.callWS as unknown as ((m: Record<string, unknown>) => Promise<{ value?: unknown } | null>) | undefined;
+    return cw ? cw.call(this.hass, msg) : Promise.reject(new Error("callWS non disponibile"));
+  }
+
+  /** Legge una volta la scelta salvata dall'utente in Home Assistant. */
+  private async _loadSections(): Promise<void> {
+    this._sectionsLoading = true;
+    try {
+      const r = await this._wsCall({ type: "frontend/get_user_data", key: SECTIONS_USER_KEY });
+      this._sectionsStored = r?.value ?? null;
+      this._sections = normalizeSections(this._sectionsStored, this._config.show);
+    } catch {
+      /* senza dati utente restano le sezioni di partenza */
+    }
+  }
+
+  private async _saveSections(): Promise<void> {
+    const value = sectionsToStore(this._sections);
+    this._sectionsStored = value;
+    try {
+      await this._wsCall({ type: "frontend/set_user_data", key: SECTIONS_USER_KEY, value });
+    } catch {
+      /* la scelta vale comunque finche' la pagina resta aperta */
+    }
+  }
+
   protected updated(changed: Map<string, unknown>): void {
     // la finestra aperta segue gli stati di Home Assistant (interruttori e numeri si aggiornano subito)
+    if (this.hass && this._config && !this._sectionsLoading) void this._loadSections();
     if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
     if (changed.has("hass") && this._info) this._info.lines = this._summaryLines();
     if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
@@ -355,7 +419,7 @@ export class ImpiantoOverviewCard extends LitElement {
     if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
     if (changed.has("hass") && this._pelletDlg) this._pelletDlg.info = this._pelletInfo();
     if (this._config?.layout === "split") this._observeFit();
-    if (this._config?.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 60000) void this._loadStufa();
+    if (this._config?.stufa && this._sections.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 60000) void this._loadStufa();
   }
 
   disconnectedCallback(): void {
@@ -416,6 +480,7 @@ export class ImpiantoOverviewCard extends LitElement {
   setConfig(config: PlantCardConfig): void {
     if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
     this._config = config;
+    this._sections = normalizeSections(this._sectionsStored, config.show);
   }
 
   getCardSize(): number {
@@ -1178,7 +1243,7 @@ export class ImpiantoOverviewCard extends LitElement {
       this._stufaCardKey = key;
     }
     this._stufaCard.hass = this.hass;
-    return html`<div class=${this._config.layout === "split" && this._wide ? "stufapanel fit" : "stufapanel"}><div class="stufafull">${this._stufaCard}</div></div>`;
+    return html`<div class=${this._config.layout === "split" && this._wide && this._sections.caldaia ? "stufapanel fit" : "stufapanel"}><div class="stufafull">${this._stufaCard}</div></div>`;
   }
 
   private _renderStufa() {
@@ -1221,27 +1286,45 @@ export class ImpiantoOverviewCard extends LitElement {
 
   render() {
     if (!this._config || !this.hass) return nothing;
-    const thermo = this._renderThermostat();
-    const stufa = this._renderStufa();
+    const sec = this._effectiveSections();
+    const thermo = sec.termostato ? this._renderThermostat() : nothing;
+    const stufa = sec.stufa ? this._renderStufa() : nothing;
     const split = this._config.layout === "split";
-    const head = html`${this._config.title ? html`<div class="ctitle">${this._config.title}</div>` : nothing}`;
+    // senza la scheda della caldaia (dove sta l'ingranaggio) le preferenze restano raggiungibili da una barra in alto
+    const gear = !sec.caldaia && this._config.settings !== false;
+    const head = html`${this._config.title || gear
+      ? html`<div class="topbar">
+          <div class="ctitle">${this._config.title ?? ""}</div>
+          ${gear
+            ? html`<button class="gearbtn" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
+                <ha-icon icon="mdi:cog-outline"></ha-icon>
+              </button>`
+            : nothing}
+        </div>`
+      : nothing}`;
     if (split) {
+      // colonne: una per ogni scheda mostrata (boiler, caldaia, stufa), con le stesse proporzioni di prima
+      const cols = [sec.boiler ? "minmax(0,1fr)" : "", sec.caldaia ? "minmax(0,1.15fr)" : "", sec.stufa && stufa !== nothing ? "minmax(0,1fr)" : ""].filter(Boolean);
+      const cards = cols.length > 0;
       return html`
         <ha-card>
           ${head}
-          <div class="layout split">
-            <section class="boilerpanel">${this._renderBoiler()}</section>
-            ${this._renderStove()}
+          <div class="layout split" style=${cards ? `--cols: ${cols.join(" ")}` : ""}>
+            ${sec.boiler ? html`<section class="boilerpanel">${this._renderBoiler()}</section>` : nothing}
+            ${sec.caldaia ? this._renderStove() : nothing}
             ${stufa}
             ${thermo === nothing ? nothing : html`<div class="splitthermo">${thermo}</div>`}
           </div>
         </ha-card>
       `;
     }
+    const right = html`${sec.caldaia ? (stufa === nothing ? this._renderStove() : html`<div class="stoverow">${this._renderStove()}${stufa}</div>`) : stufa}${thermo}`;
+    const hasRight = sec.caldaia || stufa !== nothing || thermo !== nothing;
+    const two = sec.boiler && hasRight;
     return html`
       <ha-card>
         ${head}
-        <div class="layout">${this._renderBoiler()}<div class="rightcol">${stufa === nothing ? this._renderStove() : html`<div class="stoverow">${this._renderStove()}${stufa}</div>`}${thermo}</div></div>
+        <div class=${two ? "layout" : "layout solo"}>${sec.boiler ? this._renderBoiler() : nothing}${hasRight ? html`<div class="rightcol">${right}</div>` : nothing}</div>
       </ha-card>
     `;
   }
@@ -1338,10 +1421,19 @@ export class ImpiantoOverviewCard extends LitElement {
       border-color: var(--primary-color, #03a9f4);
       color: var(--primary-text-color);
     }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
     .ctitle {
       font-size: 20px;
       font-weight: 700;
       margin: 4px 4px 8px;
+    }
+    .topbar .gearbtn {
+      margin: 0 0 4px auto;
     }
     .layout {
       display: grid;
@@ -1352,6 +1444,9 @@ export class ImpiantoOverviewCard extends LitElement {
     @container (min-width: 900px) {
       .layout {
         grid-template-columns: 7fr 6fr;
+      }
+      .layout.solo {
+        grid-template-columns: minmax(0, 1fr);
       }
     }
     svg.boiler {
@@ -1812,7 +1907,7 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     @container (min-width: 1150px) {
       .layout.split {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr);
+        grid-template-columns: var(--cols, minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr));
         align-items: stretch;
       }
       .layout.split > .splitthermo {

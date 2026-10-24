@@ -187,3 +187,10 @@ flowchart TD
     notifica/ciclo quando mancano pochi giorni ai 30, un ciclo che accende la caldaia (puffer ≥ 70 °C), sblocca l'integrazione e aspetta S3 ≥ 65 °C per
     5 minuti con un limite di un'ora e un avviso se non riesce. Attenzioni: la sonda ESP32 è corretta con una stima (±1 °C), il puffer arriva a circa
     65-70 °C col set attuale, e durante il ciclo il blocco dell'integrazione deve restare disattivato.
+
+## Sezioni a scelta (Fase 1 della scheda unica, 24/10/2026)
+
+- `src/sections-logic.ts` (pura, con test): quattro sezioni (boiler, caldaia, stufa, termostato), `normalizeSections`, `toggleSection` (l'ultima non si spegne), `SECTIONS_USER_KEY = impianto_riscaldamento_sezioni`.
+- La scheda legge la scelta con `frontend/get_user_data` alla prima `hass` e la salva con `set_user_data`; `show` in YAML è solo il valore di partenza. Le sezioni non disponibili (stufa senza `stufa`, termostato con `thermostat: false`) non compaiono tra gli interruttori e non contano per il minimo di una.
+- Il layout split usa `--cols` con una colonna per ogni scheda mostrata; il pannello della stufa con scala (`.fit`) si usa solo se la caldaia e' visibile (e' lei a dare l'altezza). Senza la caldaia l'ingranaggio sta in `.topbar`.
+- Fasi seguenti (non fatte): 2) un'unica integrazione che unisce termostato e stufa con migrazione degli id; 3) spostare i pacchetti YAML nell'integrazione.

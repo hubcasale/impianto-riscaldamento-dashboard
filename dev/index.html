@@ -231,6 +231,8 @@ if (sm) {
   set("switch.stufa", sm === "spenta" ? "off" : "on");
   set("switch.presa", "on");
 }
+// ?sezioni=boiler,caldaia,stufa,termostato: scelta salvata dell'utente (dati utente di Home Assistant)
+if (q.get("sezioni")) { const on = q.get("sezioni").split(","); localStorage.setItem("dev_ud_impianto_riscaldamento_sezioni", JSON.stringify({ version: 1, sections: Object.fromEntries(["boiler", "caldaia", "stufa", "termostato"].map((k) => [k, on.includes(k)])) })); } else localStorage.removeItem("dev_ud_impianto_riscaldamento_sezioni");
 const log = document.getElementById("log");
 const cards = [];
 function push() { cards.forEach((c) => (c.hass = hass)); }

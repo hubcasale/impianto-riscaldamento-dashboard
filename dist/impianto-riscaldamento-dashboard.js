@@ -594,6 +594,48 @@ function r5(r6) {
   return n4({ ...r6, state: true, attribute: false });
 }
 
+// src/sections-logic.ts
+var SECTION_KEYS = ["boiler", "caldaia", "stufa", "termostato"];
+var SECTION_INFO = {
+  boiler: { label: "Boiler solare", hint: "Temperature, docce, puffer e pannello solare.", icon: "mdi:water-boiler" },
+  caldaia: { label: "Caldaia a pellet (Polygon)", hint: "Stato, serbatoio del pellet, programma e preferenze dell'impianto.", icon: "mdi:fire" },
+  stufa: { label: "Stufa a pellet", hint: "Stato, potenza, accensione e programma della stufa.", icon: "mdi:stove" },
+  termostato: { label: "Termostato ambiente", hint: "Temperatura, obiettivo, modalit\xE0 e programma.", icon: "mdi:thermostat" }
+};
+var SECTIONS_USER_KEY = "impianto_riscaldamento_sezioni";
+function defaultSections(show) {
+  const list = Array.isArray(show) ? show.filter((k2) => SECTION_KEYS.includes(k2)) : [];
+  const only = list.length > 0;
+  return { boiler: !only || list.includes("boiler"), caldaia: !only || list.includes("caldaia"), stufa: !only || list.includes("stufa"), termostato: !only || list.includes("termostato") };
+}
+function normalizeSections(stored, show) {
+  const base = defaultSections(show);
+  const raw = stored && typeof stored === "object" ? stored.sections : void 0;
+  if (raw && typeof raw === "object") {
+    for (const k2 of SECTION_KEYS) {
+      const v2 = raw[k2];
+      if (typeof v2 === "boolean") base[k2] = v2;
+    }
+  }
+  return visibleKeys(base).length === 0 ? defaultSections(show) : base;
+}
+function visibleKeys(s4) {
+  return SECTION_KEYS.filter((k2) => s4[k2]);
+}
+function toggleSection(s4, key) {
+  const next = { ...s4, [key]: !s4[key] };
+  return visibleKeys(next).length === 0 ? s4 : next;
+}
+function sectionsSummary(s4) {
+  const v2 = visibleKeys(s4);
+  if (v2.length === SECTION_KEYS.length) return "Tutte le sezioni";
+  if (v2.length === 1) return `Solo ${SECTION_INFO[v2[0]].label.toLowerCase()}`;
+  return v2.map((k2) => SECTION_INFO[k2].label.split(" (")[0].toLowerCase()).join(", ");
+}
+function sectionsToStore(s4) {
+  return { version: 1, sections: { ...s4 } };
+}
+
 // src/settings-logic.ts
 var SETTINGS_GROUPS = [
   { id: "riscaldamento", title: "Caldaia e acqua calda" },
@@ -1140,6 +1182,8 @@ var TAG = "impianto-settings-dialog";
 var ImpiantoSettingsDialog = class extends i4 {
   constructor() {
     super(...arguments);
+    this.sections = null;
+    this.available = [];
     this._open = null;
     this._help = null;
     this._thermoBusy = false;
@@ -1365,6 +1409,37 @@ var ImpiantoSettingsDialog = class extends i4 {
       </section>
     `;
   }
+  /** Blocco «Cosa mostrare»: un interruttore per ogni sezione della scheda; l'ultima rimasta non si spegne. */
+  _renderSections() {
+    const s4 = this.sections;
+    if (!s4 || this.available.length < 2) return A;
+    const open = this._open === "sezioni";
+    const onlyOne = visibleKeys(s4).length <= 1;
+    return b2`
+      <h3 class="grp">Pagina</h3>
+      <section class="block ${open ? "open" : ""}">
+        <div class="bh" role="button" tabindex="0" aria-expanded=${open ? "true" : "false"} @click=${() => this._toggleBlock("sezioni")} @keydown=${(e5) => {
+      if (e5.key === "Enter" || e5.key === " ") this._toggleBlock("sezioni");
+    }}>
+          <ha-icon icon="mdi:view-dashboard-outline"></ha-icon>
+          <div class="bt"><div class="bn">Cosa mostrare</div><div class="bs">${sectionsSummary(s4)}</div></div>
+          <span class="chev">${open ? "\u25BE" : "\u25B8"}</span>
+        </div>
+        ${open ? b2`<div class="bb">
+              <p class="intro">Scegli quali schede vedere in questa pagina. La scelta vale per il tuo utente e resta salvata in Home Assistant, anche su altri dispositivi.</p>
+              ${this.available.map((k2) => {
+      const on2 = s4[k2];
+      const locked = on2 && onlyOne;
+      const info = SECTION_INFO[k2];
+      return b2`<div class="row tog">
+                  <div class="txt"><div class="lab">${info.label}</div><div class="hint">${locked ? "Almeno una sezione deve restare visibile." : info.hint}</div></div>
+                  <button class=${on2 ? "sw on" : "sw"} role="switch" aria-checked=${on2 ? "true" : "false"} aria-label=${info.label} ?disabled=${locked} @click=${() => this.dispatchEvent(new CustomEvent("sections-toggle", { detail: k2 }))}><span class="knob"></span></button>
+                </div>`;
+    })}
+            </div>` : A}
+      </section>
+    `;
+  }
   _renderHelp() {
     if (!this._help) return A;
     const { title, help } = this._help;
@@ -1398,6 +1473,7 @@ var ImpiantoSettingsDialog = class extends i4 {
           <div class="body">
             ${groups.length === 0 ? b2`<div class="empty">Nessuna impostazione trovata: installa i pacchetti Home Assistant del progetto (cartella ha-packages).</div>` : b2`
                   <p class="lead">Tocca un blocco per aprirlo e cambiare i valori: ogni modifica vale subito. Gli interruttori accendono e spengono la funzione senza aprire il blocco.</p>
+                  ${this._renderSections()}
                   ${groups.map(
       ({ g: g2, secs, extra }) => b2`
                       <h3 class="grp">${g2.title}</h3>
@@ -1805,6 +1881,12 @@ var ImpiantoSettingsDialog = class extends i4 {
 __decorateClass([
   n4({ attribute: false })
 ], ImpiantoSettingsDialog.prototype, "hass", 2);
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoSettingsDialog.prototype, "sections", 2);
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoSettingsDialog.prototype, "available", 2);
 __decorateClass([
   r5()
 ], ImpiantoSettingsDialog.prototype, "_open", 2);
@@ -4161,6 +4243,9 @@ var ImpiantoOverviewCard = class extends i4 {
     this._stufaCardKey = "";
     this._fit = 1;
     this._fitTargets = [];
+    this._sections = defaultSections();
+    this._sectionsStored = null;
+    this._sectionsLoading = false;
     this._stufa = null;
     this._stufaLoadedAt = 0;
     this._stufaLoading = false;
@@ -4202,13 +4287,60 @@ var ImpiantoOverviewCard = class extends i4 {
     if (this._dialog) return;
     const d3 = document.createElement("impianto-settings-dialog");
     d3.hass = this.hass;
+    d3.sections = this._effectiveSections();
+    d3.available = this._availableSections();
+    d3.addEventListener("sections-toggle", (ev) => this._toggleSectionKey(ev.detail));
     d3.addEventListener("closed", () => {
       this._dialog = void 0;
     });
     document.body.appendChild(d3);
     this._dialog = d3;
   }
+  /** Le sezioni che questa scheda puo' mostrare (la stufa e il termostato dipendono dalla configurazione). */
+  _availableSections() {
+    return SECTION_KEYS.filter((k2) => k2 === "stufa" ? !!this._config.stufa : k2 === "termostato" ? this._config.thermostat !== false : true);
+  }
+  /** Scelta dell'utente limitata alle sezioni disponibili; ne resta sempre almeno una. */
+  _effectiveSections() {
+    const av = this._availableSections();
+    const eff = { ...this._sections };
+    for (const k2 of SECTION_KEYS) if (!av.includes(k2)) eff[k2] = false;
+    if (!visibleKeys(eff).length) eff.boiler = true;
+    return eff;
+  }
+  _toggleSectionKey(key) {
+    const next = toggleSection(this._effectiveSections(), key);
+    this._sections = { ...this._sections, [key]: next[key] };
+    if (this._dialog) {
+      this._dialog.sections = this._effectiveSections();
+      this._dialog.available = this._availableSections();
+    }
+    void this._saveSections();
+  }
+  _wsCall(msg) {
+    const cw = this.hass.callWS;
+    return cw ? cw.call(this.hass, msg) : Promise.reject(new Error("callWS non disponibile"));
+  }
+  /** Legge una volta la scelta salvata dall'utente in Home Assistant. */
+  async _loadSections() {
+    this._sectionsLoading = true;
+    try {
+      const r6 = await this._wsCall({ type: "frontend/get_user_data", key: SECTIONS_USER_KEY });
+      this._sectionsStored = r6?.value ?? null;
+      this._sections = normalizeSections(this._sectionsStored, this._config.show);
+    } catch {
+    }
+  }
+  async _saveSections() {
+    const value = sectionsToStore(this._sections);
+    this._sectionsStored = value;
+    try {
+      await this._wsCall({ type: "frontend/set_user_data", key: SECTIONS_USER_KEY, value });
+    } catch {
+    }
+  }
   updated(changed) {
+    if (this.hass && this._config && !this._sectionsLoading) void this._loadSections();
     if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
     if (changed.has("hass") && this._info) this._info.lines = this._summaryLines();
     if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
@@ -4218,7 +4350,7 @@ var ImpiantoOverviewCard = class extends i4 {
     if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
     if (changed.has("hass") && this._pelletDlg) this._pelletDlg.info = this._pelletInfo();
     if (this._config?.layout === "split") this._observeFit();
-    if (this._config?.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 6e4) void this._loadStufa();
+    if (this._config?.stufa && this._sections.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 6e4) void this._loadStufa();
   }
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -4275,6 +4407,7 @@ var ImpiantoOverviewCard = class extends i4 {
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
     this._config = config;
+    this._sections = normalizeSections(this._sectionsStored, config.show);
   }
   getCardSize() {
     return 12;
@@ -4935,7 +5068,7 @@ var ImpiantoOverviewCard = class extends i4 {
       this._stufaCardKey = key;
     }
     this._stufaCard.hass = this.hass;
-    return b2`<div class=${this._config.layout === "split" && this._wide ? "stufapanel fit" : "stufapanel"}><div class="stufafull">${this._stufaCard}</div></div>`;
+    return b2`<div class=${this._config.layout === "split" && this._wide && this._sections.caldaia ? "stufapanel fit" : "stufapanel"}><div class="stufafull">${this._stufaCard}</div></div>`;
   }
   _renderStufa() {
     if (this._config.stufa && this._config.layout === "split") return this._stufaEmbedded();
@@ -4972,27 +5105,39 @@ var ImpiantoOverviewCard = class extends i4 {
   }
   render() {
     if (!this._config || !this.hass) return A;
-    const thermo = this._renderThermostat();
-    const stufa = this._renderStufa();
+    const sec = this._effectiveSections();
+    const thermo = sec.termostato ? this._renderThermostat() : A;
+    const stufa = sec.stufa ? this._renderStufa() : A;
     const split = this._config.layout === "split";
-    const head = b2`${this._config.title ? b2`<div class="ctitle">${this._config.title}</div>` : A}`;
+    const gear = !sec.caldaia && this._config.settings !== false;
+    const head = b2`${this._config.title || gear ? b2`<div class="topbar">
+          <div class="ctitle">${this._config.title ?? ""}</div>
+          ${gear ? b2`<button class="gearbtn" title="Preferenze impianto" aria-label="Preferenze impianto" @click=${() => this._openSettings()}>
+                <ha-icon icon="mdi:cog-outline"></ha-icon>
+              </button>` : A}
+        </div>` : A}`;
     if (split) {
+      const cols = [sec.boiler ? "minmax(0,1fr)" : "", sec.caldaia ? "minmax(0,1.15fr)" : "", sec.stufa && stufa !== A ? "minmax(0,1fr)" : ""].filter(Boolean);
+      const cards = cols.length > 0;
       return b2`
         <ha-card>
           ${head}
-          <div class="layout split">
-            <section class="boilerpanel">${this._renderBoiler()}</section>
-            ${this._renderStove()}
+          <div class="layout split" style=${cards ? `--cols: ${cols.join(" ")}` : ""}>
+            ${sec.boiler ? b2`<section class="boilerpanel">${this._renderBoiler()}</section>` : A}
+            ${sec.caldaia ? this._renderStove() : A}
             ${stufa}
             ${thermo === A ? A : b2`<div class="splitthermo">${thermo}</div>`}
           </div>
         </ha-card>
       `;
     }
+    const right = b2`${sec.caldaia ? stufa === A ? this._renderStove() : b2`<div class="stoverow">${this._renderStove()}${stufa}</div>` : stufa}${thermo}`;
+    const hasRight = sec.caldaia || stufa !== A || thermo !== A;
+    const two = sec.boiler && hasRight;
     return b2`
       <ha-card>
         ${head}
-        <div class="layout">${this._renderBoiler()}<div class="rightcol">${stufa === A ? this._renderStove() : b2`<div class="stoverow">${this._renderStove()}${stufa}</div>`}${thermo}</div></div>
+        <div class=${two ? "layout" : "layout solo"}>${sec.boiler ? this._renderBoiler() : A}${hasRight ? b2`<div class="rightcol">${right}</div>` : A}</div>
       </ha-card>
     `;
   }
@@ -5089,10 +5234,19 @@ var ImpiantoOverviewCard = class extends i4 {
       border-color: var(--primary-color, #03a9f4);
       color: var(--primary-text-color);
     }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
     .ctitle {
       font-size: 20px;
       font-weight: 700;
       margin: 4px 4px 8px;
+    }
+    .topbar .gearbtn {
+      margin: 0 0 4px auto;
     }
     .layout {
       display: grid;
@@ -5103,6 +5257,9 @@ var ImpiantoOverviewCard = class extends i4 {
     @container (min-width: 900px) {
       .layout {
         grid-template-columns: 7fr 6fr;
+      }
+      .layout.solo {
+        grid-template-columns: minmax(0, 1fr);
       }
     }
     svg.boiler {
@@ -5563,7 +5720,7 @@ var ImpiantoOverviewCard = class extends i4 {
     }
     @container (min-width: 1150px) {
       .layout.split {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr);
+        grid-template-columns: var(--cols, minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr));
         align-items: stretch;
       }
       .layout.split > .splitthermo {
@@ -5881,6 +6038,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoOverviewCard.prototype, "_wide", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCard.prototype, "_sections", 2);
 __decorateClass([
   r5()
 ], ImpiantoOverviewCard.prototype, "_stufa", 2);

@@ -1,6 +1,7 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
+import { SECTION_INFO, sectionsSummary, visibleKeys, type SectionKey, type Sections } from "./sections-logic";
 import { PENDING_MS, SETTINGS_GROUPS, applyPending, buildSettingsView, clampValue, stepValue, writeService, type HelpDef, type PendingMap, type RowView, type SectionView, type ThresholdBar } from "./settings-logic";
 
 const TAG = "impianto-settings-dialog";
@@ -12,6 +13,10 @@ const TAG = "impianto-settings-dialog";
  */
 export class ImpiantoSettingsDialog extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
+  /** quali sezioni della scheda sono visibili (la scelta di questo utente) */
+  @property({ attribute: false }) sections: Sections | null = null;
+  /** le sezioni che la scheda puo' mostrare */
+  @property({ attribute: false }) available: SectionKey[] = [];
   @state() private _open: string | null = null;
   @state() private _help: { title: string; help: HelpDef } | null = null;
   @state() private _thermoBusy = false;
@@ -246,6 +251,38 @@ export class ImpiantoSettingsDialog extends LitElement {
     `;
   }
 
+  /** Blocco «Cosa mostrare»: un interruttore per ogni sezione della scheda; l'ultima rimasta non si spegne. */
+  private _renderSections() {
+    const s = this.sections;
+    if (!s || this.available.length < 2) return nothing;
+    const open = this._open === "sezioni";
+    const onlyOne = visibleKeys(s).length <= 1;
+    return html`
+      <h3 class="grp">Pagina</h3>
+      <section class="block ${open ? "open" : ""}">
+        <div class="bh" role="button" tabindex="0" aria-expanded=${open ? "true" : "false"} @click=${() => this._toggleBlock("sezioni")} @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") this._toggleBlock("sezioni"); }}>
+          <ha-icon icon="mdi:view-dashboard-outline"></ha-icon>
+          <div class="bt"><div class="bn">Cosa mostrare</div><div class="bs">${sectionsSummary(s)}</div></div>
+          <span class="chev">${open ? "▾" : "▸"}</span>
+        </div>
+        ${open
+          ? html`<div class="bb">
+              <p class="intro">Scegli quali schede vedere in questa pagina. La scelta vale per il tuo utente e resta salvata in Home Assistant, anche su altri dispositivi.</p>
+              ${this.available.map((k) => {
+                const on = s[k];
+                const locked = on && onlyOne;
+                const info = SECTION_INFO[k];
+                return html`<div class="row tog">
+                  <div class="txt"><div class="lab">${info.label}</div><div class="hint">${locked ? "Almeno una sezione deve restare visibile." : info.hint}</div></div>
+                  <button class=${on ? "sw on" : "sw"} role="switch" aria-checked=${on ? "true" : "false"} aria-label=${info.label} ?disabled=${locked} @click=${() => this.dispatchEvent(new CustomEvent("sections-toggle", { detail: k }))}><span class="knob"></span></button>
+                </div>`;
+              })}
+            </div>`
+          : nothing}
+      </section>
+    `;
+  }
+
   private _renderHelp() {
     if (!this._help) return nothing;
     const { title, help } = this._help;
@@ -282,6 +319,7 @@ export class ImpiantoSettingsDialog extends LitElement {
               ? html`<div class="empty">Nessuna impostazione trovata: installa i pacchetti Home Assistant del progetto (cartella ha-packages).</div>`
               : html`
                   <p class="lead">Tocca un blocco per aprirlo e cambiare i valori: ogni modifica vale subito. Gli interruttori accendono e spengono la funzione senza aprire il blocco.</p>
+                  ${this._renderSections()}
                   ${groups.map(
                     ({ g, secs, extra }) => html`
                       <h3 class="grp">${g.title}</h3>
