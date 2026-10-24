@@ -231,6 +231,8 @@ export interface PlantCardConfig {
    * termostato in basso a tutta larghezza e, nella caldaia, il disegno del serbatoio con il pellet rimasto.
    */
   layout?: "classic" | "split";
+  /** "short" (prova): boiler con un solo giro per serpentina (nel layout split a schede larghe); predefinito: boiler intero */
+  boiler?: "full" | "short";
   /** false per nascondere il pulsante «Programmazione» della scheda della caldaia; un oggetto passa le opzioni alla scheda della programmazione (prefix, master, status, presets) */
   schedule?: boolean | Record<string, unknown>;
   /**
@@ -511,7 +513,9 @@ export class ImpiantoOverviewCard extends LitElement {
     const integOut = this._n(e.coil_integ_out);
     const btn = boostButton(this._s(e.boost_state), false);
     // layout split a schede larghe: boiler piu' corto, con un solo giro per serpentina
-    const short = this._config.layout === "split" && this._wide && !this._narrow;
+    const short = this._config.layout === "split" && this._config.boiler === "short" && this._wide && !this._narrow;
+    // layout split a schede larghe: dati a sinistra piu' grandi (la grafica resta com'e')
+    const fs = this._config.layout === "split" && this._wide && !this._narrow ? 1.22 : 1;
     const d1 = short ? SHORT_D1 : 0;
     const d12 = short ? SHORT_D1 + SHORT_D2 : 0;
     const coilI = short ? COIL_INTEGRATION_SHORT : COIL_INTEGRATION;
@@ -589,24 +593,24 @@ export class ImpiantoOverviewCard extends LitElement {
         <circle cx="222" cy="168" r="8" class="probe" />
         <line x1="214" y1="168" x2="150" y2="168" class="lead" />
         <rect x="14" y="132" width="136" height="72" rx="14" class="card hi" />
-        <text x="82" y="156" class="t2 s14" text-anchor="middle">Alto (S3)</text>
-        <text x="82" y="190" class="b" font-size="27" text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
+        <text x="82" y="156" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Alto (S3)</text>
+        <text x="82" y="190" class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
 
         <circle cx="222" cy=${676 - d12} r="8" class="probe" />
         <line x1="214" y1=${676 - d12} x2="150" y2=${676 - d12} class="lead" />
         <rect x="14" y=${s2y} width="136" height="72" rx="14" class="card lo" />
-        <text x="82" y=${s2y + 24} class="t2 s14" text-anchor="middle">Basso (S2)</text>
-        <text x="82" y=${s2y + 58} class="b" font-size="27" text-anchor="middle" fill="#3b82f6">${fmt(bottom, 1)} °C</text>
+        <text x="82" y=${s2y + 24} class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Basso (S2)</text>
+        <text x="82" y=${s2y + 58} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#3b82f6">${fmt(bottom, 1)} °C</text>
 
         <!-- stima e pulsante -->
         <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
-        <text x="82" y="248" class="t2 s14" text-anchor="middle">Acqua pronta in</text>
-        <text x="82" y="292" class="t1 b" font-size="34" text-anchor="middle">${etaText(eta)}</text>
-        <text x="82" y="314" class="t2 s13" text-anchor="middle">${eta === 0 ? "già a temperatura" : eta === null ? "" : "stima media"}</text>
+        <text x="82" y="248" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Acqua pronta in</text>
+        <text x="82" y="292" class="t1 b" font-size=${Math.round(34 * fs)} text-anchor="middle">${etaText(eta)}</text>
+        <text x="82" y="314" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">${eta === 0 ? "già a temperatura" : eta === null ? "" : "stima media"}</text>
         <g class=${btn.action === "none" ? "btn off" : "btn"} role="button" tabindex=${btn.action === "none" ? "-1" : "0"}
           aria-label=${btn.label} @click=${() => this._press()} @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._press()}>
           <rect x="14" y="340" width="136" height="${btn.sub ? 78 : 64}" rx="14" class="btnbg" />
-          <text x="82" y=${btn.sub ? 372 : 380} class="b" font-size="18" text-anchor="middle">${btn.label}</text>
+          <text x="82" y=${btn.sub ? 372 : 380} class="b" font-size=${Math.round(18 * fs)} text-anchor="middle">${btn.label}</text>
           ${btn.sub ? svg`<text x="82" y="396" class="s13" text-anchor="middle" opacity="0.85">${btn.sub}</text>` : nothing}
         </g>
         ${this._config.summary === false
@@ -615,8 +619,8 @@ export class ImpiantoOverviewCard extends LitElement {
               @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openInfo()}>
               <rect x="14" y=${(btn.sub ? 340 + 78 : 340 + 64) + 12} width="136" height="44" rx="14" class="infobg" />
               <circle cx="40" cy=${(btn.sub ? 340 + 78 : 340 + 64) + 34} r="10" class="infoc" />
-              <text x="40" y=${(btn.sub ? 340 + 78 : 340 + 64) + 39} class="b" font-size="14" text-anchor="middle">i</text>
-              <text x="92" y=${(btn.sub ? 340 + 78 : 340 + 64) + 40} class="b" font-size="17" text-anchor="middle">Stato</text>
+              <text x="40" y=${(btn.sub ? 340 + 78 : 340 + 64) + 39} class="b" font-size=${Math.round(14 * fs)} text-anchor="middle">i</text>
+              <text x="92" y=${(btn.sub ? 340 + 78 : 340 + 64) + 40} class="b" font-size=${Math.round(17 * fs)} text-anchor="middle">Stato</text>
             </g>`}
         ${this._config.charts === false
           ? nothing
@@ -624,13 +628,13 @@ export class ImpiantoOverviewCard extends LitElement {
               @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openCharts()}>
               <rect x="14" y=${(btn.sub ? 340 + 78 : 340 + 64) + 66} width="136" height="44" rx="14" class="infobg" />
               <polyline points="28,${(btn.sub ? 340 + 78 : 340 + 64) + 98} 35,${(btn.sub ? 340 + 78 : 340 + 64) + 88} 41,${(btn.sub ? 340 + 78 : 340 + 64) + 94} 51,${(btn.sub ? 340 + 78 : 340 + 64) + 80}" class="infoc" />
-              <text x="102" y=${(btn.sub ? 340 + 78 : 340 + 64) + 94} class="b" font-size="17" text-anchor="middle">Grafici</text>
+              <text x="102" y=${(btn.sub ? 340 + 78 : 340 + 64) + 94} class="b" font-size=${Math.round(17 * fs)} text-anchor="middle">Grafici</text>
             </g>`}
 
         <!-- solare -->
         <rect x="14" y=${kwy} width="136" height="72" rx="14" class="card sun" />
-        <text x="82" y=${kwy + 24} class="t2 s14" text-anchor="middle">Solare</text>
-        <text x="82" y=${kwy + 58} class="b" font-size="24" text-anchor="middle" fill="#22c55e">${fmt(solarKw, 1)} kW</text>
+        <text x="82" y=${kwy + 24} class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Solare</text>
+        <text x="82" y=${kwy + 58} class="b" font-size=${Math.round(24 * fs)} text-anchor="middle" fill="#22c55e">${fmt(solarKw, 1)} kW</text>
 
         <text x="532" y="80" class="b s14" fill="#ef4444">Acqua calda</text>
         <text x="532" y="98" class="t2 s13">verso utenze</text>
@@ -1769,7 +1773,7 @@ export class ImpiantoOverviewCard extends LitElement {
       background: var(--secondary-background-color);
       border: 1px solid var(--divider-color);
       border-radius: 20px;
-      padding: 14px;
+      padding: 8px 6px;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -1816,6 +1820,9 @@ export class ImpiantoOverviewCard extends LitElement {
       }
       .layout.split svg.boiler {
         margin: 0 auto;
+      }
+      .layout.split svg.boiler .tv {
+        font-size: 19px;
       }
     }
     /* le coppie etichetta/valore dello stato: nel layout normale restano figli diretti della griglia */
