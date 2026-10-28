@@ -13,6 +13,8 @@ import { HOPPER, afterBags, daysLeft, kgAtDepth, remainingKg } from "./hopper-lo
 import { hopperShape } from "./hopper-svg";
 import type { ImpiantoPelletDialog, PelletInfo } from "./pellet-dialog";
 import "./pellet-dialog";
+import type { ImpiantoPelletChartsDialog } from "./pellet-charts-dialog";
+import "./pellet-charts-dialog";
 import type { ImpiantoCardDialog } from "./card-dialog";
 import "./card-dialog";
 import type { ImpiantoConfirmDialog } from "./confirm-dialog";
@@ -312,6 +314,7 @@ export class ImpiantoOverviewCard extends LitElement {
   private _stufaDlg?: ImpiantoCardDialog;
   private _scheduleDlg?: ImpiantoCardDialog;
   private _pelletDlg?: ImpiantoPelletDialog;
+  private _pelletChartsDlg?: ImpiantoPelletChartsDialog;
   private _stufaCard?: HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
   private _stufaCardKey = "";
   private _fit = 1;
@@ -418,6 +421,10 @@ export class ImpiantoOverviewCard extends LitElement {
     if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
     if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
     if (changed.has("hass") && this._pelletDlg) this._pelletDlg.info = this._pelletInfo();
+    if (changed.has("hass") && this._pelletChartsDlg) {
+      this._pelletChartsDlg.hass = this.hass;
+      this._pelletChartsDlg.perDay = this._pelletPerDay();
+    }
     if (this._config?.layout === "split") this._observeFit();
     if (this._config?.stufa && this._sections.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 60000) void this._loadStufa();
   }
@@ -437,6 +444,8 @@ export class ImpiantoOverviewCard extends LitElement {
     this._scheduleDlg?.remove();
     this._scheduleDlg = undefined;
     this._pelletDlg?.remove();
+    this._pelletChartsDlg?.remove();
+    this._pelletChartsDlg = undefined;
     this._pelletDlg = undefined;
     this._fitRO?.disconnect();
     this._fitTargets = [];
@@ -1057,6 +1066,21 @@ export class ImpiantoOverviewCard extends LitElement {
     ]);
   }
 
+  /** Popup con i grafici del pellet: chili rimasti, caricamenti, letture del livello, consumo per giorno. */
+  private _openPelletCharts(): void {
+    if (this._pelletChartsDlg || !this._pelletEnabled()) return;
+    const d = document.createElement("impianto-pellet-charts-dialog") as ImpiantoPelletChartsDialog;
+    d.hass = this.hass;
+    d.ids = { remaining: "sensor.caldaia_pellet_serbatoio", total: this._e.pellet_total, factor: "input_number.caldaia_pellet_fattore" };
+    d.bagKg = this._pelletInfo().bagKg;
+    d.perDay = this._pelletPerDay();
+    d.addEventListener("closed", () => {
+      this._pelletChartsDlg = undefined;
+    });
+    document.body.appendChild(d);
+    this._pelletChartsDlg = d;
+  }
+
   private _openPellet(): void {
     if (this._pelletDlg || !this._pelletEnabled()) return;
     const d = document.createElement("impianto-pellet-dialog") as ImpiantoPelletDialog;
@@ -1120,6 +1144,12 @@ export class ImpiantoOverviewCard extends LitElement {
           <polygon points="22,72 60,120 28,176" fill="rgba(148,163,184,0.05)" /><polygon points="60,120 140,128 100,190 28,176" fill="rgba(148,163,184,0.08)" />
           <polygon points="140,128 176,72 176,180 100,190" fill="rgba(148,163,184,0.05)" /><polygon points="28,176 100,190 70,222 24,222" fill="rgba(148,163,184,0.06)" />
           <g transform="translate(26 74) scale(1.46)">${hopperShape(kg, "pf-clip")}</g>
+          <g class="chartbtn" role="button" tabindex="0" aria-label="Grafici del pellet" @click=${(ev: Event) => { ev.stopPropagation(); this._openPelletCharts(); }}
+            @keydown=${(ev: KeyboardEvent) => { if (ev.key === "Enter" || ev.key === " ") { ev.stopPropagation(); ev.preventDefault(); this._openPelletCharts(); } }}>
+            <rect x="114" y="69" width="68" height="24" rx="12" />
+            <polyline points="122,86 128,79 133,83 140,75" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <text x="144" y="85" font-size="11" font-weight="700">Grafici</text>
+          </g>
           <text x="98" y="152" font-size="28" font-weight="700" fill="#f1f5f9">${kg === null ? "–" : fmt(kg, 0)}<tspan font-size="13" font-weight="500" fill="#94a3b8"> kg</tspan></text>
           <text x="84" y="172" font-size="13" fill="#94a3b8">${days === null ? "" : `${days < 10 ? fmt(days, 1) : fmt(days, 0)} giorni`}</text>
           <text x="72" y="192" font-size="10.5" fill="#94a3b8">pellet</text>
@@ -1939,8 +1969,27 @@ export class ImpiantoOverviewCard extends LitElement {
       cursor: pointer;
       outline: none;
     }
-    .polyfig .cabinet:hover rect:first-child,
-    .polyfig .cabinet:focus-visible rect:first-child {
+    .polyfig .chartbtn {
+      cursor: pointer;
+    }
+    .polyfig .chartbtn rect {
+      fill: #334155;
+      stroke: #64748b;
+      stroke-width: 1;
+    }
+    .polyfig .chartbtn polyline {
+      stroke: #fbbf24;
+    }
+    .polyfig .chartbtn text {
+      fill: #e2e8f0;
+    }
+    .polyfig .chartbtn:hover rect,
+    .polyfig .chartbtn:focus-visible rect {
+      fill: #475569;
+      stroke: #fbbf24;
+    }
+    .polyfig .cabinet:hover > rect:first-child,
+    .polyfig .cabinet:focus-visible > rect:first-child {
       stroke: var(--primary-color, #03a9f4);
     }
     .polyfig .flicker {

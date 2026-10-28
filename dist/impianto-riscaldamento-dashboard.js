@@ -3590,8 +3590,944 @@ __decorateClass([
 ], ImpiantoPelletDialog.prototype, "_done", 2);
 if (!customElements.get(TAG5)) customElements.define(TAG5, ImpiantoPelletDialog);
 
+// src/pellet-charts-logic.ts
+var PELLET_RANGES = [
+  { id: "24h", label: "24 ore", hours: 24, bucket: "hour" },
+  { id: "3d", label: "3 giorni", hours: 72, bucket: "day" },
+  { id: "7d", label: "7 giorni", hours: 168, bucket: "day" },
+  { id: "14d", label: "14 giorni", hours: 336, bucket: "day" },
+  { id: "30d", label: "30 giorni", hours: 720, bucket: "day" },
+  { id: "90d", label: "90 giorni", hours: 2160, bucket: "day" }
+];
+var MIN = 6e4;
+var HOUR = 36e5;
+var DAY = 864e5;
+function rangeStart(range, now) {
+  const d3 = new Date(now);
+  if (range.bucket === "hour") {
+    d3.setMinutes(0, 0, 0);
+    return d3.getTime() - (range.hours - 1) * HOUR;
+  }
+  d3.setHours(0, 0, 0, 0);
+  const days = Math.round(range.hours / 24);
+  const start = new Date(d3);
+  start.setDate(start.getDate() - (days - 1));
+  return start.getTime();
+}
+function valueAt(pts, t3) {
+  if (pts.length === 0) return null;
+  let lo = 0;
+  let hi = pts.length - 1;
+  if (t3 < pts[0].t) return pts[0].v;
+  while (lo < hi) {
+    const mid = lo + hi + 1 >> 1;
+    if (pts[mid].t <= t3) lo = mid;
+    else hi = mid - 1;
+  }
+  return pts[lo].v;
+}
+function classifyDelta(delta, after, bagKg, capacityKg = 120) {
+  if (delta > 0 && bagKg > 0) {
+    const bags = Math.round(delta / bagKg * 2) / 2;
+    if (bags >= 0.5 && Math.abs(delta - bags * bagKg) <= 0.8) return { kind: "carico", bags };
+    if (after >= capacityKg - 0.5 && delta >= 1) return { kind: "carico", bags: Math.round(delta / bagKg * 2) / 2 || 0.5 };
+  }
+  return { kind: "misura", bags: null };
+}
+var SMALL = 0.12;
+var BIG = 0.35;
+function detectEvents(rem, tot, t0, t1, bagKg) {
+  if (rem.length === 0 || tot.length === 0 || t1 <= t0) return [];
+  const n5 = Math.floor((t1 - t0) / MIN) + 1;
+  const r6 = new Array(n5).fill(null);
+  const c4 = new Array(n5).fill(null);
+  let ri = 0;
+  let ci = 0;
+  let rv = null;
+  let cv = null;
+  for (let i6 = 0; i6 < n5; i6++) {
+    const t3 = t0 + i6 * MIN;
+    while (ri < rem.length && rem[ri].t <= t3) rv = rem[ri++].v;
+    while (ci < tot.length && tot[ci].t <= t3) cv = tot[ci++].v;
+    r6[i6] = rv;
+    c4[i6] = cv;
+  }
+  const d3 = new Array(n5).fill(0);
+  for (let i6 = 1; i6 < n5; i6++) {
+    if (r6[i6] !== null && r6[i6 - 1] !== null && c4[i6] !== null && c4[i6 - 1] !== null) d3[i6] = r6[i6] - r6[i6 - 1] + (c4[i6] - c4[i6 - 1]);
+  }
+  const events = [];
+  let prev = null;
+  let i5 = 1;
+  while (i5 < n5) {
+    if (Math.abs(d3[i5]) <= SMALL) {
+      i5++;
+      continue;
+    }
+    let j = i5;
+    let sum = 0;
+    let at = i5;
+    while (j < n5 && Math.abs(d3[j]) > SMALL) {
+      sum += d3[j];
+      if (Math.abs(d3[j]) > Math.abs(d3[at])) at = j;
+      j++;
+    }
+    if (Math.abs(sum) > BIG) {
+      const before = r6[i5 - 1];
+      const after = r6[j - 1];
+      const t3 = t0 + at * MIN;
+      const cls = classifyDelta(sum, after, bagKg);
+      const totNow = c4[at];
+      let used = null;
+      let real = null;
+      let ratio = null;
+      if (cls.kind === "misura" && prev) {
+        used = totNow - prev.tot;
+        real = prev.after - after;
+        ratio = used >= 2 && real > 0 ? real / used : null;
+      }
+      events.push({ t: t3, kind: cls.kind, before, after, delta: sum, bags: cls.bags, used, real, ratio });
+      prev = { t: t3, after, tot: totNow };
+    }
+    i5 = j;
+  }
+  return events;
+}
+function consumptionBuckets(tot, t0, t1, bucket) {
+  const out = [];
+  if (tot.length === 0) return out;
+  let b0 = t0;
+  while (b0 < t1) {
+    let b1;
+    if (bucket === "hour") b1 = b0 + HOUR;
+    else {
+      const d3 = new Date(b0);
+      d3.setDate(d3.getDate() + 1);
+      d3.setHours(0, 0, 0, 0);
+      b1 = d3.getTime();
+    }
+    const end = Math.min(b1, t1);
+    const a3 = valueAt(tot, b0);
+    const b3 = valueAt(tot, end);
+    out.push({ t0: b0, t1: b1, kg: a3 === null || b3 === null ? 0 : Math.max(0, b3 - a3), partial: b1 > t1 });
+    b0 = b1;
+  }
+  return out;
+}
+function summarizePeriod(tot, events, t0, t1) {
+  const first = tot.length ? Math.max(t0, tot[0].t) : t1;
+  const days = Math.max(0, (t1 - first) / DAY);
+  const a3 = valueAt(tot, first);
+  const b3 = valueAt(tot, t1);
+  const consumed = a3 === null || b3 === null ? 0 : Math.max(0, b3 - a3);
+  const loadedEv = events.filter((e5) => e5.kind === "carico");
+  return {
+    consumed,
+    perDay: days >= 0.5 ? consumed / days : null,
+    loaded: loadedEv.reduce((s4, e5) => s4 + e5.delta, 0),
+    bags: loadedEv.reduce((s4, e5) => s4 + (e5.bags ?? 0), 0),
+    days
+  };
+}
+function runOut(remKg, perDay, now) {
+  if (remKg === null || perDay === null || perDay <= 0.05) return null;
+  const days = remKg / perDay;
+  return { days, date: now + days * DAY };
+}
+function calibration(events, currentFactor) {
+  const ok = events.filter((e5) => e5.kind === "misura" && e5.ratio !== null && e5.used !== null && e5.real !== null);
+  if (ok.length === 0) return null;
+  const used = ok.reduce((s4, e5) => s4 + e5.used, 0);
+  const real = ok.reduce((s4, e5) => s4 + e5.real, 0);
+  if (used <= 0) return null;
+  const ratio = real / used;
+  return { ratio, usedKg: used, readings: ok.length, suggested: currentFactor !== null && currentFactor > 0 ? Math.round(currentFactor * ratio * 100) / 100 : null };
+}
+function statsToPoints(rows, field) {
+  const out = [];
+  const ms = (v2) => {
+    if (v2 === void 0) return null;
+    if (typeof v2 === "number") return v2 < 1e11 ? v2 * 1e3 : v2;
+    const x2 = Date.parse(v2);
+    return Number.isNaN(x2) ? null : x2;
+  };
+  for (const r6 of rows ?? []) {
+    const v2 = r6[field];
+    const s4 = ms(r6.start);
+    const e5 = ms(r6.end);
+    if (typeof v2 === "number" && Number.isFinite(v2) && s4 !== null) out.push({ t: field === "state" && e5 !== null ? e5 - 1 : s4 + 30 * MIN, v: v2 });
+  }
+  return out.sort((a3, b3) => a3.t - b3.t);
+}
+function mergeSeries(stats, history) {
+  if (history.length === 0) return stats;
+  const from = history[0].t;
+  return stats.filter((p3) => p3.t < from).concat(history);
+}
+
+// src/pellet-charts-dialog.ts
+var TAG6 = "impianto-pellet-charts-dialog";
+var PLOT_H2 = 230;
+var BARS_H = 150;
+var BT = 24;
+var ML = 40;
+var MR = 12;
+var MT2 = 24;
+var MB = 22;
+var CAPACITY = 120;
+var DAYS2 = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+var MESI = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
+var fmt2 = (n5, d3 = 1) => n5.toFixed(d3).replace(".", ",");
+var sign = (n5, d3 = 1) => `${n5 > 0 ? "+" : n5 < 0 ? "\u2212" : ""}${fmt2(Math.abs(n5), d3)}`;
+var dayLabel = (t3) => {
+  const d3 = new Date(t3);
+  return `${DAYS2[d3.getDay()]} ${d3.getDate()} ${MESI[d3.getMonth()]}`;
+};
+var ImpiantoPelletChartsDialog = class extends i4 {
+  constructor() {
+    super(...arguments);
+    this.bagKg = 15;
+    this.perDay = 6;
+    this._range = "7d";
+    this._showLoads = true;
+    this._showReads = true;
+    this._showGap = true;
+    this._loading = false;
+    this._error = "";
+    this._w = 600;
+    this._data = null;
+    this._selT = null;
+    this._selBar = null;
+    this._seq = 0;
+    this._onKey = (e5) => {
+      if (e5.key === "Escape") this._close();
+    };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("keydown", this._onKey);
+    this._timer = window.setInterval(() => void this._load(), 12e4);
+    void this._load();
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener("keydown", this._onKey);
+    this._ro?.disconnect();
+    if (this._timer) window.clearInterval(this._timer);
+  }
+  firstUpdated() {
+    const wrap = this.renderRoot.querySelector(".chartwrap");
+    if (!wrap) return;
+    this._ro = new ResizeObserver((entries) => {
+      const w2 = Math.floor(entries[0]?.contentRect.width ?? 600);
+      if (w2 > 100 && Math.abs(w2 - this._w) > 2) this._w = w2;
+    });
+    this._ro.observe(wrap);
+  }
+  _close() {
+    this.dispatchEvent(new CustomEvent("closed"));
+    this.remove();
+  }
+  // ---- dati ----------------------------------------------------------------
+  _ws(msg) {
+    const cw = this.hass.callWS;
+    return cw.call(this.hass, msg);
+  }
+  async _load() {
+    if (!this.hass || !this.ids) return;
+    const seq = ++this._seq;
+    const range = PELLET_RANGES.find((r6) => r6.id === this._range) ?? PELLET_RANGES[2];
+    const now = Date.now();
+    const t0 = rangeStart(range, now);
+    const { remaining, total } = this.ids;
+    this._loading = this._data === null;
+    try {
+      const hist = await this._ws({
+        type: "history/history_during_period",
+        start_time: new Date(t0).toISOString(),
+        end_time: new Date(now).toISOString(),
+        entity_ids: [remaining, total],
+        include_start_time_state: true,
+        significant_changes_only: false,
+        minimal_response: true,
+        no_attributes: true
+      });
+      if (seq !== this._seq) return;
+      const remH = parseNumeric(hist[remaining]);
+      const totH = parseNumeric(hist[total]);
+      const firstH = Math.min(remH[0]?.t ?? now, totH[0]?.t ?? now);
+      const partial = firstH > t0 + 3 * 36e5;
+      let rem = remH;
+      let tot = totH;
+      if (partial) {
+        try {
+          const st = await this._ws({
+            type: "recorder/statistics_during_period",
+            start_time: new Date(t0).toISOString(),
+            end_time: new Date(firstH).toISOString(),
+            statistic_ids: [remaining, total],
+            period: "hour",
+            types: ["mean", "state"]
+          });
+          rem = mergeSeries(statsToPoints(st[remaining], "mean"), remH);
+          tot = mergeSeries(statsToPoints(st[total], "state"), totH);
+        } catch {
+        }
+      }
+      if (seq !== this._seq) return;
+      const fineFrom = Math.max(t0, Math.min(remH[0]?.t ?? now, totH[0]?.t ?? now));
+      const events = detectEvents(remH, totH, fineFrom, now, this.bagKg);
+      this._data = { t0, t1: now, rem, tot, events, buckets: consumptionBuckets(tot, t0, now, range.bucket), bucket: range.bucket, partial };
+      this._error = "";
+      if (this._selT !== null && (this._selT < t0 || this._selT > now)) this._selT = null;
+    } catch (e5) {
+      this._error = `Non riesco a leggere lo storico: ${e5?.message ?? e5}`;
+    } finally {
+      if (seq === this._seq) this._loading = false;
+    }
+  }
+  _setRange(id) {
+    if (id === this._range) return;
+    this._range = id;
+    this._selT = null;
+    this._selBar = null;
+    this._data = null;
+    void this._load();
+  }
+  // ---- grafico dei chili rimasti ----------------------------------------------
+  _renderLevel(d3) {
+    const W = this._w;
+    const pw = Math.max(50, W - ML - MR);
+    const axis = { min: 0, max: CAPACITY, ticks: [0, 30, 60, 90, 120] };
+    const x2 = (t3) => ML + (t3 - d3.t0) / Math.max(1, d3.t1 - d3.t0) * pw;
+    const y3 = (v2) => MT2 + (1 - (v2 - axis.min) / (axis.max - axis.min)) * PLOT_H2;
+    const inside = d3.rem.filter((p3) => p3.t >= d3.t0 && p3.t <= d3.t1);
+    const stride = Math.max(1, Math.ceil(inside.length / 1400));
+    const pts = inside.filter((_2, i5) => i5 % stride === 0);
+    if (inside.length && pts[pts.length - 1] !== inside[inside.length - 1]) pts.push(inside[inside.length - 1]);
+    if (pts.length) pts.push({ t: d3.t1, v: pts[pts.length - 1].v });
+    const line = pts.map((p3, i5) => `${i5 ? "L" : "M"}${x2(p3.t).toFixed(1)} ${y3(p3.v).toFixed(1)}`).join("");
+    const area = pts.length ? `${line}L${x2(pts[pts.length - 1].t).toFixed(1)} ${y3(0)}L${x2(pts[0].t).toFixed(1)} ${y3(0)}Z` : "";
+    const ticks = this._ticks(d3, Math.max(3, Math.floor(pw / 90)));
+    const sel = this._selT;
+    const selV = sel !== null ? valueAt(d3.rem, sel) : null;
+    const ev = d3.events.filter((e5) => e5.t >= d3.t0 && e5.t <= d3.t1);
+    const H3 = MT2 + PLOT_H2 + MB;
+    return w`
+      <svg width=${W} height=${H3} viewBox="0 0 ${W} ${H3}" role="img" aria-label="Chili di pellet rimasti nel serbatoio"
+        @pointerdown=${(e5) => this._pick(e5, d3, x2)} @pointermove=${(e5) => e5.pointerType === "mouse" && this._pick(e5, d3, x2)}>
+        <defs><linearGradient id="pcg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9922b" stop-opacity="0.45" /><stop offset="1" stop-color="#d9922b" stop-opacity="0.04" /></linearGradient></defs>
+        ${axis.ticks.map((v2) => w`<line class="grid" x1=${ML} x2=${W - MR} y1=${y3(v2)} y2=${y3(v2)} /><text class="ax" x=${ML - 6} y=${y3(v2) + 4} text-anchor="end">${v2}</text>`)}
+        <text class="ax" x="4" y="12">kg</text>
+        ${ticks.map((tk) => w`<line class=${tk.major ? "vgrid major" : "vgrid"} x1=${x2(tk.t)} x2=${x2(tk.t)} y1=${MT2} y2=${MT2 + PLOT_H2} /><text class="ax" x=${x2(tk.t)} y=${MT2 + PLOT_H2 + 15} text-anchor="middle">${tk.label}</text>`)}
+        <line class="cap" x1=${ML} x2=${W - MR} y1=${y3(CAPACITY)} y2=${y3(CAPACITY)} />
+        ${area ? w`<path d=${area} fill="url(#pcg)" />` : A}
+        ${line ? w`<path class="line" d=${line} />` : A}
+        ${ev.map((e5) => this._marker(e5, x2, y3))}
+        ${sel !== null && selV !== null ? w`<line class="cursor" x1=${x2(sel)} x2=${x2(sel)} y1=${MT2} y2=${MT2 + PLOT_H2} /><circle class="dot" cx=${x2(sel)} cy=${y3(selV)} r="4.5" fill="#d9922b" />` : A}
+      </svg>
+    `;
+  }
+  /** Tacche dell'asse del tempo: con i periodi a giorni una per giorno (mezzanotte locale, anche col cambio dell'ora), altrimenti a ore. */
+  _ticks(d3, maxTicks) {
+    if (d3.bucket === "hour") return timeTicks(d3.t0, d3.t1, maxTicks);
+    const days = Math.ceil((d3.t1 - d3.t0) / 864e5);
+    const every = Math.max(1, Math.ceil(days / maxTicks));
+    const out = [];
+    const c4 = new Date(d3.t0);
+    c4.setHours(0, 0, 0, 0);
+    for (let i5 = 0; c4.getTime() <= d3.t1; i5++, c4.setDate(c4.getDate() + 1)) {
+      if (c4.getTime() < d3.t0 || i5 % every) continue;
+      out.push({ t: c4.getTime(), label: days > 14 ? `${c4.getDate()} ${MESI[c4.getMonth()]}` : `${DAYS2[c4.getDay()]} ${c4.getDate()}`, major: true });
+    }
+    return out;
+  }
+  _marker(e5, x2, y3) {
+    const cx = x2(e5.t);
+    if (e5.kind === "carico") {
+      if (!this._showLoads) return A;
+      return w`
+        <line class="evline load" x1=${cx} x2=${cx} y1=${y3(e5.before)} y2=${y3(e5.after)} />
+        <path class="load" d="M${cx} ${y3(e5.after) - 9}l6 10h-12z" />
+        <text class="evtxt load" x=${cx} y=${y3(e5.after) - 13} text-anchor="middle">${sign(e5.delta, 0)} kg</text>`;
+    }
+    if (!this._showReads) return A;
+    return w`
+      ${this._showGap ? w`<line class="evline gap" x1=${cx} x2=${cx} y1=${y3(e5.before)} y2=${y3(e5.after)} />` : A}
+      <circle class="read" cx=${cx} cy=${y3(e5.after)} r="5.5" />
+      <text class="evtxt read" x=${cx > this._w - 150 ? cx - 8 : cx + 8} text-anchor=${cx > this._w - 150 ? "end" : "start"} y=${y3(e5.after) + (e5.after < 20 ? -8 : 15)}>${fmt2(e5.after, 1)} kg${this._showGap ? b2` (${sign(e5.delta)})` : ""}</text>`;
+  }
+  _pick(ev, d3, x2) {
+    const svgEl = ev.currentTarget;
+    const r6 = svgEl.getBoundingClientRect();
+    const px = ev.clientX - r6.left;
+    const t3 = d3.t0 + (px - ML) / Math.max(1, this._w - ML - MR) * (d3.t1 - d3.t0);
+    const near = d3.events.find((e5) => Math.abs(x2(e5.t) - px) <= 14);
+    this._selT = Math.max(d3.t0, Math.min(d3.t1, near ? near.t : t3));
+  }
+  _renderTip(d3) {
+    if (this._selT === null) return A;
+    const t3 = this._selT;
+    const v2 = valueAt(d3.rem, t3);
+    const px = ML + (t3 - d3.t0) / Math.max(1, d3.t1 - d3.t0) * Math.max(50, this._w - ML - MR);
+    const near = d3.events.find((e5) => Math.abs(e5.t - t3) < Math.max(5 * 6e4, (d3.t1 - d3.t0) / 200));
+    const left = px > this._w / 2 ? { right: `${this._w - px + 8}px` } : { left: `${px + 8}px` };
+    const style = Object.entries(left).map(([k2, val]) => `${k2}:${val}`).join(";");
+    return b2`<div class="tip" style=${style}>
+      <div class="tt">${formatMoment(t3)}</div>
+      <div class="tr"><i style="background:#d9922b"></i><span class="tn">Rimasti</span><b>${v2 === null ? "\u2013" : `${fmt2(v2)} kg`}</b></div>
+      ${near ? near.kind === "carico" ? b2`<div class="tr ev load"><span class="tn">Caricamento</span><b>${sign(near.delta)} kg${near.bags ? ` \xB7 ${fmt2(near.bags, near.bags % 1 ? 1 : 0)} ${near.bags === 1 ? "sacco" : "sacchi"}` : ""}</b></div>
+              <div class="note">da ${fmt2(near.before)} a ${fmt2(near.after)} kg</div>` : b2`<div class="tr ev read"><span class="tn">Lettura del livello</span><b>${fmt2(near.after)} kg</b></div>
+              <div class="note">la stima diceva ${fmt2(near.before)} kg: scarto ${sign(near.delta)} kg${near.ratio !== null ? ` \xB7 consumo reale ${fmt2(near.ratio * 100, 0)} % della stima` : ""}</div>` : A}
+    </div>`;
+  }
+  // ---- consumo per giorno -------------------------------------------------------
+  _renderBars(d3) {
+    const W = this._w;
+    const pw = Math.max(50, W - ML - MR);
+    const bs = d3.buckets;
+    if (bs.length === 0) return b2`<p class="empty">Nessun dato di consumo nel periodo.</p>`;
+    const max = Math.max(0.5, ...bs.map((b3) => b3.kg));
+    const axis = niceAxis(0, max, 4);
+    const y3 = (v2) => BT + (1 - (v2 - axis.min) / (axis.max - axis.min)) * BARS_H;
+    const slot = pw / bs.length;
+    const bw = Math.max(3, Math.min(54, slot * 0.7));
+    const full = bs.filter((b3) => !b3.partial);
+    const avg = full.length ? full.reduce((s4, b3) => s4 + b3.kg, 0) / full.length : null;
+    const labels = bs.length <= 16;
+    const unit = d3.bucket === "hour" ? "kg/h" : "kg/giorno";
+    const H3 = BT + BARS_H + 22;
+    const every = Math.max(1, Math.ceil(bs.length / Math.max(3, Math.floor(pw / 60))));
+    const label = (b3) => d3.bucket === "hour" ? `${String(new Date(b3.t0).getHours()).padStart(2, "0")}:00` : `${DAYS2[new Date(b3.t0).getDay()]} ${new Date(b3.t0).getDate()}`;
+    return w`
+      <svg width=${W} height=${H3} viewBox="0 0 ${W} ${H3}" role="img" aria-label="Consumo stimato di pellet">
+        ${axis.ticks.map((v2) => w`<line class="grid" x1=${ML} x2=${W - MR} y1=${y3(v2)} y2=${y3(v2)} /><text class="ax" x=${ML - 6} y=${y3(v2) + 4} text-anchor="end">${fmt2(v2, v2 % 1 ? 1 : 0)}</text>`)}
+        <text class="ax" x="4" y="9">${unit}</text>
+        ${bs.map((b3, i5) => {
+      const cx = ML + slot * (i5 + 0.5);
+      const top = y3(b3.kg);
+      const on2 = this._selBar === i5;
+      return w`<g class="bar" @pointerdown=${() => this._selBar = on2 ? null : i5}>
+            <rect x=${ML + slot * i5} y=${BT} width=${slot} height=${BARS_H} fill="transparent" />
+            <rect class=${`b${b3.partial ? " partial" : ""}${on2 ? " on" : ""}`} x=${cx - bw / 2} y=${top} width=${bw} height=${Math.max(0.5, y3(0) - top)} rx="3" />
+            ${labels || on2 ? w`<text class="blab" x=${cx} y=${top - 4} text-anchor="middle">${fmt2(b3.kg, 1)}</text>` : A}
+            ${i5 % every === 0 ? w`<text class="ax" x=${cx} y=${BT + BARS_H + 15} text-anchor="middle">${label(b3)}</text>` : A}
+          </g>`;
+    })}
+        ${avg !== null ? w`<line class="avg" x1=${ML} x2=${W - MR} y1=${y3(avg)} y2=${y3(avg)} /><text class="avgt" x=${W - MR} y=${y3(avg) - 4} text-anchor="end">media ${fmt2(avg, 1)}</text>` : A}
+      </svg>
+    `;
+  }
+  _renderBarReadout(d3) {
+    if (this._selBar === null) return b2`<p class="hint">Tocca una colonna per leggere il consumo di quel ${d3.bucket === "hour" ? "ora" : "giorno"}.</p>`;
+    const b3 = d3.buckets[this._selBar];
+    if (!b3) return A;
+    const when = d3.bucket === "hour" ? `${dayLabel(b3.t0)}, ${String(new Date(b3.t0).getHours()).padStart(2, "0")}:00` : dayLabel(b3.t0);
+    return b2`<p class="hint"><b>${when}</b>: ${fmt2(b3.kg, 2)} kg stimati${b3.partial ? " (non ancora finito)" : ""}.</p>`;
+  }
+  // ---- riepilogo, eventi, taratura -----------------------------------------------
+  _tile(label, value, sub = "") {
+    return b2`<div class="tile"><div class="tl">${label}</div><div class="tv">${value}</div>${sub ? b2`<div class="ts">${sub}</div>` : A}</div>`;
+  }
+  _renderSummary(d3) {
+    const s4 = summarizePeriod(d3.tot, d3.events, d3.t0, d3.t1);
+    const remNow = d3.rem.length ? d3.rem[d3.rem.length - 1].v : null;
+    const rate = s4.perDay !== null && s4.days >= 3 ? s4.perDay : this.perDay;
+    const out = runOut(remNow, rate, d3.t1);
+    const dd = out ? new Date(out.date) : null;
+    return b2`<div class="tiles">
+      ${this._tile("Rimasti adesso", remNow === null ? "\u2013" : `${fmt2(remNow)} kg`, remNow === null ? "" : `${fmt2(remNow / CAPACITY * 100, 0)} % del serbatoio`)}
+      ${this._tile("Consumo medio", s4.perDay === null ? "\u2013" : `${fmt2(s4.perDay)} kg/giorno`, `stima su ${fmt2(s4.days, s4.days < 10 ? 1 : 0)} giorni`)}
+      ${this._tile("Consumati nel periodo", `${fmt2(s4.consumed)} kg`, "stima della scheda")}
+      ${this._tile("Caricati nel periodo", `${fmt2(s4.loaded, 0)} kg`, s4.bags ? `${fmt2(s4.bags, s4.bags % 1 ? 1 : 0)} ${s4.bags === 1 ? "sacco" : "sacchi"}` : "nessun caricamento")}
+      ${this._tile("Finisce", dd ? `${DAYS2[dd.getDay()]} ${dd.getDate()} ${MESI[dd.getMonth()]}` : "\u2013", out ? `tra ${fmt2(out.days, out.days < 10 ? 1 : 0)} giorni a ${fmt2(rate)} kg/giorno` : "")}
+    </div>`;
+  }
+  _renderEvents(d3) {
+    const ev = d3.events.filter((e5) => e5.t >= d3.t0).slice().reverse();
+    if (ev.length === 0) return b2`<p class="empty">Nel periodo non risultano caricamenti né letture del livello${d3.partial ? " nello storico dettagliato" : ""}.</p>`;
+    return b2`<table>
+      <thead><tr><th>Quando</th><th>Cosa</th><th>Chili</th><th>Dettaglio</th></tr></thead>
+      <tbody>
+        ${ev.map(
+      (e5) => b2`<tr class=${e5.kind === "carico" ? "load" : "read"} @click=${() => this._selT = e5.t}>
+            <td>${formatMoment(e5.t)}</td>
+            <td>${e5.kind === "carico" ? b2`<span class="badge load">Caricamento</span>` : b2`<span class="badge read">Lettura</span>`}</td>
+            <td>${e5.kind === "carico" ? `${sign(e5.delta)}` : fmt2(e5.after)} kg</td>
+            <td class="det">${e5.kind === "carico" ? `${e5.bags ? `${fmt2(e5.bags, e5.bags % 1 ? 1 : 0)} ${e5.bags === 1 ? "sacco" : "sacchi"}, ` : ""}da ${fmt2(e5.before)} a ${fmt2(e5.after)} kg` : `stima ${fmt2(e5.before)} kg, scarto ${sign(e5.delta)} kg${e5.ratio !== null ? `, consumo reale ${fmt2(e5.ratio * 100, 0)} % della stima` : ""}`}</td>
+          </tr>`
+    )}
+      </tbody>
+    </table>`;
+  }
+  _renderCalibration(d3) {
+    const f3 = this.ids.factor ? Number(this.hass.states[this.ids.factor]?.state) : NaN;
+    const c4 = calibration(d3.events, Number.isFinite(f3) ? f3 : null);
+    if (!c4) return b2`<p class="hint">Per controllare la taratura servono almeno due eventi con una lettura del livello in mezzo: la scheda confronta quanto pellet è sceso davvero con quanto aveva stimato.</p>`;
+    return b2`<div class="calib">
+      <b>Taratura della stima</b>
+      <p>Nelle ${c4.readings} ${c4.readings === 1 ? "lettura" : "letture"} del livello il pellet sceso davvero è stato il <b>${fmt2(c4.ratio * 100, 0)} %</b> di quello stimato (su ${fmt2(c4.usedKg, 0)} kg stimati).
+      ${c4.suggested !== null ? b2`Il fattore di taratura ${Number.isFinite(f3) ? `\xE8 ${fmt2(f3, 2)}` : ""}: con questo risultato diventerebbe <b>${fmt2(c4.suggested, 2)}</b>. Si cambia dalle preferenze, blocco «Pellet».` : A}
+      ${c4.usedKg < 15 ? " Sono pochi chili: aspetta altre letture prima di cambiare il fattore." : ""}</p>
+    </div>`;
+  }
+  // ---- pagina ---------------------------------------------------------------
+  render() {
+    const d3 = this._data;
+    return b2`
+      <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
+        <div class="panel" role="dialog" aria-modal="true" aria-label="Pellet: consumi e caricamenti">
+          <div class="head">
+            <div class="title">Pellet: consumi e caricamenti</div>
+            <button class="x" aria-label="Chiudi" @click=${() => this._close()}>✕</button>
+          </div>
+          <div class="body">
+            <div class="chips" role="group" aria-label="Periodo">
+              ${PELLET_RANGES.map((r6) => b2`<button class=${r6.id === this._range ? "chip on" : "chip"} aria-pressed=${r6.id === this._range} @click=${() => this._setRange(r6.id)}>${r6.label}</button>`)}
+            </div>
+            ${this._error ? b2`<div class="err">${this._error}</div>` : A}
+            ${d3 ? this._renderSummary(d3) : A}
+            <div class="sect">Chili rimasti nel serbatoio</div>
+            <div class="chips" role="group" aria-label="Cosa evidenziare">
+              <button class=${this._showLoads ? "chip on" : "chip"} aria-pressed=${this._showLoads} @click=${() => this._showLoads = !this._showLoads}><i class="load"></i>Caricamenti</button>
+              <button class=${this._showReads ? "chip on" : "chip"} aria-pressed=${this._showReads} @click=${() => this._showReads = !this._showReads}><i class="read"></i>Letture del livello</button>
+              <button class=${this._showGap ? "chip on" : "chip"} aria-pressed=${this._showGap} ?disabled=${!this._showReads} @click=${() => this._showGap = !this._showGap}><i class="gap"></i>Scarto della stima</button>
+            </div>
+            <div class="chartarea ${this._loading ? "loading" : ""}">
+              <div class="chartwrap">${d3 ? this._renderLevel(d3) : b2`<div style="height:${PLOT_H2 + MT2 + MB}px"></div>`}${d3 ? this._renderTip(d3) : A}</div>
+              ${this._loading ? b2`<div class="spin">Carico lo storico…</div>` : A}
+            </div>
+            ${d3?.partial ? b2`<p class="hint">Lo storico dettagliato non copre tutto il periodo (Home Assistant ne conserva pochi giorni): prima si vede solo un andamento approssimato, senza caricamenti né letture.</p>` : A}
+            ${d3 ? b2`<div class="sect">Consumo stimato ${d3.bucket === "hour" ? "per ora" : "per giorno"}</div>${this._renderBars(d3)}${this._renderBarReadout(d3)}` : A}
+            ${d3 ? b2`<div class="sect">Caricamenti e letture del livello</div>${this._renderEvents(d3)}${this._renderCalibration(d3)}` : A}
+            <p class="hint">Il consumo è una stima della scheda (potenza, stand-by e accensioni); la lettura del livello la corregge e si vede come scarto.</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  static {
+    this.styles = i`
+    :host {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      color: var(--primary-text-color, #212121);
+      font-family: var(--paper-font-body1_-_font-family, Roboto, Helvetica, Arial, sans-serif);
+    }
+    .backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .panel {
+      background: var(--card-background-color, #fff);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 940px;
+      max-height: min(94vh, 900px);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+    }
+    .title {
+      font-size: 19px;
+      font-weight: 700;
+    }
+    .x {
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+    .x:hover {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.15));
+    }
+    .body {
+      overflow-y: auto;
+      padding: 10px 18px 18px;
+    }
+    .sect {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--secondary-text-color, #727272);
+      margin: 16px 0 4px;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 6px 0 8px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 36px;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.4));
+      background: none;
+      color: var(--secondary-text-color, #727272);
+      border-radius: 999px;
+      padding: 6px 13px;
+      font-size: 13.5px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .chip.on {
+      color: var(--primary-text-color, #212121);
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      border-color: var(--secondary-text-color, #727272);
+    }
+    .chip:disabled {
+      opacity: 0.4;
+    }
+    .chip i {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      border: 2px solid;
+      box-sizing: border-box;
+      display: inline-block;
+    }
+    i.load {
+      border-color: #22c55e;
+      background: #22c55e;
+      border-radius: 2px;
+    }
+    i.read {
+      border-color: #3b82f6;
+      background: #3b82f6;
+    }
+    i.gap {
+      border-color: #f97316;
+      background: #f97316;
+      border-radius: 1px;
+      width: 4px;
+    }
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      margin: 6px 0 4px;
+    }
+    .tile {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      border-radius: 12px;
+      padding: 8px 12px;
+    }
+    .tl {
+      font-size: 12px;
+      color: var(--secondary-text-color, #727272);
+    }
+    .tv {
+      font-size: 19px;
+      font-weight: 700;
+      margin-top: 1px;
+    }
+    .ts {
+      font-size: 11.5px;
+      color: var(--secondary-text-color, #727272);
+    }
+    .chartarea {
+      position: relative;
+    }
+    .chartarea.loading svg {
+      opacity: 0.35;
+    }
+    .spin {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--secondary-text-color, #727272);
+    }
+    .chartwrap {
+      position: relative;
+      width: 100%;
+    }
+    svg {
+      display: block;
+      touch-action: pan-y;
+      user-select: none;
+    }
+    .grid {
+      stroke: var(--divider-color, rgba(127, 127, 127, 0.3));
+      stroke-width: 1;
+    }
+    .vgrid {
+      stroke: var(--divider-color, rgba(127, 127, 127, 0.2));
+      stroke-width: 1;
+      stroke-dasharray: 2 4;
+    }
+    .vgrid.major {
+      stroke-dasharray: none;
+      stroke: var(--secondary-text-color, rgba(127, 127, 127, 0.5));
+    }
+    .cap {
+      stroke: #22c55e;
+      stroke-width: 1;
+      stroke-dasharray: 6 4;
+      opacity: 0.55;
+    }
+    .ax {
+      font-size: 11.5px;
+      fill: var(--secondary-text-color, #727272);
+    }
+    .line {
+      fill: none;
+      stroke: #d9922b;
+      stroke-width: 2.4;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+    .evline {
+      stroke-width: 2.4;
+      stroke-dasharray: 4 3;
+    }
+    .evline.load {
+      stroke: #22c55e;
+    }
+    .evline.gap {
+      stroke: #f97316;
+      stroke-dasharray: none;
+      stroke-width: 3.2;
+      opacity: 0.85;
+    }
+    path.load {
+      fill: #22c55e;
+    }
+    circle.read {
+      fill: #3b82f6;
+      stroke: var(--card-background-color, #fff);
+      stroke-width: 2;
+    }
+    .evtxt {
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+    .evtxt.load {
+      fill: #16a34a;
+    }
+    .evtxt.read {
+      fill: #2563eb;
+    }
+    .cursor {
+      stroke: var(--primary-text-color, #212121);
+      stroke-width: 1;
+      opacity: 0.6;
+    }
+    .dot {
+      stroke: var(--card-background-color, #fff);
+      stroke-width: 2;
+    }
+    .tip {
+      position: absolute;
+      top: 6px;
+      z-index: 2;
+      pointer-events: none;
+      min-width: 200px;
+      max-width: 300px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    }
+    .tt {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .tr {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      line-height: 1.55;
+    }
+    .tr i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: none;
+      display: inline-block;
+    }
+    .tr .tn {
+      flex: 1;
+      color: var(--secondary-text-color, #727272);
+    }
+    .tr.ev.load b {
+      color: #16a34a;
+    }
+    .tr.ev.read b {
+      color: #2563eb;
+    }
+    .note {
+      font-size: 11.5px;
+      color: var(--secondary-text-color, #727272);
+      margin-top: 2px;
+    }
+    rect.b {
+      fill: #d9922b;
+      opacity: 0.85;
+    }
+    rect.b.partial {
+      opacity: 0.45;
+    }
+    rect.b.on {
+      fill: #f59e0b;
+      opacity: 1;
+    }
+    .blab {
+      font-size: 11px;
+      fill: var(--primary-text-color, #212121);
+    }
+    .avg {
+      stroke: var(--secondary-text-color, #727272);
+      stroke-width: 1.5;
+      stroke-dasharray: 5 4;
+    }
+    .avgt {
+      font-size: 11.5px;
+      fill: var(--secondary-text-color, #727272);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+    th {
+      text-align: left;
+      font-weight: 600;
+      color: var(--secondary-text-color, #727272);
+      font-size: 12px;
+      padding: 4px 6px;
+    }
+    td {
+      padding: 7px 6px;
+      border-top: 1px solid var(--divider-color, rgba(127, 127, 127, 0.2));
+      vertical-align: top;
+    }
+    tr:hover td {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.08));
+    }
+    td.det {
+      color: var(--secondary-text-color, #727272);
+      font-size: 12.5px;
+    }
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .badge.load {
+      background: #16a34a;
+    }
+    .badge.read {
+      background: #2563eb;
+    }
+    .calib {
+      margin-top: 10px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      font-size: 13.5px;
+    }
+    .calib p {
+      margin: 4px 0 0;
+    }
+    .empty,
+    .hint {
+      color: var(--secondary-text-color, #727272);
+      font-size: 13px;
+      margin: 8px 0 0;
+    }
+    .err {
+      color: #ef4444;
+      font-size: 13.5px;
+      margin: 6px 0;
+    }
+    @media (max-width: 560px) {
+      .body {
+        padding: 8px 10px 14px;
+      }
+      td.det {
+        display: none;
+      }
+      th:nth-child(4) {
+        display: none;
+      }
+    }
+  `;
+  }
+};
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoPelletChartsDialog.prototype, "hass", 2);
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoPelletChartsDialog.prototype, "ids", 2);
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoPelletChartsDialog.prototype, "bagKg", 2);
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoPelletChartsDialog.prototype, "perDay", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletChartsDialog.prototype, "_range", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletChartsDialog.prototype, "_showLoads", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletChartsDialog.prototype, "_showReads", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletChartsDialog.prototype, "_showGap", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletChartsDialog.prototype, "_loading", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletChartsDialog.prototype, "_error", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletChartsDialog.prototype, "_w", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletChartsDialog.prototype, "_data", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletChartsDialog.prototype, "_selT", 2);
+__decorateClass([
+  r5()
+], ImpiantoPelletChartsDialog.prototype, "_selBar", 2);
+if (!customElements.get(TAG6)) customElements.define(TAG6, ImpiantoPelletChartsDialog);
+
 // src/card-dialog.ts
-var TAG6 = "impianto-card-dialog";
+var TAG7 = "impianto-card-dialog";
 var ImpiantoCardDialog = class extends i4 {
   constructor() {
     super(...arguments);
@@ -3708,10 +4644,10 @@ __decorateClass([
 __decorateClass([
   n4({ type: Boolean })
 ], ImpiantoCardDialog.prototype, "wide", 2);
-if (!customElements.get(TAG6)) customElements.define(TAG6, ImpiantoCardDialog);
+if (!customElements.get(TAG7)) customElements.define(TAG7, ImpiantoCardDialog);
 
 // src/confirm-dialog.ts
-var TAG7 = "impianto-confirm-dialog";
+var TAG8 = "impianto-confirm-dialog";
 var ImpiantoConfirmDialog = class extends i4 {
   constructor() {
     super(...arguments);
@@ -3845,7 +4781,7 @@ __decorateClass([
 __decorateClass([
   n4({ type: Boolean })
 ], ImpiantoConfirmDialog.prototype, "danger", 2);
-if (!customElements.get(TAG7)) customElements.define(TAG7, ImpiantoConfirmDialog);
+if (!customElements.get(TAG8)) customElements.define(TAG8, ImpiantoConfirmDialog);
 
 // src/plant-logic.ts
 var DEFAULT_MODEL = {
@@ -3908,7 +4844,7 @@ function tempColor(t3) {
   }
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
-function fmt2(n5, decimals2 = 0) {
+function fmt3(n5, decimals2 = 0) {
   if (n5 === null || n5 === void 0 || Number.isNaN(n5)) return "\u2013";
   return n5.toLocaleString("it-IT", { minimumFractionDigits: decimals2, maximumFractionDigits: decimals2 });
 }
@@ -4027,13 +4963,13 @@ function stoveLine(i5) {
     };
   }
   if (raw === "ECO STOP") {
-    const dove = i5.setBoiler !== null ? ` Riparte quando il puffer scende a circa ${fmt2(i5.setBoiler - RESTART_BELOW_SETPOINT)} \xB0C${i5.puffer !== null ? ` (ora ${fmt2(i5.puffer)} \xB0C)` : ""}.` : "";
+    const dove = i5.setBoiler !== null ? ` Riparte quando il puffer scende a circa ${fmt3(i5.setBoiler - RESTART_BELOW_SETPOINT)} \xB0C${i5.puffer !== null ? ` (ora ${fmt3(i5.puffer)} \xB0C)` : ""}.` : "";
     return { icon: "mdi:pause-circle-outline", text: `Caldaia ferma in ECO STOP: l'acqua ha raggiunto la temperatura.${dove}`, tone: "info" };
   }
   if (look === "work")
     return {
       icon: "mdi:fire",
-      text: `Caldaia in lavoro${i5.power !== null ? ` al ${fmt2(i5.power)} %` : ""}${i5.setWater !== null ? `: scalda l'acqua fino a ${fmt2(i5.setWater)} \xB0C, poi va in ECO STOP` : ""}.`,
+      text: `Caldaia in lavoro${i5.power !== null ? ` al ${fmt3(i5.power)} %` : ""}${i5.setWater !== null ? `: scalda l'acqua fino a ${fmt3(i5.setWater)} \xB0C, poi va in ECO STOP` : ""}.`,
       tone: "ok"
     };
   if (look === "start" || look === "wait")
@@ -4059,8 +4995,8 @@ function whyOffLine(i5) {
   return null;
 }
 function pumpLine(i5) {
-  const p3 = i5.puffer !== null ? `${fmt2(i5.puffer)} \xB0C` : "\u2013";
-  const b3 = i5.boilerTop !== null ? `${fmt2(i5.boilerTop)} \xB0C` : "\u2013";
+  const p3 = i5.puffer !== null ? `${fmt3(i5.puffer)} \xB0C` : "\u2013";
+  const b3 = i5.boilerTop !== null ? `${fmt3(i5.boilerTop)} \xB0C` : "\u2013";
   if (i5.integrationPump === "running")
     return { icon: "mdi:pump", text: `Pompa di integrazione accesa: porta il calore del puffer (${p3}) al boiler (${b3}).`, tone: "ok" };
   if (i5.integrationPump === "blocked")
@@ -4071,20 +5007,20 @@ function solarLine(i5) {
   if (i5.collectorPumpOn === true)
     return {
       icon: "mdi:solar-power",
-      text: `Il solare sta scaldando il boiler${i5.collector !== null ? ` (collettore a ${fmt2(i5.collector)} \xB0C)` : ""}.`,
+      text: `Il solare sta scaldando il boiler${i5.collector !== null ? ` (collettore a ${fmt3(i5.collector)} \xB0C)` : ""}.`,
       tone: "ok"
     };
   if (i5.collectorPumpOn === false && i5.collector !== null)
-    return { icon: "mdi:weather-sunny-off", text: `Il solare \xE8 fermo (collettore a ${fmt2(i5.collector)} \xB0C).`, tone: "info" };
+    return { icon: "mdi:weather-sunny-off", text: `Il solare \xE8 fermo (collettore a ${fmt3(i5.collector)} \xB0C).`, tone: "info" };
   return null;
 }
 function sunLine(i5) {
   if (i5.sunElevation !== null && i5.sunElevation > 0 && i5.sunAboveHorizon === false) {
-    const h3 = i5.horizonElev !== null ? ` (da quella parte il terreno arriva a ${fmt2(i5.horizonElev)}\xB0)` : "";
+    const h3 = i5.horizonElev !== null ? ` (da quella parte il terreno arriva a ${fmt3(i5.horizonElev)}\xB0)` : "";
     return { icon: "mdi:image-filter-hdr", text: `Il sole \xE8 dietro le colline${h3}: niente luce diretta sul collettore.`, tone: "info" };
   }
   if (i5.allskyOk !== true || i5.sunFree === null || i5.allskyCloud === null) return null;
-  const c4 = `${fmt2(i5.allskyCloud)} %`;
+  const c4 = `${fmt3(i5.allskyCloud)} %`;
   if (i5.sunFree && i5.allskyCloud >= 50)
     return {
       icon: "mdi:weather-partly-cloudy",
@@ -4124,7 +5060,7 @@ function summarize(i5) {
   for (const l3 of [whyOffLine(i5), pumpLine(i5), solarLine(i5), sunLine(i5), awayLine(i5)]) if (l3) lines.push(l3);
   if (i5.etaMinutes !== null) {
     lines.push(
-      i5.etaMinutes > 0 ? { icon: "mdi:water-boiler", text: `L'acqua calda sar\xE0 pronta tra circa ${fmt2(i5.etaMinutes)} min.`, tone: "info" } : { icon: "mdi:water-boiler", text: "L'acqua calda \xE8 gi\xE0 a temperatura d'uso.", tone: "ok" }
+      i5.etaMinutes > 0 ? { icon: "mdi:water-boiler", text: `L'acqua calda sar\xE0 pronta tra circa ${fmt3(i5.etaMinutes)} min.`, tone: "info" } : { icon: "mdi:water-boiler", text: "L'acqua calda \xE8 gi\xE0 a temperatura d'uso.", tone: "ok" }
     );
   }
   return lines;
@@ -4349,6 +5285,10 @@ var ImpiantoOverviewCard = class extends i4 {
     if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
     if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
     if (changed.has("hass") && this._pelletDlg) this._pelletDlg.info = this._pelletInfo();
+    if (changed.has("hass") && this._pelletChartsDlg) {
+      this._pelletChartsDlg.hass = this.hass;
+      this._pelletChartsDlg.perDay = this._pelletPerDay();
+    }
     if (this._config?.layout === "split") this._observeFit();
     if (this._config?.stufa && this._sections.stufa && this.hass && !this._stufaLoading && Date.now() - this._stufaLoadedAt > 5 * 6e4) void this._loadStufa();
   }
@@ -4367,6 +5307,8 @@ var ImpiantoOverviewCard = class extends i4 {
     this._scheduleDlg?.remove();
     this._scheduleDlg = void 0;
     this._pelletDlg?.remove();
+    this._pelletChartsDlg?.remove();
+    this._pelletChartsDlg = void 0;
     this._pelletDlg = void 0;
     this._fitRO?.disconnect();
     this._fitTargets = [];
@@ -4535,8 +5477,8 @@ var ImpiantoOverviewCard = class extends i4 {
           <path d="M440 ${short ? 236 : 268} H520 V315 H575" class="pipe warm thin" />
           <path d="M685 215 H700" class="pipe hot thin" />
           <path d="M685 300 H700" class="pipe warm thin" />
-          <text x="452" y="198" class="tv">${integIn !== null ? `${fmt2(integIn, 1)} \xB0C` : ""}</text>
-          <text x="452" y=${short ? 228 : 260} class="tv">${integOut !== null ? `${fmt2(integOut, 1)} \xB0C` : ""}</text>
+          <text x="452" y="198" class="tv">${integIn !== null ? `${fmt3(integIn, 1)} \xB0C` : ""}</text>
+          <text x="452" y=${short ? 228 : 260} class="tv">${integOut !== null ? `${fmt3(integOut, 1)} \xB0C` : ""}</text>
         </g>
 
         <!-- boiler -->
@@ -4559,7 +5501,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <!-- scheda centrale -->
         <rect x="236" y=${338 - d1} width="168" height="176" rx="22" class="pill big" />
         <text x="320" y=${372 - d1} class="t2 s14" text-anchor="middle">Uscita acqua calda</text>
-        <text x="320" y=${434 - d1} class="t1 b" font-size="50" text-anchor="middle">${fmt2(outlet, 1)}<tspan font-size="24" dy="-16"> °C</tspan></text>
+        <text x="320" y=${434 - d1} class="t1 b" font-size="50" text-anchor="middle">${fmt3(outlet, 1)}<tspan font-size="24" dy="-16"> °C</tspan></text>
         <line x1="262" y1=${456 - d1} x2="378" y2=${456 - d1} class="sep" />
         <text x="320" y=${490 - d1} class="t1 b" font-size="22" text-anchor="middle">${showers === null ? "(\u2013)" : `(\u2248 ${showers} ${showers === 1 ? "doccia" : "docce"})`}</text>
 
@@ -4568,13 +5510,13 @@ var ImpiantoOverviewCard = class extends i4 {
         <line x1="214" y1="168" x2="150" y2="168" class="lead" />
         <rect x="14" y="132" width="136" height="72" rx="14" class="card hi" />
         <text x="82" y="156" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Alto (S3)</text>
-        <text x="82" y="190" class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt2(top, 1)} °C</text>
+        <text x="82" y="190" class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt3(top, 1)} °C</text>
 
         <circle cx="222" cy=${676 - d12} r="8" class="probe" />
         <line x1="214" y1=${676 - d12} x2="150" y2=${676 - d12} class="lead" />
         <rect x="14" y=${s2y} width="136" height="72" rx="14" class="card lo" />
         <text x="82" y=${s2y + 24} class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Basso (S2)</text>
-        <text x="82" y=${s2y + 58} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#3b82f6">${fmt2(bottom, 1)} °C</text>
+        <text x="82" y=${s2y + 58} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#3b82f6">${fmt3(bottom, 1)} °C</text>
 
         <!-- stima e pulsante -->
         <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
@@ -4604,7 +5546,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <!-- solare -->
         <rect x="14" y=${kwy} width="136" height="72" rx="14" class="card sun" />
         <text x="82" y=${kwy + 24} class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Solare</text>
-        <text x="82" y=${kwy + 58} class="b" font-size=${Math.round(24 * fs)} text-anchor="middle" fill="#22c55e">${fmt2(solarKw, 1)} kW</text>
+        <text x="82" y=${kwy + 58} class="b" font-size=${Math.round(24 * fs)} text-anchor="middle" fill="#22c55e">${fmt3(solarKw, 1)} kW</text>
 
         <text x="532" y="80" class="b s14" fill="#ef4444">Acqua calda</text>
         <text x="532" y="98" class="t2 s13">verso utenze</text>
@@ -4618,17 +5560,17 @@ var ImpiantoOverviewCard = class extends i4 {
           <path d=${panIn} class="pipe hot thin" />
           <path d=${panOut} class="pipe cold thin" />
           ${collectorOn ? w`<path d=${panIn} class="coilflow" /><path d=${panOut} class="coilflow" />` : A}
-          <text x="448" y=${short ? 504 : 548} class="tv">${solarIn !== null ? `${fmt2(solarIn, 1)} \xB0C` : ""}</text>
-          <text x="448" y=${short ? 528 : 644} class="tv">${solarOut !== null ? `${fmt2(solarOut, 1)} \xB0C` : ""}</text>
+          <text x="448" y=${short ? 504 : 548} class="tv">${solarIn !== null ? `${fmt3(solarIn, 1)} \xB0C` : ""}</text>
+          <text x="448" y=${short ? 528 : 644} class="tv">${solarOut !== null ? `${fmt3(solarOut, 1)} \xB0C` : ""}</text>
           <g transform=${short ? "translate(0 -60)" : "translate(0 0)"}>${this._panelShape(panel, panelFill)}</g>
         </g>
       </svg>
       ${this._narrow ? w`<svg class="boiler mini" viewBox="0 0 640 330" role="img" aria-label="Puffer e pannello solare">
             <g transform="translate(-480 -140)">${this._pufferShape(puffer, pufferEstimated)}</g>
-            <text x="150" y="236" class="tv">${integIn !== null ? `\u2192 ${fmt2(integIn, 1)} \xB0C` : ""}</text>
-            <text x="150" y="266" class="tv">${integOut !== null ? `\u2190 ${fmt2(integOut, 1)} \xB0C` : ""}</text>
+            <text x="150" y="236" class="tv">${integIn !== null ? `\u2192 ${fmt3(integIn, 1)} \xB0C` : ""}</text>
+            <text x="150" y="266" class="tv">${integOut !== null ? `\u2190 ${fmt3(integOut, 1)} \xB0C` : ""}</text>
             <g transform="translate(-160 -420)">${this._panelShape(panel, panelFill)}</g>
-            <text x="470" y="318" class="tv" text-anchor="middle">${solarIn !== null ? `\u2192 ${fmt2(solarIn, 1)} \xB0C` : ""}   ${solarOut !== null ? `\u2190 ${fmt2(solarOut, 1)} \xB0C` : ""}</text>
+            <text x="470" y="318" class="tv" text-anchor="middle">${solarIn !== null ? `\u2192 ${fmt3(solarIn, 1)} \xB0C` : ""}   ${solarOut !== null ? `\u2190 ${fmt3(solarOut, 1)} \xB0C` : ""}</text>
           </svg>` : A}
     `;
   }
@@ -4638,7 +5580,7 @@ var ImpiantoOverviewCard = class extends i4 {
       <text x="630" y="158" class="t1 b s15" text-anchor="middle">Puffer 50 L</text>
       <rect x="575" y="170" width="110" height="170" rx="26" fill="url(#puffer)" class="outline" />
       <rect x="587" y="224" width="86" height="64" rx="14" class="pill big" />
-      <text x="630" y="${estimated ? 258 : 264}" class="t1 b val" text-anchor="middle">${fmt2(puffer, 0)} °C</text>
+      <text x="630" y="${estimated ? 258 : 264}" class="t1 b val" text-anchor="middle">${fmt3(puffer, 0)} °C</text>
       ${estimated ? w`<text x="630" y="279" class="t2 s13" text-anchor="middle">stima sonda</text>` : A}`;
   }
   /** La sagoma del pannello con i suoi testi, con le coordinate del disegno largo (al centro x = 630). */
@@ -4652,10 +5594,10 @@ var ImpiantoOverviewCard = class extends i4 {
       </g>
       <polygon points="616,462 640,462 612,568 592,568" fill="#fff" opacity="0.16" />
       <line x1="618" y1="568" x2="612" y2="586" class="panelleg" /><line x1="666" y1="568" x2="672" y2="586" class="panelleg" />
-      <text x="630" y="618" class="t1 b val" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt2(panel.value, 0)} \xB0C`}</text>
+      <text x="630" y="618" class="t1 b val" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt3(panel.value, 0)} \xB0C`}</text>
       <text x="630" y="640" class="t2 s15" text-anchor="middle">${panel.caption}</text>
-      ${panel.maxPredicted !== null ? w`<text x="630" y="668" class="b s15" text-anchor="middle" fill="#f59e0b">max prevista ${fmt2(panel.maxPredicted, 0)} °C</text>` : A}
-      ${panel.maxToday !== null ? w`<text x="630" y="690" class="t2 s15" text-anchor="middle">raggiunta oggi ${fmt2(panel.maxToday, 0)} °C</text>` : A}`;
+      ${panel.maxPredicted !== null ? w`<text x="630" y="668" class="b s15" text-anchor="middle" fill="#f59e0b">max prevista ${fmt3(panel.maxPredicted, 0)} °C</text>` : A}
+      ${panel.maxToday !== null ? w`<text x="630" y="690" class="t2 s15" text-anchor="middle">raggiunta oggi ${fmt3(panel.maxToday, 0)} °C</text>` : A}`;
   }
   // ---- caldaia -----------------------------------------------------------
   _flame(cx, cy, k2, opacity = 1) {
@@ -4723,24 +5665,24 @@ var ImpiantoOverviewCard = class extends i4 {
           ${inline ? this._renderPolygonFigure(look, pellet, { state: stateRaw ?? "\u2013", water: this._n(e5.stove_water), since }) : b2`${this._renderStoveImage(look, pellet)}
                 <div class="statecard">
                   <span class="scp"><span class="tl">Stato caldaia</span><span class="statepill ${look}">${stateRaw ?? "\u2013"}</span></span>
-                  <span class="scp"><span class="tl">Acqua caldaia</span><span class="water">${fmt2(this._n(e5.stove_water), 1)}<small> °C</small></span></span>
+                  <span class="scp"><span class="tl">Acqua caldaia</span><span class="water">${fmt3(this._n(e5.stove_water), 1)}<small> °C</small></span></span>
                   <span class="scp"><span class="tl">Ultimo cambio stato</span><span class="since">${since ? `alle ${since}` : "\u2013"}</span></span>
                   <span class="scp"><span class="tl">Pellet</span><span class="pelletpill ${pellet.key}">${pellet.label}</span></span>
                 </div>`}
         </div>
         ${noAlarm ? A : b2`<div class="alarmbar" role="alert"><b>Allarme</b><span>${alarmRaw}</span></div>`}
         <div class="tiles">
-          ${this._tile("Puffer 50 L", `${fmt2(this._n(this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer), 1)} \xB0C${this.hass.states[e5.puffer_effective]?.attributes?.fonte === "sonda ingresso" ? " (stima)" : ""}`, "#f59e0b")}
-          ${this._tile("Set boiler", `${fmt2(this._n(e5.set_boiler), 0)} \xB0C`)}
-          ${this._tile("Set acqua", `${fmt2(this._n(e5.set_water), 0)} \xB0C`)}
-          ${this._tile("Potenza reale", `${fmt2(this._n(e5.power), 0)} %`)}
+          ${this._tile("Puffer 50 L", `${fmt3(this._n(this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer), 1)} \xB0C${this.hass.states[e5.puffer_effective]?.attributes?.fonte === "sonda ingresso" ? " (stima)" : ""}`, "#f59e0b")}
+          ${this._tile("Set boiler", `${fmt3(this._n(e5.set_boiler), 0)} \xB0C`)}
+          ${this._tile("Set acqua", `${fmt3(this._n(e5.set_water), 0)} \xB0C`)}
+          ${this._tile("Potenza reale", `${fmt3(this._n(e5.power), 0)} %`)}
         </div>
         <div class="counters">
           <span class="tl">Oggi</span>
           <div>
-            <b>${fmt2(this._n(e5.starts_today), 0)} accensioni</b>
-            <b>${fmt2(work, 1)} h in lavoro</b>
-            <b>${fmt2(this._n(e5.standby_today), 0)} stand-by</b>
+            <b>${fmt3(this._n(e5.starts_today), 0)} accensioni</b>
+            <b>${fmt3(work, 1)} h in lavoro</b>
+            <b>${fmt3(this._n(e5.standby_today), 0)} stand-by</b>
           </div>
           <button class="more" @click=${() => this._openDetails()} aria-label="Altri dati della caldaia">Altri dati ▸</button>
         </div>
@@ -4763,18 +5705,18 @@ var ImpiantoOverviewCard = class extends i4 {
       {
         title: "Combustione",
         tiles: [
-          { label: "Fumi", value: `${fmt2(this._n(e5.smoke), 0)} \xB0C` },
-          { label: "Fiamma", value: `${fmt2(this._n(e5.flame), 0)} \xB0C` },
-          { label: "Estrattore fumi", value: `${fmt2(this._n(e5.extractor), 0)} giri` },
-          { label: "Pressione braciere", value: fmt2(this._n(e5.brazier_pressure), 1) }
+          { label: "Fumi", value: `${fmt3(this._n(e5.smoke), 0)} \xB0C` },
+          { label: "Fiamma", value: `${fmt3(this._n(e5.flame), 0)} \xB0C` },
+          { label: "Estrattore fumi", value: `${fmt3(this._n(e5.extractor), 0)} giri` },
+          { label: "Pressione braciere", value: fmt3(this._n(e5.brazier_pressure), 1) }
         ]
       },
       {
         title: "Acqua e circolatore",
         tiles: [
-          { label: "Pressione acqua", value: `${fmt2(this._n(e5.water_pressure), 1)} bar` },
+          { label: "Pressione acqua", value: `${fmt3(this._n(e5.water_pressure), 1)} bar` },
           { label: "Circolatore", value: pump === void 0 ? "\u2013" : pumpOn ? "ON" : "OFF", color: pumpOn ? "#22c55e" : void 0 },
-          { label: "Accensioni ieri", value: fmt2(this._n(e5.starts_yesterday), 0) },
+          { label: "Accensioni ieri", value: fmt3(this._n(e5.starts_yesterday), 0) },
           { label: "Allarme", value: noAlarm ? "nessuno" : alarmRaw, color: noAlarm ? "#22c55e" : "#ef4444" }
         ]
       }
@@ -4783,9 +5725,9 @@ var ImpiantoOverviewCard = class extends i4 {
       groups.push({
         title: "Pellet (stima dal modello di consumo)",
         tiles: [
-          { label: "Oggi", value: `${fmt2(this._n(e5.pellet_today), 1)} kg` },
-          { label: "Settimana", value: `${fmt2(this._n(e5.pellet_week), 1)} kg` },
-          { label: "Mese", value: `${fmt2(this._n(e5.pellet_month), 0)} kg` }
+          { label: "Oggi", value: `${fmt3(this._n(e5.pellet_today), 1)} kg` },
+          { label: "Settimana", value: `${fmt3(this._n(e5.pellet_week), 1)} kg` },
+          { label: "Mese", value: `${fmt3(this._n(e5.pellet_month), 0)} kg` }
         ]
       });
     }
@@ -4918,6 +5860,20 @@ var ImpiantoOverviewCard = class extends i4 {
       this.hass.callService("input_number", "set_value", { entity_id: e5.pellet_ref_total, value: Math.round(total * 100) / 100 })
     ]);
   }
+  /** Popup con i grafici del pellet: chili rimasti, caricamenti, letture del livello, consumo per giorno. */
+  _openPelletCharts() {
+    if (this._pelletChartsDlg || !this._pelletEnabled()) return;
+    const d3 = document.createElement("impianto-pellet-charts-dialog");
+    d3.hass = this.hass;
+    d3.ids = { remaining: "sensor.caldaia_pellet_serbatoio", total: this._e.pellet_total, factor: "input_number.caldaia_pellet_fattore" };
+    d3.bagKg = this._pelletInfo().bagKg;
+    d3.perDay = this._pelletPerDay();
+    d3.addEventListener("closed", () => {
+      this._pelletChartsDlg = void 0;
+    });
+    document.body.appendChild(d3);
+    this._pelletChartsDlg = d3;
+  }
   _openPellet() {
     if (this._pelletDlg || !this._pelletEnabled()) return;
     const d3 = document.createElement("impianto-pellet-dialog");
@@ -4964,7 +5920,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <g class="flicker">${flame}</g>
         <rect class="sp ${look}" x="206" y="188" width="62" height="28" rx="14" />
         <text class="spt ${look}" x="237" y="207" font-size=${stateFont} font-weight="700" text-anchor="middle">${d3.state}</text>
-        <text x="342" y="208" font-size="19" font-weight="700" text-anchor="end" fill="#f1f5f9">${fmt2(d3.water, 1)}<tspan font-size="11" font-weight="500" fill="#94a3b8"> °C</tspan></text>
+        <text x="342" y="208" font-size="19" font-weight="700" text-anchor="end" fill="#f1f5f9">${fmt3(d3.water, 1)}<tspan font-size="11" font-weight="500" fill="#94a3b8"> °C</tspan></text>
         <!-- armadio del serbatoio (a sinistra) -->
         <g class="cabinet" role="button" tabindex="0" aria-label="Pellet nel serbatoio: aggiorna il conteggio" @click=${() => this._openPellet()} @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._openPellet()}>
           <rect x="10" y="56" width="178" height="174" rx="4" fill="url(#pf-armadio)" stroke="#3b3b44" stroke-width="1.5" />
@@ -4973,8 +5929,23 @@ var ImpiantoOverviewCard = class extends i4 {
           <polygon points="22,72 60,120 28,176" fill="rgba(148,163,184,0.05)" /><polygon points="60,120 140,128 100,190 28,176" fill="rgba(148,163,184,0.08)" />
           <polygon points="140,128 176,72 176,180 100,190" fill="rgba(148,163,184,0.05)" /><polygon points="28,176 100,190 70,222 24,222" fill="rgba(148,163,184,0.06)" />
           <g transform="translate(26 74) scale(1.46)">${hopperShape(kg, "pf-clip")}</g>
-          <text x="98" y="152" font-size="28" font-weight="700" fill="#f1f5f9">${kg === null ? "\u2013" : fmt2(kg, 0)}<tspan font-size="13" font-weight="500" fill="#94a3b8"> kg</tspan></text>
-          <text x="84" y="172" font-size="13" fill="#94a3b8">${days === null ? "" : `${days < 10 ? fmt2(days, 1) : fmt2(days, 0)} giorni`}</text>
+          <g class="chartbtn" role="button" tabindex="0" aria-label="Grafici del pellet" @click=${(ev) => {
+      ev.stopPropagation();
+      this._openPelletCharts();
+    }}
+            @keydown=${(ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.stopPropagation();
+        ev.preventDefault();
+        this._openPelletCharts();
+      }
+    }}>
+            <rect x="114" y="69" width="68" height="24" rx="12" />
+            <polyline points="122,86 128,79 133,83 140,75" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <text x="144" y="85" font-size="11" font-weight="700">Grafici</text>
+          </g>
+          <text x="98" y="152" font-size="28" font-weight="700" fill="#f1f5f9">${kg === null ? "\u2013" : fmt3(kg, 0)}<tspan font-size="13" font-weight="500" fill="#94a3b8"> kg</tspan></text>
+          <text x="84" y="172" font-size="13" fill="#94a3b8">${days === null ? "" : `${days < 10 ? fmt3(days, 1) : fmt3(days, 0)} giorni`}</text>
           <text x="72" y="192" font-size="10.5" fill="#94a3b8">pellet</text>
           <rect x="72" y="197" width="58" height="20" rx="10" fill=${pelletFill} />
           <text x="101" y="211.5" font-size="11" font-weight="700" text-anchor="middle" fill="#ffffff">${pellet.label}</text>
@@ -5094,7 +6065,7 @@ var ImpiantoOverviewCard = class extends i4 {
             <span class="since">${since}</span>
           </div>
           ${modeRaw && STUFA_MODE_LABEL[modeRaw] ? b2`<div class="sumrow"><span class="tl">Modo</span><b>${STUFA_MODE_LABEL[modeRaw]}</b></div>` : A}
-          <div class="sumrow"><span class="tl">Potenza</span><b>${power === null ? "\u2013" : `${fmt2(power, power % 1 ? 1 : 0)} W`}</b></div>
+          <div class="sumrow"><span class="tl">Potenza</span><b>${power === null ? "\u2013" : `${fmt3(power, power % 1 ? 1 : 0)} W`}</b></div>
         </div>
         ${sw ? b2`<button class=${cls} ?disabled=${btn.action === "none"} @click=${() => this._stufaPress()}>
               <span>${btn.label}</span>${btn.sub ? b2`<small>${btn.sub}</small>` : A}
@@ -5752,8 +6723,27 @@ var ImpiantoOverviewCard = class extends i4 {
       cursor: pointer;
       outline: none;
     }
-    .polyfig .cabinet:hover rect:first-child,
-    .polyfig .cabinet:focus-visible rect:first-child {
+    .polyfig .chartbtn {
+      cursor: pointer;
+    }
+    .polyfig .chartbtn rect {
+      fill: #334155;
+      stroke: #64748b;
+      stroke-width: 1;
+    }
+    .polyfig .chartbtn polyline {
+      stroke: #fbbf24;
+    }
+    .polyfig .chartbtn text {
+      fill: #e2e8f0;
+    }
+    .polyfig .chartbtn:hover rect,
+    .polyfig .chartbtn:focus-visible rect {
+      fill: #475569;
+      stroke: #fbbf24;
+    }
+    .polyfig .cabinet:hover > rect:first-child,
+    .polyfig .cabinet:focus-visible > rect:first-child {
       stroke: var(--primary-color, #03a9f4);
     }
     .polyfig .flicker {

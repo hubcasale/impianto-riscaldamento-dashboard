@@ -194,3 +194,10 @@ flowchart TD
 - La scheda legge la scelta con `frontend/get_user_data` alla prima `hass` e la salva con `set_user_data`; `show` in YAML è solo il valore di partenza. Le sezioni non disponibili (stufa senza `stufa`, termostato con `thermostat: false`) non compaiono tra gli interruttori e non contano per il minimo di una.
 - Il layout split usa `--cols` con una colonna per ogni scheda mostrata; il pannello della stufa con scala (`.fit`) si usa solo se la caldaia e' visibile (e' lei a dare l'altezza). Senza la caldaia l'ingranaggio sta in `.topbar`.
 - Fasi seguenti (non fatte): 2) un'unica integrazione che unisce termostato e stufa con migrazione degli id; 3) spostare i pacchetti YAML nell'integrazione.
+
+## Grafici del pellet (28/10/2026)
+
+- `src/pellet-charts-logic.ts` (pura, test in `test/pellet-charts-logic.test.ts`): `detectEvents` campiona al minuto `sensor.caldaia_pellet_serbatoio` e il totale stimato, somma i passi consecutivi sopra 0,12 kg e li considera evento se > 0,35 kg; `classifyDelta` (multiplo di mezzo sacco ±0,8 kg, o serbatoio pieno = caricamento, altrimenti lettura); rapporto reale/stimato tra eventi consecutivi e `calibration`.
+- `src/pellet-charts-dialog.ts`: finestra `impianto-pellet-charts-dialog`; storico con `history/history_during_period`, e solo se non copre il periodo `recorder/statistics_during_period` (ora per ora, mean per i chili, state per il totale). Eventi solo dove c'e' lo storico (il recorder tiene 10 giorni: nessun `purge_keep_days` impostato).
+- Tacche a giorni calcolate a mano (mezzanotte locale): `timeTicks` aggiunge 24 h fisse e col cambio dell'ora (25/10) sbagliava.
+- Dev page: `?pellet_grafici=1&periodo=24h|3d|7d|14d|30d|90d` (storico finto di 95 giorni con caricamenti e letture).

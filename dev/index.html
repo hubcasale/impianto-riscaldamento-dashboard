@@ -236,12 +236,57 @@ if (q.get("sezioni")) { const on = q.get("sezioni").split(","); localStorage.set
 const log = document.getElementById("log");
 const cards = [];
 function push() { cards.forEach((c) => (c.hass = hass)); }
+// storico finto del pellet: 95 giorni di consumo, con caricamenti e letture del livello negli ultimi 12 giorni
+// (?pellet_grafici=1 apre la finestra dei grafici, ?periodo=24h|3d|7d|14d|30d|90d sceglie il periodo)
+const PEL = (() => {
+  const STEP = 300000, now = Math.floor(Date.now() / STEP) * STEP, n = 95 * 288;
+  const t0 = now - n * STEP;
+  // caricamenti vecchi (solo per avere un andamento sensato nelle statistiche) e, negli ultimi 12 giorni, quelli veri
+  const ev = [[84, 12, "add", 90], [70, 12, "add", 75], [56, 12, "add", 75], [42, 12, "add", 75], [28, 12, "add", 75], [20, 12, "add", 75],
+              [10, 10.5, "add", 15], [7, 18, "set", -2.6], [4, 9.2, "add", 30], [1, 20, "set", 1.4]].map(([d, h, k, v]) => ({ t: now - d * 86400000 + (h - 12) * 3600000, k, v }));
+  const rem = [], tot = [];
+  let total = 500, refKg = 30, refTot = 500;
+  for (let i = 0; i <= n; i++) {
+    const t = t0 + i * STEP, hr = new Date(t).getHours() + new Date(t).getMinutes() / 60, dayN = Math.floor(t / 86400000);
+    const perDay = 4 + 3 * (0.5 + 0.5 * Math.sin(dayN * 1.7)); // 4-7 kg al giorno
+    const w = hr >= 6 && hr < 9 ? 3 : hr >= 17 && hr < 23 ? 2 : 0.35; // piu' consumo mattina e sera
+    total += (perDay * w) / (3 * 3 + 2 * 6 + 0.35 * 15) / 12;
+    for (const e of ev) if (e.t >= t && e.t < t + STEP) { const est = refKg - (total - refTot); refKg = Math.min(120, est + e.v); refTot = total; }
+    tot.push([t, Math.round(total * 100) / 100]);
+    rem.push([t, Math.max(0, Math.round((refKg - (total - refTot)) * 10) / 10)]);
+  }
+  return { rem, tot, now, t0 };
+})();
+set("sensor.caldaia_pellet_serbatoio", PEL.rem[PEL.rem.length - 1][1], { unit_of_measurement: "kg" });
 const hass = {
   states: S,
   // storico finto per la finestra dei grafici: curve plausibili ogni 5 minuti
   async callWS(msg) {
     if (msg.type === "stufa_pellet/info") return sinfo;
     if (msg.type && msg.type.startsWith("termostato_riscaldamento/")) return msg.type.endsWith("/info") ? tinfo : { ok: true };
+    if (msg.type === "recorder/statistics_during_period") {
+      const a = Date.parse(msg.start_time), z = Date.parse(msg.end_time), out = {};
+      for (const id of msg.statistic_ids) {
+        const src = id.endsWith("serbatoio") ? PEL.rem : id.endsWith("stimato_totale") ? PEL.tot : null;
+        if (!src) continue;
+        const rows = [];
+        for (let h = Math.ceil(a / 3600000) * 3600000; h + 3600000 <= z; h += 3600000) {
+          const inh = src.filter(([t]) => t >= h && t < h + 3600000);
+          if (!inh.length) continue;
+          rows.push({ start: h, end: h + 3600000, mean: inh.reduce((x, [, v]) => x + v, 0) / inh.length, state: inh[inh.length - 1][1] });
+        }
+        out[id] = rows;
+      }
+      return out;
+    }
+    if (msg.type === "history/history_during_period" && msg.entity_ids.some((e) => e.endsWith("pellet_serbatoio") || e.endsWith("pellet_stimato_totale"))) {
+      const purge = PEL.now - 12 * 86400000, a = Math.max(Date.parse(msg.start_time), purge), z = Date.parse(msg.end_time), out = {};
+      for (const id of msg.entity_ids) {
+        const src = id.endsWith("serbatoio") ? PEL.rem : id.endsWith("stimato_totale") ? PEL.tot : [];
+        out[id] = src.filter(([t]) => t >= a && t <= z).map(([t, v]) => ({ s: String(v), lu: t / 1000 }));
+      }
+      return out;
+    }
     await new Promise((r) => setTimeout(r, 150));
     if (msg.type === "frontend/get_user_data") { const v = localStorage.getItem("dev_ud_" + msg.key); return { value: v ? JSON.parse(v) : null }; }
     if (msg.type === "frontend/set_user_data") { localStorage.setItem("dev_ud_" + msg.key, JSON.stringify(msg.value)); return null; }
@@ -361,6 +406,7 @@ if (q.get("scroll")) setTimeout(() => { const b = document.querySelector("impian
 if (q.get("aiuto")) setTimeout(() => { document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".block.open .bb .i, .block.open .bh .i").click(); }, 900);
 if (q.get("programma_popup")) setTimeout(() => cards[0]._openSchedule(), 600);
 if (q.get("pellet_popup")) setTimeout(() => cards[0]._openPellet(), 700);
+if (q.get("pellet_grafici")) setTimeout(() => { cards[0]._openPelletCharts(); const d = document.querySelector("impianto-pellet-charts-dialog"); if (q.get("periodo")) d._setRange(q.get("periodo")); if (q.get("tocca")) setTimeout(() => { d._selT = Date.now() - parseFloat(q.get("tocca")) * 86400000; d._selBar = 2; }, 1500); }, 800);
 if (q.get("stufa_alta")) setTimeout(() => { const c = cards[0]._stufaCard; if (c) c.style.minHeight = q.get("stufa_alta") + "px"; }, 2500);
 if (q.get("stufa_popup")) setTimeout(() => cards[0]._openStufa(), 1500);
 if (q.get("conferma")) setTimeout(() => (q.get("conferma") === "stufa" ? cards[0]._stufaPress() : cards[0]._press()), 1500);
