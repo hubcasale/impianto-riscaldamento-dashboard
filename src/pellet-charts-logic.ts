@@ -63,6 +63,8 @@ export interface PelletEvent {
   delta: number;
   /** sacchi versati (solo per i caricamenti, passo di mezzo sacco) */
   bags: number | null;
+  /** momento dell'evento precedente (inizio dell'intervallo su cui si confrontano consumo reale e stimato) */
+  from: number | null;
   /** consumo stimato dall'evento precedente e consumo reale (solo letture del livello con un evento precedente) */
   used: number | null;
   real: number | null;
@@ -138,7 +140,7 @@ export function detectEvents(rem: Pt[], tot: Pt[], t0: number, t1: number, bagKg
         real = prev.after - after;
         ratio = used >= 2 && real > 0 ? real / used : null;
       }
-      events.push({ t, kind: cls.kind, before, after, delta: sum, bags: cls.bags, used, real, ratio });
+      events.push({ t, kind: cls.kind, before, after, delta: sum, bags: cls.bags, from: prev && cls.kind === "misura" ? prev.t : null, used, real, ratio });
       prev = { t, after, tot: totNow };
     }
     i = j;
@@ -210,22 +212,54 @@ export function runOut(remKg: number | null, perDay: number | null, now: number)
 }
 
 export interface Calibration {
-  /** consumo reale / stimato di tutte le letture del livello utili, pesato sui chili */
+  /** consumo reale / stimato di tutte le letture del livello utili, pesato sui chili (rispetto al fattore allora in uso) */
   ratio: number;
   usedKg: number;
   readings: number;
-  /** fattore di taratura suggerito (quello attuale × rapporto) */
+  /** fattore medio con cui sono state fatte quelle stime */
+  usedFactor: number | null;
+  /** fattore di taratura suggerito: consumo reale diviso per la stima con fattore 1 */
   suggested: number | null;
 }
 
-export function calibration(events: PelletEvent[], currentFactor: number | null): Calibration | null {
-  const ok = events.filter((e) => e.kind === "misura" && e.ratio !== null && e.used !== null && e.real !== null);
+/**
+ * Taratura: le stime dello storico sono state fatte con il fattore che c'era allora, che puo' essere cambiato nel frattempo.
+ * Per questo non si moltiplica il fattore attuale per il rapporto reale/stimato (si correggerebbe due volte): si divide il
+ * consumo reale per la stima «con fattore 1», cioe' ogni aumento del totale diviso per il fattore in vigore in quel momento.
+ * Senza lo storico del fattore si usa il fattore attuale per tutto l'intervallo.
+ */
+export function calibration(events: PelletEvent[], tot: Pt[], factorSeries: Pt[], currentFactor: number | null): Calibration | null {
+  const ok = events.filter((e) => e.kind === "misura" && e.ratio !== null && e.used !== null && e.real !== null && e.from !== null);
   if (ok.length === 0) return null;
   const used = ok.reduce((s, e) => s + (e.used as number), 0);
   const real = ok.reduce((s, e) => s + (e.real as number), 0);
   if (used <= 0) return null;
-  const ratio = real / used;
-  return { ratio, usedKg: used, readings: ok.length, suggested: currentFactor !== null && currentFactor > 0 ? Math.round(currentFactor * ratio * 100) / 100 : null };
+  let base = 0;
+  let known = true;
+  for (const e of ok) {
+    for (let i = 1; i < tot.length; i++) {
+      const a = tot[i - 1];
+      const b = tot[i];
+      if (b.t <= (e.from as number) || a.t >= e.t) continue;
+      const d = b.v - a.v;
+      if (d <= 0) continue;
+      const f = valueAt(factorSeries, (a.t + b.t) / 2) ?? currentFactor;
+      if (f === null || f <= 0) {
+        known = false;
+        break;
+      }
+      base += d / f;
+    }
+    if (!known) break;
+  }
+  const usedFactor = known && base > 0 ? used / base : null;
+  return {
+    ratio: real / used,
+    usedKg: used,
+    readings: ok.length,
+    usedFactor: usedFactor === null ? null : Math.round(usedFactor * 100) / 100,
+    suggested: known && base > 0 ? Math.round((real / base) * 100) / 100 : null,
+  };
 }
 
 /** Punti dalle statistiche a lungo termine (`recorder/statistics_during_period`): `field` è mean per i sensori istantanei, state per i contatori. */

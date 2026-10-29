@@ -41,6 +41,8 @@ interface Loaded {
   events: PelletEvent[];
   buckets: Bucket[];
   bucket: "hour" | "day";
+  /** storico del fattore di taratura (chi cambia il fattore cambia anche le stime da quel momento) */
+  factor: Pt[];
   /** lo storico dettagliato non copre tutto il periodo (il registratore conserva pochi giorni) */
   partial: boolean;
 }
@@ -122,13 +124,14 @@ export class ImpiantoPelletChartsDialog extends LitElement {
         type: "history/history_during_period",
         start_time: new Date(t0).toISOString(),
         end_time: new Date(now).toISOString(),
-        entity_ids: [remaining, total],
+        entity_ids: this.ids.factor ? [remaining, total, this.ids.factor] : [remaining, total],
         include_start_time_state: true,
         significant_changes_only: false,
         minimal_response: true,
         no_attributes: true,
       });
       if (seq !== this._seq) return;
+      const factor = this.ids.factor ? parseNumeric(hist[this.ids.factor]) : [];
       const remH = parseNumeric(hist[remaining]);
       const totH = parseNumeric(hist[total]);
       const firstH = Math.min(remH[0]?.t ?? now, totH[0]?.t ?? now);
@@ -155,7 +158,7 @@ export class ImpiantoPelletChartsDialog extends LitElement {
       if (seq !== this._seq) return;
       const fineFrom = Math.max(t0, Math.min(remH[0]?.t ?? now, totH[0]?.t ?? now));
       const events = detectEvents(remH, totH, fineFrom, now, this.bagKg);
-      this._data = { t0, t1: now, rem, tot, events, buckets: consumptionBuckets(tot, t0, now, range.bucket), bucket: range.bucket, partial };
+      this._data = { t0, t1: now, rem, tot, events, factor, buckets: consumptionBuckets(tot, t0, now, range.bucket), bucket: range.bucket, partial };
       this._error = "";
       if (this._selT !== null && (this._selT < t0 || this._selT > now)) this._selT = null;
     } catch (e) {
@@ -362,13 +365,18 @@ export class ImpiantoPelletChartsDialog extends LitElement {
 
   private _renderCalibration(d: Loaded) {
     const f = this.ids.factor ? Number(this.hass.states[this.ids.factor]?.state) : NaN;
-    const c = calibration(d.events, Number.isFinite(f) ? f : null);
+    const cur = Number.isFinite(f) ? f : null;
+    const c = calibration(d.events, d.tot, d.factor, cur);
     if (!c) return html`<p class="hint">Per controllare la taratura servono almeno due eventi con una lettura del livello in mezzo: la scheda confronta quanto pellet è sceso davvero con quanto aveva stimato.</p>`;
+    const same = c.suggested !== null && cur !== null && Math.abs(c.suggested - cur) < 0.03;
     return html`<div class="calib">
       <b>Taratura della stima</b>
-      <p>Nelle ${c.readings} ${c.readings === 1 ? "lettura" : "letture"} del livello il pellet sceso davvero è stato il <b>${fmt(c.ratio * 100, 0)} %</b> di quello stimato (su ${fmt(c.usedKg, 0)} kg stimati).
+      <p>Nelle ${c.readings} ${c.readings === 1 ? "lettura" : "letture"} del livello il pellet sceso davvero è stato il <b>${fmt(c.ratio * 100, 0)} %</b> di quello stimato
+      (${fmt(c.usedKg, 0)} kg stimati${c.usedFactor !== null ? `, con il fattore di allora, in media ${fmt(c.usedFactor, 2)}` : ""}).
       ${c.suggested !== null
-        ? html`Il fattore di taratura ${Number.isFinite(f) ? `è ${fmt(f, 2)}` : ""}: con questo risultato diventerebbe <b>${fmt(c.suggested, 2)}</b>. Si cambia dalle preferenze, blocco «Pellet».`
+        ? same
+          ? html`Il fattore attuale (${fmt(cur as number, 2)}) è già quello che torna con le letture.`
+          : html`Il fattore che avrebbe dato la stima giusta è <b>${fmt(c.suggested, 2)}</b>${cur !== null ? ` (adesso ${fmt(cur, 2)}; cambialo dalle preferenze, blocco «Pellet»)` : ""}. Dopo averlo cambiato il valore resta lo stesso: le stime passate non si ricalcolano.`
         : nothing}
       ${c.usedKg < 15 ? " Sono pochi chili: aspetta altre letture prima di cambiare il fattore." : ""}</p>
     </div>`;

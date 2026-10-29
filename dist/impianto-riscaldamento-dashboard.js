@@ -3686,7 +3686,7 @@ function detectEvents(rem, tot, t0, t1, bagKg) {
         real = prev.after - after;
         ratio = used >= 2 && real > 0 ? real / used : null;
       }
-      events.push({ t: t3, kind: cls.kind, before, after, delta: sum, bags: cls.bags, used, real, ratio });
+      events.push({ t: t3, kind: cls.kind, before, after, delta: sum, bags: cls.bags, from: prev && cls.kind === "misura" ? prev.t : null, used, real, ratio });
       prev = { t: t3, after, tot: totNow };
     }
     i5 = j;
@@ -3734,14 +3734,38 @@ function runOut(remKg, perDay, now) {
   const days = remKg / perDay;
   return { days, date: now + days * DAY };
 }
-function calibration(events, currentFactor) {
-  const ok = events.filter((e5) => e5.kind === "misura" && e5.ratio !== null && e5.used !== null && e5.real !== null);
+function calibration(events, tot, factorSeries, currentFactor) {
+  const ok = events.filter((e5) => e5.kind === "misura" && e5.ratio !== null && e5.used !== null && e5.real !== null && e5.from !== null);
   if (ok.length === 0) return null;
   const used = ok.reduce((s4, e5) => s4 + e5.used, 0);
   const real = ok.reduce((s4, e5) => s4 + e5.real, 0);
   if (used <= 0) return null;
-  const ratio = real / used;
-  return { ratio, usedKg: used, readings: ok.length, suggested: currentFactor !== null && currentFactor > 0 ? Math.round(currentFactor * ratio * 100) / 100 : null };
+  let base = 0;
+  let known = true;
+  for (const e5 of ok) {
+    for (let i5 = 1; i5 < tot.length; i5++) {
+      const a3 = tot[i5 - 1];
+      const b3 = tot[i5];
+      if (b3.t <= e5.from || a3.t >= e5.t) continue;
+      const d3 = b3.v - a3.v;
+      if (d3 <= 0) continue;
+      const f3 = valueAt(factorSeries, (a3.t + b3.t) / 2) ?? currentFactor;
+      if (f3 === null || f3 <= 0) {
+        known = false;
+        break;
+      }
+      base += d3 / f3;
+    }
+    if (!known) break;
+  }
+  const usedFactor = known && base > 0 ? used / base : null;
+  return {
+    ratio: real / used,
+    usedKg: used,
+    readings: ok.length,
+    usedFactor: usedFactor === null ? null : Math.round(usedFactor * 100) / 100,
+    suggested: known && base > 0 ? Math.round(real / base * 100) / 100 : null
+  };
 }
 function statsToPoints(rows, field) {
   const out = [];
@@ -3846,13 +3870,14 @@ var ImpiantoPelletChartsDialog = class extends i4 {
         type: "history/history_during_period",
         start_time: new Date(t0).toISOString(),
         end_time: new Date(now).toISOString(),
-        entity_ids: [remaining, total],
+        entity_ids: this.ids.factor ? [remaining, total, this.ids.factor] : [remaining, total],
         include_start_time_state: true,
         significant_changes_only: false,
         minimal_response: true,
         no_attributes: true
       });
       if (seq !== this._seq) return;
+      const factor = this.ids.factor ? parseNumeric(hist[this.ids.factor]) : [];
       const remH = parseNumeric(hist[remaining]);
       const totH = parseNumeric(hist[total]);
       const firstH = Math.min(remH[0]?.t ?? now, totH[0]?.t ?? now);
@@ -3877,7 +3902,7 @@ var ImpiantoPelletChartsDialog = class extends i4 {
       if (seq !== this._seq) return;
       const fineFrom = Math.max(t0, Math.min(remH[0]?.t ?? now, totH[0]?.t ?? now));
       const events = detectEvents(remH, totH, fineFrom, now, this.bagKg);
-      this._data = { t0, t1: now, rem, tot, events, buckets: consumptionBuckets(tot, t0, now, range.bucket), bucket: range.bucket, partial };
+      this._data = { t0, t1: now, rem, tot, events, factor, buckets: consumptionBuckets(tot, t0, now, range.bucket), bucket: range.bucket, partial };
       this._error = "";
       if (this._selT !== null && (this._selT < t0 || this._selT > now)) this._selT = null;
     } catch (e5) {
@@ -4062,12 +4087,15 @@ var ImpiantoPelletChartsDialog = class extends i4 {
   }
   _renderCalibration(d3) {
     const f3 = this.ids.factor ? Number(this.hass.states[this.ids.factor]?.state) : NaN;
-    const c4 = calibration(d3.events, Number.isFinite(f3) ? f3 : null);
+    const cur = Number.isFinite(f3) ? f3 : null;
+    const c4 = calibration(d3.events, d3.tot, d3.factor, cur);
     if (!c4) return b2`<p class="hint">Per controllare la taratura servono almeno due eventi con una lettura del livello in mezzo: la scheda confronta quanto pellet è sceso davvero con quanto aveva stimato.</p>`;
+    const same = c4.suggested !== null && cur !== null && Math.abs(c4.suggested - cur) < 0.03;
     return b2`<div class="calib">
       <b>Taratura della stima</b>
-      <p>Nelle ${c4.readings} ${c4.readings === 1 ? "lettura" : "letture"} del livello il pellet sceso davvero è stato il <b>${fmt2(c4.ratio * 100, 0)} %</b> di quello stimato (su ${fmt2(c4.usedKg, 0)} kg stimati).
-      ${c4.suggested !== null ? b2`Il fattore di taratura ${Number.isFinite(f3) ? `\xE8 ${fmt2(f3, 2)}` : ""}: con questo risultato diventerebbe <b>${fmt2(c4.suggested, 2)}</b>. Si cambia dalle preferenze, blocco «Pellet».` : A}
+      <p>Nelle ${c4.readings} ${c4.readings === 1 ? "lettura" : "letture"} del livello il pellet sceso davvero è stato il <b>${fmt2(c4.ratio * 100, 0)} %</b> di quello stimato
+      (${fmt2(c4.usedKg, 0)} kg stimati${c4.usedFactor !== null ? `, con il fattore di allora, in media ${fmt2(c4.usedFactor, 2)}` : ""}).
+      ${c4.suggested !== null ? same ? b2`Il fattore attuale (${fmt2(cur, 2)}) è già quello che torna con le letture.` : b2`Il fattore che avrebbe dato la stima giusta è <b>${fmt2(c4.suggested, 2)}</b>${cur !== null ? ` (adesso ${fmt2(cur, 2)}; cambialo dalle preferenze, blocco \xABPellet\xBB)` : ""}. Dopo averlo cambiato il valore resta lo stesso: le stime passate non si ricalcolano.` : A}
       ${c4.usedKg < 15 ? " Sono pochi chili: aspetta altre letture prima di cambiare il fattore." : ""}</p>
     </div>`;
   }

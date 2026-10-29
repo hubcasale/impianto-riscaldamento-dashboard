@@ -137,18 +137,46 @@ test("pellet: autonomia", () => {
   assert.equal(r.date, now + 10 * 86400000);
 });
 
-test("pellet: taratura dal rapporto tra consumo reale e stimato", () => {
+test("pellet: taratura con il fattore costante", () => {
+  // tra due eventi il totale stimato sale di 20 kg con fattore 1,65; il pellet sceso davvero e' 18 kg: fattore giusto 1,65 * 0,9
+  const tot: Pt[] = [{ t: 0, v: 100 }, { t: 5000, v: 110 }, { t: 10000, v: 120 }];
   const ev = [
-    { t: 1, kind: "misura", before: 0, after: 0, delta: -3, bags: null, used: 20, real: 23, ratio: 1.15 },
-    { t: 2, kind: "misura", before: 0, after: 0, delta: 1, bags: null, used: 10, real: 9, ratio: 0.9 },
-    { t: 3, kind: "carico", before: 0, after: 0, delta: 15, bags: 1, used: null, real: null, ratio: null },
-  ] as Parameters<typeof calibration>[0];
-  const c = calibration(ev, 1.65)!;
-  assert.equal(c.readings, 2);
-  assert.ok(Math.abs(c.ratio - 32 / 30) < 1e-9);
-  assert.equal(c.suggested, Math.round(1.65 * (32 / 30) * 100) / 100);
-  assert.equal(calibration([], 1.65), null);
-  assert.equal(calibration(ev, null)!.suggested, null);
+    { t: 10000, kind: "misura", before: 0, after: 0, delta: -2, bags: null, from: 0, used: 20, real: 18, ratio: 0.9 },
+    { t: 11000, kind: "carico", before: 0, after: 0, delta: 15, bags: 1, from: null, used: null, real: null, ratio: null },
+  ] as Parameters<typeof calibration>[1] extends never ? never : Parameters<typeof calibration>[0];
+  const c = calibration(ev, tot, [{ t: 0, v: 1.65 }], 1.65)!;
+  assert.equal(c.readings, 1);
+  assert.ok(Math.abs(c.ratio - 0.9) < 1e-9);
+  assert.equal(c.usedFactor, 1.65);
+  assert.equal(c.suggested, Math.round(1.65 * 0.9 * 100) / 100);
+});
+
+test("pellet: dopo aver cambiato il fattore il suggerimento non si corregge due volte", () => {
+  // stime fatte con 1,65; poi il fattore e' stato portato a 1,46: il suggerimento non deve cambiare
+  const tot: Pt[] = [{ t: 0, v: 100 }, { t: 5000, v: 110 }, { t: 10000, v: 120 }];
+  const ev = [{ t: 10000, kind: "misura", before: 0, after: 0, delta: -2, bags: null, from: 0, used: 20, real: 18, ratio: 0.9 }] as Parameters<typeof calibration>[0];
+  const before = calibration(ev, tot, [{ t: 0, v: 1.65 }], 1.65)!;
+  const after = calibration(ev, tot, [{ t: 0, v: 1.65 }, { t: 20000, v: 1.46 }], 1.46)!;
+  assert.equal(after.suggested, before.suggested);
+  // il vecchio calcolo (fattore attuale per il rapporto) sarebbe sceso a 1,31
+  assert.ok(Math.abs((after.suggested as number) - 1.46) < 0.05);
+});
+
+test("pellet: il fattore cambiato nel mezzo dell'intervallo pesa sui chili stimati in ciascuna parte", () => {
+  // 10 kg stimati con 1,6 poi 10 kg con 1,2: stima con fattore 1 = 10/1,6 + 10/1,2 = 14,583; reale 17,5 -> 1,2
+  const tot: Pt[] = [{ t: 0, v: 0 }, { t: 5000, v: 10 }, { t: 10000, v: 20 }];
+  const ev = [{ t: 10000, kind: "misura", before: 0, after: 0, delta: 0, bags: null, from: 0, used: 20, real: 17.5, ratio: 17.5 / 20 }] as Parameters<typeof calibration>[0];
+  const c = calibration(ev, tot, [{ t: 0, v: 1.6 }, { t: 5000, v: 1.2 }], 1.2)!;
+  assert.equal(c.suggested, Math.round((17.5 / (10 / 1.6 + 10 / 1.2)) * 100) / 100);
+  assert.ok(Math.abs((c.usedFactor as number) - 20 / (10 / 1.6 + 10 / 1.2)) < 0.01);
+});
+
+test("pellet: taratura senza storico del fattore usa quello attuale; senza nulla non suggerisce", () => {
+  const tot: Pt[] = [{ t: 0, v: 0 }, { t: 10000, v: 20 }];
+  const ev = [{ t: 10000, kind: "misura", before: 0, after: 0, delta: 0, bags: null, from: 0, used: 20, real: 18, ratio: 0.9 }] as Parameters<typeof calibration>[0];
+  assert.equal(calibration(ev, tot, [], 1.5)!.suggested, 1.35);
+  assert.equal(calibration(ev, tot, [], null)!.suggested, null);
+  assert.equal(calibration([], tot, [], 1.5), null);
 });
 
 test("pellet: statistiche a lungo termine e unione con lo storico", () => {
