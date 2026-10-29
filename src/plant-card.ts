@@ -1105,6 +1105,9 @@ export class ImpiantoOverviewCard extends LitElement {
   private _renderPolygonFigure(look: StoveLook, pellet: ReturnType<typeof pelletStatus>, d: { state: string; water: number | null; since: string | null }) {
     const kg = this._pelletKg();
     const days = daysLeft(kg, this._pelletPerDay());
+    // quanto durerebbe un carico completo (120 kg) al consumo medio attuale
+    const fullDays = daysLeft(HOPPER.capacityKg, this._pelletPerDay());
+    const dayText = (n: number) => `${n < 10 ? fmt(n, 1) : fmt(n, 0)} giorni`;
     const glow = look === "work" ? 0.55 : look === "start" ? 0.3 : 0;
     const flame =
       look === "work"
@@ -1149,8 +1152,9 @@ export class ImpiantoOverviewCard extends LitElement {
             <polyline points="122,86 128,79 133,83 140,75" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
             <text x="144" y="85" font-size="11" font-weight="700">Grafici</text>
           </g>
-          <text x="98" y="152" font-size="28" font-weight="700" fill="#f1f5f9">${kg === null ? "–" : fmt(kg, 0)}<tspan font-size="13" font-weight="500" fill="#94a3b8"> kg</tspan></text>
-          <text x="84" y="172" font-size="13" fill="#94a3b8">${days === null ? "" : `${days < 10 ? fmt(days, 1) : fmt(days, 0)} giorni`}</text>
+          <text x="104" y="138" font-size="28" font-weight="700" fill="#f1f5f9">${kg === null ? "–" : fmt(kg, 0)}<tspan font-size="13" font-weight="500" fill="#94a3b8"> kg</tspan></text>
+          <text x="92" y="155" font-size="13" fill="#94a3b8">${days === null ? "" : dayText(days)}</text>
+          <text x="76" y="171" font-size="9.5" fill="#94a3b8">${fullDays === null ? "" : `(100% pellet ${dayText(fullDays)})`}</text>
           <text x="72" y="192" font-size="10.5" fill="#94a3b8">pellet</text>
           <rect x="72" y="197" width="58" height="20" rx="10" fill=${pelletFill} />
           <text x="101" y="211.5" font-size="11" font-weight="700" text-anchor="middle" fill="#ffffff">${pellet.label}</text>
