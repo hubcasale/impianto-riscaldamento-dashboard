@@ -9,7 +9,7 @@ import type { DetailGroup, ImpiantoDetailsDialog } from "./details-dialog";
 import "./details-dialog";
 import type { ImpiantoChartsDialog } from "./charts-dialog";
 import "./charts-dialog";
-import { HOPPER, afterBags, daysLeft, kgAtDepth, remainingKg } from "./hopper-logic";
+import { HOPPER, afterBags, consumptionPerDay, daysLeft, kgAtDepth, remainingKg } from "./hopper-logic";
 import { hopperShape } from "./hopper-svg";
 import type { ImpiantoPelletDialog, PelletInfo } from "./pellet-dialog";
 import "./pellet-dialog";
@@ -1044,10 +1044,9 @@ export class ImpiantoOverviewCard extends LitElement {
     return remainingKg(this._n(e.pellet_ref_kg), this._n(e.pellet_total), this._n(e.pellet_ref_total));
   }
 
-  /** Consumo medio al giorno: la stima della settimana divisa per 7, non meno di 2 kg (i primi giorni la settimana e' incompleta). */
+  /** Consumo medio al giorno: dai contatori della settimana e del mese, diviso per i giorni trascorsi (vedi consumptionPerDay). */
   private _pelletPerDay(): number {
-    const w = this._n(this._e.pellet_week);
-    return w !== null && w / 7 >= 2 ? w / 7 : 6;
+    return consumptionPerDay(this._n(this._e.pellet_week), this._n(this._e.pellet_month), new Date());
   }
 
   private _pelletInfo(): PelletInfo {

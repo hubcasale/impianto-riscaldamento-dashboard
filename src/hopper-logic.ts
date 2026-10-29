@@ -130,3 +130,19 @@ export function levelColor(kg: number | null): string {
 export function fillPercent(kg: number | null): number {
   return kg === null ? 0 : Math.round((kg / HOPPER.capacityKg) * 100);
 }
+
+/**
+ * Consumo medio al giorno per l'autonomia, dai contatori della settimana e del mese (si azzerano il lunedi' e il primo del mese).
+ * Si divide per i giorni trascorsi da quando il contatore e' ripartito, non per 7 o 30: a meta' settimana dividere per 7
+ * dimezzava il consumo e prometteva il doppio dei giorni. Con troppo poco tempo trascorso si prova l'altro contatore, poi 6 kg/giorno.
+ */
+export function consumptionPerDay(week: number | null, month: number | null, now: Date, fallback = 6): number {
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const frac = (now.getTime() - dayStart.getTime()) / 86400000;
+  const weekDays = ((now.getDay() + 6) % 7) + frac; // la settimana parte dal lunedi'
+  const monthDays = now.getDate() - 1 + frac;
+  if (week !== null && weekDays >= 2 && week / weekDays >= 0.5) return week / weekDays;
+  if (month !== null && monthDays >= 3 && month / monthDays >= 0.5) return month / monthDays;
+  return fallback;
+}

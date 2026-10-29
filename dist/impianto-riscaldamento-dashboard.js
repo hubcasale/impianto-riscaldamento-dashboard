@@ -3252,6 +3252,16 @@ function levelColor(kg) {
   if (kg < 40) return "#f59e0b";
   return "#b7791f";
 }
+function consumptionPerDay(week, month, now, fallback = 6) {
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const frac = (now.getTime() - dayStart.getTime()) / 864e5;
+  const weekDays = (now.getDay() + 6) % 7 + frac;
+  const monthDays = now.getDate() - 1 + frac;
+  if (week !== null && weekDays >= 2 && week / weekDays >= 0.5) return week / weekDays;
+  if (month !== null && monthDays >= 3 && month / monthDays >= 0.5) return month / monthDays;
+  return fallback;
+}
 
 // src/hopper-svg.ts
 function widthAt(depth) {
@@ -5869,10 +5879,9 @@ var ImpiantoOverviewCard = class extends i4 {
     if (!this._pelletEnabled()) return null;
     return remainingKg(this._n(e5.pellet_ref_kg), this._n(e5.pellet_total), this._n(e5.pellet_ref_total));
   }
-  /** Consumo medio al giorno: la stima della settimana divisa per 7, non meno di 2 kg (i primi giorni la settimana e' incompleta). */
+  /** Consumo medio al giorno: dai contatori della settimana e del mese, diviso per i giorni trascorsi (vedi consumptionPerDay). */
   _pelletPerDay() {
-    const w2 = this._n(this._e.pellet_week);
-    return w2 !== null && w2 / 7 >= 2 ? w2 / 7 : 6;
+    return consumptionPerDay(this._n(this._e.pellet_week), this._n(this._e.pellet_month), /* @__PURE__ */ new Date());
   }
   _pelletInfo() {
     return { kg: this._pelletKg(), perDay: this._pelletPerDay(), bagKg: this._n(this._e.pellet_bag) ?? HOPPER.bagKg };

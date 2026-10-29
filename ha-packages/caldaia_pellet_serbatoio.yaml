@@ -58,6 +58,13 @@ template:
         icon: mdi:calendar-clock
         availability: "{{ is_number(states('sensor.caldaia_pellet_serbatoio')) }}"
         state: >
-          {% set w = states('sensor.caldaia_pellet_settimana') | float(0) / 7 %}
-          {% set al_giorno = w if w >= 2 else 6 %}
+          {# giorni trascorsi da quando i contatori sono ripartiti (settimana: lunedi'; mese: il primo): dividere per 7 a meta' settimana dimezzava il consumo #}
+          {% set frazione = (now() - now().replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 86400 %}
+          {% set gg_sett = now().weekday() + frazione %}
+          {% set gg_mese = now().day - 1 + frazione %}
+          {% set sett = states('sensor.caldaia_pellet_settimana') | float(0) %}
+          {% set mese = states('sensor.caldaia_pellet_mese') | float(0) %}
+          {% if gg_sett >= 2 and sett / gg_sett >= 0.5 %}{% set al_giorno = sett / gg_sett %}
+          {% elif gg_mese >= 3 and mese / gg_mese >= 0.5 %}{% set al_giorno = mese / gg_mese %}
+          {% else %}{% set al_giorno = 6 %}{% endif %}
           {{ (states('sensor.caldaia_pellet_serbatoio') | float(0) / al_giorno) | round(1) }}

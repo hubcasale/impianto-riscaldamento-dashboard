@@ -72,3 +72,26 @@ test("contorno: lato sinistro verticale, destro obliquo", () => {
   assert.deepEqual(o[3], [19, 78]);
   assert.deepEqual(o[4], [7, 94]);
 });
+
+import { consumptionPerDay } from "../src/hopper-logic";
+
+test("consumo al giorno: a meta' settimana si divide per i giorni trascorsi, non per 7", () => {
+  // giovedi' 29/10/2026 alle 07:10: 3 giorni e un po' dal lunedi'
+  const now = new Date(2026, 9, 29, 7, 10);
+  const days = 3 + (7 * 60 + 10) / 1440;
+  assert.ok(Math.abs(consumptionPerDay(19.16, 156.81, now) - 19.16 / days) < 1e-9);
+  assert.ok(consumptionPerDay(19.16, 156.81, now) > 5.5);
+});
+
+test("consumo al giorno: all'inizio della settimana si usa il mese, poi il valore di riserva", () => {
+  const lunedi = new Date(2026, 9, 26, 10, 0); // lunedi', 26 del mese: 25 giorni dall'inizio del mese
+  assert.ok(Math.abs(consumptionPerDay(2, 140, lunedi) - 140 / (25 + 10 / 24)) < 1e-9);
+  const primoDelMese = new Date(2026, 10, 2, 10, 0); // lunedi' 2 novembre: 1 giorno di mese
+  assert.equal(consumptionPerDay(2, 9, primoDelMese), 6);
+  assert.equal(consumptionPerDay(null, null, new Date(2026, 9, 29, 7, 10)), 6);
+});
+
+test("consumo al giorno: valori troppo bassi (stufa ferma) non allungano l'autonomia all'infinito", () => {
+  const now = new Date(2026, 9, 29, 7, 10);
+  assert.equal(consumptionPerDay(0.5, 1, now), 6);
+});
