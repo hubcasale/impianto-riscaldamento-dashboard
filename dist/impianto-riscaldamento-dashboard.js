@@ -5225,6 +5225,7 @@ var ImpiantoOverviewCard = class extends i4 {
     this._stufaLoading = false;
     this._thermoKey = "";
     this._waited = false;
+    this._loadInfo = {};
     /**
      * Layout split a schede larghe: l'altezza della riga la decide la scheda della caldaia. La scheda completa della stufa, se e'
      * piu' alta, si rimpicciolisce in proporzione (non sotto il 60 %) invece di allungare la riga.
@@ -5255,7 +5256,10 @@ var ImpiantoOverviewCard = class extends i4 {
       if (wide !== this._wide) this._wide = wide;
     });
     this._ro.observe(this);
-    this._waitTimer = window.setTimeout(() => this._waited = true, 4e3);
+    this._waitTimer = window.setTimeout(() => {
+      this._waited = true;
+      void this._loadLinkedCards();
+    }, 4e3);
     void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
     void customElements.whenDefined("stufa-pellet-card").then(() => this.requestUpdate());
   }
@@ -5786,11 +5790,39 @@ var ImpiantoOverviewCard = class extends i4 {
     document.body.appendChild(d3);
     this._details = d3;
   }
+  /**
+   * Se il browser non ha registrato una scheda collegata, ne importa il file a mano: se l'importazione riesce la scheda compare,
+   * se fallisce l'errore (che sul tablet non si puo' leggere dalla console) finisce nel segnaposto.
+   */
+  async _loadLinkedCards() {
+    const cards = [
+      ["stufa-pellet-card", "/impianto_riscaldamento_static/stufa-pellet-card.js"],
+      ["termostato-card", "/impianto_riscaldamento_static/termostato-card.js"]
+    ];
+    for (const [element, url] of cards) {
+      if (customElements.get(element)) continue;
+      try {
+        await import(
+          /* @vite-ignore */
+          `${url}?r=${Date.now()}`
+        );
+        this._loadInfo = {
+          ...this._loadInfo,
+          [element]: customElements.get(element) ? "caricata a mano" : "file importato ma la scheda non si registra"
+        };
+      } catch (err) {
+        const e5 = err;
+        this._loadInfo = { ...this._loadInfo, [element]: `${e5?.name ?? "Errore"}: ${e5?.message ?? String(err)}` };
+      }
+      this.requestUpdate();
+    }
+  }
   /** Segnaposto quando una scheda collegata non si e' caricata: dice cosa manca e permette di ricaricare con un tocco. */
   _missingBox(title, element) {
     return b2`<div class="missingbox" role="alert">
       <b>${title}: scheda non caricata</b>
       <span>Il browser non ha ancora caricato «${element}». Ricarica la pagina; se resta così svuota la cache del browser.</span>
+      <span class="missingdiag">${this._loadInfo[element] ?? "provo a caricarla\u2026"} · ${(navigator.userAgent.match(/Chrome\/[\d.]+/) ?? ["?"])[0]}</span>
       <button @click=${() => location.reload()}>Ricarica la pagina</button>
     </div>`;
   }
@@ -6736,6 +6768,11 @@ var ImpiantoOverviewCard = class extends i4 {
       color: var(--primary-text-color);
       font-size: 15px;
     }
+    .missingbox .missingdiag {
+      font-size: 12px;
+      font-family: monospace;
+      word-break: break-word;
+    }
     .missingbox button {
       min-height: 44px;
       border-radius: 22px;
@@ -7123,6 +7160,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoOverviewCard.prototype, "_waited", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCard.prototype, "_loadInfo", 2);
 customElements.define(CARD_TAG, ImpiantoOverviewCard);
 
 // src/schedule-logic.ts
@@ -8239,7 +8279,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.4.23";
+var VERSION = "0.4.24";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

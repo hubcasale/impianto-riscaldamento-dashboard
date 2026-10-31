@@ -331,6 +331,8 @@ export class ImpiantoOverviewCard extends LitElement {
   /** passati alcuni secondi dall'avvio: se una scheda collegata non si e' ancora caricata lo si dice (sul tablet non c'e' la console) */
   @state() private _waited = false;
   private _waitTimer?: number;
+  /** esito del caricamento diretto dei file delle schede collegate (elemento -> messaggio), mostrato nel segnaposto */
+  @state() private _loadInfo: Record<string, string> = {};
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -344,7 +346,10 @@ export class ImpiantoOverviewCard extends LitElement {
     });
     this._ro.observe(this);
     // il termostato arriva da un'altra integrazione: se il suo file si carica dopo la scheda, ridisegna
-    this._waitTimer = window.setTimeout(() => (this._waited = true), 4000);
+    this._waitTimer = window.setTimeout(() => {
+      this._waited = true;
+      void this._loadLinkedCards();
+    }, 4000);
     void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
     // la scheda della stufa arriva anch'essa da un'altra integrazione e puo' caricarsi dopo questa: senza questo la stufa
     // restava assente finche' non si ricaricava la pagina
@@ -948,11 +953,37 @@ export class ImpiantoOverviewCard extends LitElement {
     this._details = d;
   }
 
+  /**
+   * Se il browser non ha registrato una scheda collegata, ne importa il file a mano: se l'importazione riesce la scheda compare,
+   * se fallisce l'errore (che sul tablet non si puo' leggere dalla console) finisce nel segnaposto.
+   */
+  private async _loadLinkedCards(): Promise<void> {
+    const cards: Array<[string, string]> = [
+      ["stufa-pellet-card", "/impianto_riscaldamento_static/stufa-pellet-card.js"],
+      ["termostato-card", "/impianto_riscaldamento_static/termostato-card.js"],
+    ];
+    for (const [element, url] of cards) {
+      if (customElements.get(element)) continue;
+      try {
+        await import(/* @vite-ignore */ `${url}?r=${Date.now()}`);
+        this._loadInfo = {
+          ...this._loadInfo,
+          [element]: customElements.get(element) ? "caricata a mano" : "file importato ma la scheda non si registra",
+        };
+      } catch (err) {
+        const e = err as Error;
+        this._loadInfo = { ...this._loadInfo, [element]: `${e?.name ?? "Errore"}: ${e?.message ?? String(err)}` };
+      }
+      this.requestUpdate();
+    }
+  }
+
   /** Segnaposto quando una scheda collegata non si e' caricata: dice cosa manca e permette di ricaricare con un tocco. */
   private _missingBox(title: string, element: string) {
     return html`<div class="missingbox" role="alert">
       <b>${title}: scheda non caricata</b>
       <span>Il browser non ha ancora caricato «${element}». Ricarica la pagina; se resta così svuota la cache del browser.</span>
+      <span class="missingdiag">${this._loadInfo[element] ?? "provo a caricarla…"} · ${(navigator.userAgent.match(/Chrome\/[\d.]+/) ?? ["?"])[0]}</span>
       <button @click=${() => location.reload()}>Ricarica la pagina</button>
     </div>`;
   }
@@ -1949,6 +1980,11 @@ export class ImpiantoOverviewCard extends LitElement {
     .missingbox b {
       color: var(--primary-text-color);
       font-size: 15px;
+    }
+    .missingbox .missingdiag {
+      font-size: 12px;
+      font-family: monospace;
+      word-break: break-word;
     }
     .missingbox button {
       min-height: 44px;
