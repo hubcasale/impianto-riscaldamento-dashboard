@@ -5256,10 +5256,8 @@ var ImpiantoOverviewCard = class extends i4 {
       if (wide !== this._wide) this._wide = wide;
     });
     this._ro.observe(this);
-    this._waitTimer = window.setTimeout(() => {
-      this._waited = true;
-      void this._loadLinkedCards();
-    }, 4e3);
+    this._waitTimer = window.setTimeout(() => this._waited = true, 4e3);
+    this._importTimer = window.setTimeout(() => void this._loadLinkedCards(), 1500);
     void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
     void customElements.whenDefined("stufa-pellet-card").then(() => this.requestUpdate());
   }
@@ -5340,6 +5338,7 @@ var ImpiantoOverviewCard = class extends i4 {
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._waitTimer) window.clearTimeout(this._waitTimer);
+    if (this._importTimer) window.clearTimeout(this._importTimer);
     this._dialog?.remove();
     this._dialog = void 0;
     this._info?.remove();
@@ -8279,7 +8278,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.4.24";
+var VERSION = "0.4.25";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

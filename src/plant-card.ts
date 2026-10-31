@@ -331,6 +331,7 @@ export class ImpiantoOverviewCard extends LitElement {
   /** passati alcuni secondi dall'avvio: se una scheda collegata non si e' ancora caricata lo si dice (sul tablet non c'e' la console) */
   @state() private _waited = false;
   private _waitTimer?: number;
+  private _importTimer?: number;
   /** esito del caricamento diretto dei file delle schede collegate (elemento -> messaggio), mostrato nel segnaposto */
   @state() private _loadInfo: Record<string, string> = {};
 
@@ -346,10 +347,8 @@ export class ImpiantoOverviewCard extends LitElement {
     });
     this._ro.observe(this);
     // il termostato arriva da un'altra integrazione: se il suo file si carica dopo la scheda, ridisegna
-    this._waitTimer = window.setTimeout(() => {
-      this._waited = true;
-      void this._loadLinkedCards();
-    }, 4000);
+    this._waitTimer = window.setTimeout(() => (this._waited = true), 4000);
+    this._importTimer = window.setTimeout(() => void this._loadLinkedCards(), 1500);
     void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
     // la scheda della stufa arriva anch'essa da un'altra integrazione e puo' caricarsi dopo questa: senza questo la stufa
     // restava assente finche' non si ricaricava la pagina
@@ -444,6 +443,7 @@ export class ImpiantoOverviewCard extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     if (this._waitTimer) window.clearTimeout(this._waitTimer);
+    if (this._importTimer) window.clearTimeout(this._importTimer);
     this._dialog?.remove();
     this._dialog = undefined;
     this._info?.remove();
