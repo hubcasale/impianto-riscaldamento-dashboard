@@ -342,6 +342,9 @@ export class ImpiantoOverviewCard extends LitElement {
     this._ro.observe(this);
     // il termostato arriva da un'altra integrazione: se il suo file si carica dopo la scheda, ridisegna
     void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
+    // la scheda della stufa arriva anch'essa da un'altra integrazione e puo' caricarsi dopo questa: senza questo la stufa
+    // restava assente finche' non si ricaricava la pagina
+    void customElements.whenDefined("stufa-pellet-card").then(() => this.requestUpdate());
   }
 
   /** Apre la finestra delle preferenze (si aggiunge alla pagina, non sta dentro la scheda). */

@@ -5255,6 +5255,7 @@ var ImpiantoOverviewCard = class extends i4 {
     });
     this._ro.observe(this);
     void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
+    void customElements.whenDefined("stufa-pellet-card").then(() => this.requestUpdate());
   }
   /** Apre la finestra delle preferenze (si aggiunge alla pagina, non sta dentro la scheda). */
   _openSettings() {

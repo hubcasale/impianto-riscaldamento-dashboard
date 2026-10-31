@@ -45,7 +45,13 @@
 </div>
 
 <script src="bundle.js"></script>
-<script>if (new URLSearchParams(location.search).get("stufa")) document.write('<script src="/stufa-pellet-monitor/dev/bundle.js"><\/script>');</script>
+<script>{ // ?stufa_tardi=ms: la scheda della stufa si carica in ritardo (prova della gara tra i file delle schede)
+  const qq = new URLSearchParams(location.search), src = "/stufa-pellet-monitor/dev/bundle.js";
+  if (qq.get("stufa")) {
+    if (qq.get("stufa_tardi")) setTimeout(() => { const el = document.createElement("script"); el.src = src; document.head.appendChild(el); }, parseInt(qq.get("stufa_tardi")));
+    else document.write('<script src="' + src + '"><\/script>');
+  }
+}</script>
 <script>if (new URLSearchParams(location.search).get("termostato")) document.write('<script src="/termostato-riscaldamento/dev/bundle.js"><\/script>');</script>
 <script>
 
