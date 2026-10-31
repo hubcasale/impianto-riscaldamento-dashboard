@@ -5224,6 +5224,7 @@ var ImpiantoOverviewCard = class extends i4 {
     this._stufaLoadedAt = 0;
     this._stufaLoading = false;
     this._thermoKey = "";
+    this._waited = false;
     /**
      * Layout split a schede larghe: l'altezza della riga la decide la scheda della caldaia. La scheda completa della stufa, se e'
      * piu' alta, si rimpicciolisce in proporzione (non sotto il 60 %) invece di allungare la riga.
@@ -5254,6 +5255,7 @@ var ImpiantoOverviewCard = class extends i4 {
       if (wide !== this._wide) this._wide = wide;
     });
     this._ro.observe(this);
+    this._waitTimer = window.setTimeout(() => this._waited = true, 4e3);
     void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
     void customElements.whenDefined("stufa-pellet-card").then(() => this.requestUpdate());
   }
@@ -5333,6 +5335,7 @@ var ImpiantoOverviewCard = class extends i4 {
   }
   disconnectedCallback() {
     super.disconnectedCallback();
+    if (this._waitTimer) window.clearTimeout(this._waitTimer);
     this._dialog?.remove();
     this._dialog = void 0;
     this._info?.remove();
@@ -5783,10 +5786,23 @@ var ImpiantoOverviewCard = class extends i4 {
     document.body.appendChild(d3);
     this._details = d3;
   }
+  /** Segnaposto quando una scheda collegata non si e' caricata: dice cosa manca e permette di ricaricare con un tocco. */
+  _missingBox(title, element) {
+    return b2`<div class="missingbox" role="alert">
+      <b>${title}: scheda non caricata</b>
+      <span>Il browser non ha ancora caricato «${element}». Ricarica la pagina; se resta così svuota la cache del browser.</span>
+      <button @click=${() => location.reload()}>Ricarica la pagina</button>
+    </div>`;
+  }
   /** Il termostato ambiente (integrazione termostato_riscaldamento): sotto la caldaia, solo se è installato. */
   _renderThermostat() {
     const opt = this._config.thermostat;
-    if (opt === false || !customElements.get("termostato-card")) return A;
+    if (opt === false) return A;
+    if (!customElements.get("termostato-card")) {
+      const comps = this.hass.config?.components ?? [];
+      const installed = comps.includes("impianto_riscaldamento") || comps.includes("termostato_riscaldamento");
+      return this._waited && installed ? this._missingBox("Termostato", "termostato-card") : A;
+    }
     const cfg = typeof opt === "object" && opt !== null ? opt : {};
     const key = JSON.stringify(cfg);
     if (!this._thermo || this._thermoKey !== key) {
@@ -6069,7 +6085,7 @@ var ImpiantoOverviewCard = class extends i4 {
   /** Sintesi della stufa a pellet: stato, modo, potenza, accensione manuale e pulsante della scheda completa. */
   /** Layout split: la scheda completa della stufa (stufa-pellet-card) incorporata, senza pulsante e popup. */
   _stufaEmbedded() {
-    if (!customElements.get("stufa-pellet-card")) return A;
+    if (!customElements.get("stufa-pellet-card")) return this._waited ? this._missingBox("Stufa a pellet", "stufa-pellet-card") : A;
     const opt = this._config.stufa;
     const cfg = typeof opt === "object" && opt !== null ? opt : {};
     const key = JSON.stringify(cfg) + this._config.layout;
@@ -6702,6 +6718,35 @@ var ImpiantoOverviewCard = class extends i4 {
     .splitthermo {
       min-width: 0;
     }
+    .missingbox {
+      background: var(--secondary-background-color);
+      border: 1px dashed var(--divider-color);
+      border-radius: 20px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-start;
+      justify-content: center;
+      font-size: 14px;
+      color: var(--secondary-text-color);
+      min-width: 0;
+    }
+    .missingbox b {
+      color: var(--primary-text-color);
+      font-size: 15px;
+    }
+    .missingbox button {
+      min-height: 44px;
+      border-radius: 22px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      padding: 0 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
     /* scheda completa della stufa: stesso sfondo, bordo e angoli delle altre schede; le tessere prendono il colore delle tessere della caldaia */
     .stufapanel {
       background: var(--secondary-background-color);
@@ -7075,6 +7120,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoOverviewCard.prototype, "_stufa", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCard.prototype, "_waited", 2);
 customElements.define(CARD_TAG, ImpiantoOverviewCard);
 
 // src/schedule-logic.ts

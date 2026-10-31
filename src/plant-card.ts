@@ -328,6 +328,9 @@ export class ImpiantoOverviewCard extends LitElement {
   private _stufaLoading = false;
   private _thermo?: HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
   private _thermoKey = "";
+  /** passati alcuni secondi dall'avvio: se una scheda collegata non si e' ancora caricata lo si dice (sul tablet non c'e' la console) */
+  @state() private _waited = false;
+  private _waitTimer?: number;
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -341,6 +344,7 @@ export class ImpiantoOverviewCard extends LitElement {
     });
     this._ro.observe(this);
     // il termostato arriva da un'altra integrazione: se il suo file si carica dopo la scheda, ridisegna
+    this._waitTimer = window.setTimeout(() => (this._waited = true), 4000);
     void customElements.whenDefined("termostato-card").then(() => this.requestUpdate());
     // la scheda della stufa arriva anch'essa da un'altra integrazione e puo' caricarsi dopo questa: senza questo la stufa
     // restava assente finche' non si ricaricava la pagina
@@ -434,6 +438,7 @@ export class ImpiantoOverviewCard extends LitElement {
 
   disconnectedCallback(): void {
     super.disconnectedCallback();
+    if (this._waitTimer) window.clearTimeout(this._waitTimer);
     this._dialog?.remove();
     this._dialog = undefined;
     this._info?.remove();
@@ -943,10 +948,24 @@ export class ImpiantoOverviewCard extends LitElement {
     this._details = d;
   }
 
+  /** Segnaposto quando una scheda collegata non si e' caricata: dice cosa manca e permette di ricaricare con un tocco. */
+  private _missingBox(title: string, element: string) {
+    return html`<div class="missingbox" role="alert">
+      <b>${title}: scheda non caricata</b>
+      <span>Il browser non ha ancora caricato «${element}». Ricarica la pagina; se resta così svuota la cache del browser.</span>
+      <button @click=${() => location.reload()}>Ricarica la pagina</button>
+    </div>`;
+  }
+
   /** Il termostato ambiente (integrazione termostato_riscaldamento): sotto la caldaia, solo se è installato. */
   private _renderThermostat() {
     const opt = this._config.thermostat;
-    if (opt === false || !customElements.get("termostato-card")) return nothing;
+    if (opt === false) return nothing;
+    if (!customElements.get("termostato-card")) {
+      const comps = (this.hass as unknown as { config?: { components?: string[] } }).config?.components ?? [];
+      const installed = comps.includes("impianto_riscaldamento") || comps.includes("termostato_riscaldamento");
+      return this._waited && installed ? this._missingBox("Termostato", "termostato-card") : nothing;
+    }
     const cfg = typeof opt === "object" && opt !== null ? opt : {};
     const key = JSON.stringify(cfg);
     if (!this._thermo || this._thermoKey !== key) {
@@ -1267,7 +1286,7 @@ export class ImpiantoOverviewCard extends LitElement {
   /** Sintesi della stufa a pellet: stato, modo, potenza, accensione manuale e pulsante della scheda completa. */
   /** Layout split: la scheda completa della stufa (stufa-pellet-card) incorporata, senza pulsante e popup. */
   private _stufaEmbedded() {
-    if (!customElements.get("stufa-pellet-card")) return nothing;
+    if (!customElements.get("stufa-pellet-card")) return this._waited ? this._missingBox("Stufa a pellet", "stufa-pellet-card") : nothing;
     const opt = this._config.stufa;
     const cfg = typeof opt === "object" && opt !== null ? opt : {};
     const key = JSON.stringify(cfg) + this._config.layout;
@@ -1912,6 +1931,35 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .splitthermo {
       min-width: 0;
+    }
+    .missingbox {
+      background: var(--secondary-background-color);
+      border: 1px dashed var(--divider-color);
+      border-radius: 20px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-start;
+      justify-content: center;
+      font-size: 14px;
+      color: var(--secondary-text-color);
+      min-width: 0;
+    }
+    .missingbox b {
+      color: var(--primary-text-color);
+      font-size: 15px;
+    }
+    .missingbox button {
+      min-height: 44px;
+      border-radius: 22px;
+      border: 1px solid var(--divider-color);
+      background: var(--card-background-color);
+      color: var(--primary-text-color);
+      padding: 0 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
     }
     /* scheda completa della stufa: stesso sfondo, bordo e angoli delle altre schede; le tessere prendono il colore delle tessere della caldaia */
     .stufapanel {
