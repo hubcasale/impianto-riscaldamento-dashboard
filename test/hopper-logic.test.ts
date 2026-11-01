@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEAD_KG, HOPPER, HOPPER_HEIGHT, afterBags, daysLeft, depthAtKg, fillPercent, hopperOutline, kgAtDepth, levelColor, remainingKg } from "../src/hopper-logic";
+import { DEAD_KG, HOPPER, HOPPER_HEIGHT, afterBags, checkBags, daysLeft, depthAtKg, fillPercent, hopperOutline, kgAtDepth, levelColor, remainingKg } from "../src/hopper-logic";
 
 const near = (a: number, b: number, tol: number, msg?: string) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ""} ${a} != ${b} (+-${tol})`);
 
@@ -94,4 +94,29 @@ test("consumo al giorno: all'inizio della settimana si usa il mese, poi il valor
 test("consumo al giorno: valori troppo bassi (stufa ferma) non allungano l'autonomia all'infinito", () => {
   const now = new Date(2026, 9, 29, 7, 10);
   assert.equal(consumptionPerDay(0.5, 1, now), 6);
+});
+
+test("controllo sacchi: con la geometria giusta due sacchi fanno 30 kg e la densita' resta quella", () => {
+  const before = depthAtKg(60);
+  const after = depthAtKg(90);
+  const c = checkBags(2, after, before, null)!;
+  near(c.gainKg, 30, 0.05);
+  near(c.expectedKg, 30, 0);
+  near(c.impliedRho!, HOPPER.rho, 0.001);
+});
+
+test("controllo sacchi: se la quota sale meno del previsto la densita' implicita e' piu' alta", () => {
+  const c = checkBags(2, depthAtKg(80), depthAtKg(60), null)!;
+  near(c.gainKg, 20, 0.05);
+  near(c.impliedRho!, HOPPER.rho * 1.5, 0.002);
+});
+
+test("controllo sacchi: senza la quota di prima si usa la stima e non si da' la densita'", () => {
+  const c = checkBags(1, depthAtKg(50), null, 40)!;
+  near(c.beforeKg, 40, 0);
+  near(c.gainKg, 10, 0.05);
+  assert.equal(c.impliedRho, null);
+  assert.equal(checkBags(1, depthAtKg(50), null, null), null);
+  assert.equal(checkBags(0, depthAtKg(50), null, 40), null);
+  assert.equal(checkBags(1, NaN, null, 40), null);
 });

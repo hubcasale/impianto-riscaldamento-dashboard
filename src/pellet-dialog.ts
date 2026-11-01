@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
-import { HOPPER, afterBags, kgAtDepth } from "./hopper-logic";
+import { HOPPER, afterBags, checkBags, kgAtDepth } from "./hopper-logic";
 import { hopperSvg } from "./hopper-svg";
 
 const TAG = "impianto-pellet-dialog";
@@ -26,6 +26,9 @@ export class ImpiantoPelletDialog extends LitElement {
   @state() private _bags = 1;
   @state() private _depth = "";
   @state() private _done = "";
+  @state() private _cBags = "";
+  @state() private _cBefore = "";
+  @state() private _cAfter = "";
   private _onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") this._close();
   };
@@ -62,8 +65,33 @@ export class ImpiantoPelletDialog extends LitElement {
     this._depth = "";
   }
 
+  private static _num(v: string): number | null {
+    if (v.trim() === "") return null;
+    const n = Number(v.replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+
+  /** Sacchi e quota insieme: la quota dopo il carico gia' comprende i sacchi, quindi imposta quella; il confronto serve a controllare la geometria. */
+  private _setCombined(): void {
+    const c = this._combined();
+    const after = ImpiantoPelletDialog._num(this._cAfter);
+    if (!c || after === null) return;
+    this.dispatchEvent(new CustomEvent("level", { detail: after }));
+    this._done = `Livello impostato a ${fmt(after, 1)} cm: ${fmt(c.afterKg)} kg (con ${this._cBags.trim()} ${ImpiantoPelletDialog._num(this._cBags) === 1 ? "sacco" : "sacchi"} versati).`;
+    this._cBags = this._cBefore = this._cAfter = "";
+  }
+
+  private _combined() {
+    const bags = ImpiantoPelletDialog._num(this._cBags);
+    const after = ImpiantoPelletDialog._num(this._cAfter);
+    const before = ImpiantoPelletDialog._num(this._cBefore);
+    if (bags === null || after === null || bags <= 0 || after > 94 || (before !== null && (before < 0 || before > 94))) return null;
+    return checkBags(bags, after, before, this.info.kg, this.info.bagKg);
+  }
+
   render() {
     const { kg, perDay, bagKg } = this.info;
+    const comb = this._combined();
     const days = kg !== null && perDay ? kg / perDay : null;
     const after = kg !== null ? afterBags(kg, this._bags, bagKg) : null;
     const d = Number(this._depth.replace(",", "."));
@@ -106,6 +134,30 @@ export class ImpiantoPelletDialog extends LitElement {
               <button class="btn primary" ?disabled=${!levelOk} @click=${() => this._setLevel()}>Imposta</button>
             </div>
             <div class="hint">${levelOk ? `${fmt(d, 1)} cm sono circa ${fmt(kgAtDepth(d))} kg.` : "Misura dal bordo alto del serbatoio fino alla superficie del pellet, dopo averla livellata."}</div>
+
+            <div class="sec">Ho versato dei sacchi e misurato la quota</div>
+            <div class="row">
+              <label class="field">
+                <span>Sacchi versati</span>
+                <input type="text" inputmode="decimal" .value=${this._cBags} placeholder="es. 2" @input=${(e: Event) => (this._cBags = (e.target as HTMLInputElement).value)} />
+              </label>
+              <label class="field">
+                <span>Quota prima (cm, facoltativa)</span>
+                <input type="text" inputmode="decimal" .value=${this._cBefore} placeholder="es. 38" @input=${(e: Event) => (this._cBefore = (e.target as HTMLInputElement).value)} />
+              </label>
+              <label class="field">
+                <span>Quota dopo (cm)</span>
+                <input type="text" inputmode="decimal" .value=${this._cAfter} placeholder="es. 24" @input=${(e: Event) => (this._cAfter = (e.target as HTMLInputElement).value)} />
+              </label>
+              <button class="btn primary" ?disabled=${!comb} @click=${() => this._setCombined()}>Imposta</button>
+            </div>
+            <div class="hint">${
+              comb
+                ? `${this._cBefore.trim() === "" ? "Prima (stima della scheda)" : "Prima"}: ${fmt(comb.beforeKg)} kg · dopo: ${fmt(comb.afterKg)} kg · aumento ${fmt(comb.gainKg, 1)} kg, attesi ${fmt(comb.expectedKg, 1)} kg.${
+                    comb.impliedRho === null ? "" : ` Con questi dati la densità sarebbe ${fmt(comb.impliedRho, 3)} kg/litro (ora ${fmt(HOPPER.rho, 3)}).`
+                  }`
+                : "Misura la quota prima di versare i sacchi, versali, livella la superficie e misura di nuovo. Senza la quota di prima il confronto usa la stima della scheda."
+            }</div>
 
             ${this._done ? html`<div class="done">${this._done}</div>` : nothing}
             <div class="note">Da qui in poi i chili rimasti diminuiscono con il consumo stimato dalla scheda. Aggiorna il conteggio ogni volta che riempi il serbatoio o misuri il livello.</div>

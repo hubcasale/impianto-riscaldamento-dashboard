@@ -3236,6 +3236,17 @@ function daysLeft(kg, kgPerDay) {
 function afterBags(currentKg, bags, bagKg = HOPPER.bagKg) {
   return Math.min(HOPPER.capacityKg, Math.max(0, currentKg + bags * bagKg));
 }
+function checkBags(bags, depthAfter, depthBefore, estimatedKg, bagKg = HOPPER.bagKg) {
+  if (!(bags > 0) || !Number.isFinite(depthAfter) || depthAfter < 0) return null;
+  const afterKg = kgAtDepth(depthAfter);
+  const measured = depthBefore !== null && Number.isFinite(depthBefore) && depthBefore >= 0;
+  const beforeKg = measured ? kgAtDepth(depthBefore) : estimatedKg;
+  if (beforeKg === null) return null;
+  const gainKg = afterKg - beforeKg;
+  const expectedKg = bags * bagKg;
+  const impliedRho = measured && gainKg > 0.5 ? HOPPER.rho * expectedKg / gainKg : null;
+  return { afterKg, beforeKg, gainKg, expectedKg, impliedRho };
+}
 function hopperOutline() {
   return [
     [0, 0],
@@ -3303,13 +3314,16 @@ function hopperSvg(kg, label) {
 // src/pellet-dialog.ts
 var TAG5 = "impianto-pellet-dialog";
 var fmt = (n5, d3 = 0) => n5.toFixed(d3).replace(".", ",");
-var ImpiantoPelletDialog = class extends i4 {
+var _ImpiantoPelletDialog = class _ImpiantoPelletDialog extends i4 {
   constructor() {
     super(...arguments);
     this.info = { kg: null, perDay: null, bagKg: HOPPER.bagKg };
     this._bags = 1;
     this._depth = "";
     this._done = "";
+    this._cBags = "";
+    this._cBefore = "";
+    this._cAfter = "";
     this._onKey = (e5) => {
       if (e5.key === "Escape") this._close();
     };
@@ -3340,8 +3354,30 @@ var ImpiantoPelletDialog = class extends i4 {
     this._done = `Livello impostato a ${fmt(d3, 1)} cm: ${fmt(kgAtDepth(d3))} kg.`;
     this._depth = "";
   }
+  static _num(v2) {
+    if (v2.trim() === "") return null;
+    const n5 = Number(v2.replace(",", "."));
+    return Number.isFinite(n5) ? n5 : null;
+  }
+  /** Sacchi e quota insieme: la quota dopo il carico gia' comprende i sacchi, quindi imposta quella; il confronto serve a controllare la geometria. */
+  _setCombined() {
+    const c4 = this._combined();
+    const after = _ImpiantoPelletDialog._num(this._cAfter);
+    if (!c4 || after === null) return;
+    this.dispatchEvent(new CustomEvent("level", { detail: after }));
+    this._done = `Livello impostato a ${fmt(after, 1)} cm: ${fmt(c4.afterKg)} kg (con ${this._cBags.trim()} ${_ImpiantoPelletDialog._num(this._cBags) === 1 ? "sacco" : "sacchi"} versati).`;
+    this._cBags = this._cBefore = this._cAfter = "";
+  }
+  _combined() {
+    const bags = _ImpiantoPelletDialog._num(this._cBags);
+    const after = _ImpiantoPelletDialog._num(this._cAfter);
+    const before = _ImpiantoPelletDialog._num(this._cBefore);
+    if (bags === null || after === null || bags <= 0 || after > 94 || before !== null && (before < 0 || before > 94)) return null;
+    return checkBags(bags, after, before, this.info.kg, this.info.bagKg);
+  }
   render() {
     const { kg, perDay, bagKg } = this.info;
+    const comb = this._combined();
     const days = kg !== null && perDay ? kg / perDay : null;
     const after = kg !== null ? afterBags(kg, this._bags, bagKg) : null;
     const d3 = Number(this._depth.replace(",", "."));
@@ -3384,6 +3420,24 @@ var ImpiantoPelletDialog = class extends i4 {
               <button class="btn primary" ?disabled=${!levelOk} @click=${() => this._setLevel()}>Imposta</button>
             </div>
             <div class="hint">${levelOk ? `${fmt(d3, 1)} cm sono circa ${fmt(kgAtDepth(d3))} kg.` : "Misura dal bordo alto del serbatoio fino alla superficie del pellet, dopo averla livellata."}</div>
+
+            <div class="sec">Ho versato dei sacchi e misurato la quota</div>
+            <div class="row">
+              <label class="field">
+                <span>Sacchi versati</span>
+                <input type="text" inputmode="decimal" .value=${this._cBags} placeholder="es. 2" @input=${(e5) => this._cBags = e5.target.value} />
+              </label>
+              <label class="field">
+                <span>Quota prima (cm, facoltativa)</span>
+                <input type="text" inputmode="decimal" .value=${this._cBefore} placeholder="es. 38" @input=${(e5) => this._cBefore = e5.target.value} />
+              </label>
+              <label class="field">
+                <span>Quota dopo (cm)</span>
+                <input type="text" inputmode="decimal" .value=${this._cAfter} placeholder="es. 24" @input=${(e5) => this._cAfter = e5.target.value} />
+              </label>
+              <button class="btn primary" ?disabled=${!comb} @click=${() => this._setCombined()}>Imposta</button>
+            </div>
+            <div class="hint">${comb ? `${this._cBefore.trim() === "" ? "Prima (stima della scheda)" : "Prima"}: ${fmt(comb.beforeKg)} kg \xB7 dopo: ${fmt(comb.afterKg)} kg \xB7 aumento ${fmt(comb.gainKg, 1)} kg, attesi ${fmt(comb.expectedKg, 1)} kg.${comb.impliedRho === null ? "" : ` Con questi dati la densit\xE0 sarebbe ${fmt(comb.impliedRho, 3)} kg/litro (ora ${fmt(HOPPER.rho, 3)}).`}` : "Misura la quota prima di versare i sacchi, versali, livella la superficie e misura di nuovo. Senza la quota di prima il confronto usa la stima della scheda."}</div>
 
             ${this._done ? b2`<div class="done">${this._done}</div>` : A}
             <div class="note">Da qui in poi i chili rimasti diminuiscono con il consumo stimato dalla scheda. Aggiorna il conteggio ogni volta che riempi il serbatoio o misuri il livello.</div>
@@ -3588,16 +3642,26 @@ var ImpiantoPelletDialog = class extends i4 {
 };
 __decorateClass([
   n4({ attribute: false })
-], ImpiantoPelletDialog.prototype, "info", 2);
+], _ImpiantoPelletDialog.prototype, "info", 2);
 __decorateClass([
   r5()
-], ImpiantoPelletDialog.prototype, "_bags", 2);
+], _ImpiantoPelletDialog.prototype, "_bags", 2);
 __decorateClass([
   r5()
-], ImpiantoPelletDialog.prototype, "_depth", 2);
+], _ImpiantoPelletDialog.prototype, "_depth", 2);
 __decorateClass([
   r5()
-], ImpiantoPelletDialog.prototype, "_done", 2);
+], _ImpiantoPelletDialog.prototype, "_done", 2);
+__decorateClass([
+  r5()
+], _ImpiantoPelletDialog.prototype, "_cBags", 2);
+__decorateClass([
+  r5()
+], _ImpiantoPelletDialog.prototype, "_cBefore", 2);
+__decorateClass([
+  r5()
+], _ImpiantoPelletDialog.prototype, "_cAfter", 2);
+var ImpiantoPelletDialog = _ImpiantoPelletDialog;
 if (!customElements.get(TAG5)) customElements.define(TAG5, ImpiantoPelletDialog);
 
 // src/pellet-charts-logic.ts
@@ -8278,7 +8342,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.4.25";
+var VERSION = "0.4.26";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

@@ -106,6 +106,36 @@ export function afterBags(currentKg: number, bags: number, bagKg = HOPPER.bagKg)
   return Math.min(HOPPER.capacityKg, Math.max(0, currentKg + bags * bagKg));
 }
 
+export interface BagCheck {
+  /** chili ricavati dalla quota dopo il carico */
+  afterKg: number;
+  /** chili ricavati dalla quota prima del carico, oppure quelli stimati dalla scheda */
+  beforeKg: number;
+  /** aumento misurato (dopo - prima) */
+  gainKg: number;
+  /** aumento atteso: sacchi x peso del sacco */
+  expectedKg: number;
+  /** densita' (kg/litro) con cui la geometria darebbe l'aumento atteso: solo se la quota di prima e' stata misurata */
+  impliedRho: number | null;
+}
+
+/**
+ * Confronta quello che dice la geometria con i sacchi versati: dalla quota dopo il carico e da quella di prima (o, se manca,
+ * dalla stima della scheda) ricava l'aumento in chili e lo mette accanto a sacchi x peso del sacco. La densita' implicita
+ * si da' solo con la quota di prima misurata: con la stima, il suo errore finirebbe nella densita'.
+ */
+export function checkBags(bags: number, depthAfter: number, depthBefore: number | null, estimatedKg: number | null, bagKg = HOPPER.bagKg): BagCheck | null {
+  if (!(bags > 0) || !Number.isFinite(depthAfter) || depthAfter < 0) return null;
+  const afterKg = kgAtDepth(depthAfter);
+  const measured = depthBefore !== null && Number.isFinite(depthBefore) && depthBefore >= 0;
+  const beforeKg = measured ? kgAtDepth(depthBefore as number) : estimatedKg;
+  if (beforeKg === null) return null;
+  const gainKg = afterKg - beforeKg;
+  const expectedKg = bags * bagKg;
+  const impliedRho = measured && gainKg > 0.5 ? (HOPPER.rho * expectedKg) / gainKg : null;
+  return { afterKg, beforeKg, gainKg, expectedKg, impliedRho };
+}
+
 /** Contorno del serbatoio nel disegno (cm, origine in alto a sinistra): il lato sinistro e' verticale, quello destro obliquo. */
 export function hopperOutline(): Array<[number, number]> {
   return [
