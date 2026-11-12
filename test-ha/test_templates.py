@@ -679,5 +679,26 @@ check("serbatoio: il lunedi' (settimana appena ripartita) si usa il contatore de
       render(giorni_state, {**gs, "sensor.caldaia_pellet_settimana": "2", "sensor.caldaia_pellet_mese": "140"}, now=LUN26), "19.1")
 check("serbatoio: senza dati sufficienti si usano 6 kg al giorno", render(giorni_state, {**gs, "sensor.caldaia_pellet_settimana": "0.5", "sensor.caldaia_pellet_mese": "unavailable"}, now=GIO), "17.5")
 
+# ---------------------------------------------------------------- allarme AllSky (foto ferma)
+ALM = yaml.safe_load(open("ha-packages/solare_allsky_allarme.yaml"))
+ferma = find_in("binary_sensor", "AllSky foto ferma", ALM)
+eta_s = find_in("sensor", "AllSky eta foto", ALM)
+def alm(stato, eta=None, soglia="10", motivo=None):
+    at = {("sensor.allsky_controllo_foto", "eta_min"): eta, ("sensor.allsky_controllo_foto", "motivo"): motivo}
+    return {"states": {"sensor.allsky_controllo_foto": stato, "input_number.allsky_allarme_minuti": soglia}, "attrs": at}
+x = alm("ok", 1.2); check("allarme allsky: foto di 1,2 minuti = nessun allarme", render(ferma["state"], x["states"], attrs=x["attrs"]), "False")
+x = alm("ok", 10.0); check("allarme allsky: foto di 10,0 minuti con soglia 10 = nessun allarme (serve oltre la soglia)", render(ferma["state"], x["states"], attrs=x["attrs"]), "False")
+x = alm("ok", 10.1); check("allarme allsky: foto di 10,1 minuti = allarme", render(ferma["state"], x["states"], attrs=x["attrs"]), "True")
+x = alm("ok", 6.0, soglia="5"); check("allarme allsky: la soglia si legge dall'helper (6 > 5)", render(ferma["state"], x["states"], attrs=x["attrs"]), "True")
+x = alm("non raggiungibile", None, motivo="non raggiungibile: timeout"); check("allarme allsky: Raspberry non raggiungibile = allarme", render(ferma["state"], x["states"], attrs=x["attrs"]), "True")
+x = alm("ok", None); check("allarme allsky: stato ok ma senza eta' = allarme (dati incompleti)", render(ferma["state"], x["states"], attrs=x["attrs"]), "True")
+x = alm("unknown", None); check("allarme allsky: all'avvio (sensore sconosciuto) il sensore non e' disponibile", render(ferma["availability"], x["states"], attrs=x["attrs"]), "False")
+x = alm("ok", 2.5); check("allarme allsky: sensore disponibile quando il controllo ha girato", render(ferma["availability"], x["states"], attrs=x["attrs"]), "True")
+x = alm("ok", 3.4); check("allarme allsky: eta' numerica in minuti", render(eta_s["state"], x["states"], attrs=x["attrs"]), "3.4")
+x = alm("non raggiungibile", None, motivo="x"); check("allarme allsky: eta' non disponibile se il Raspberry non risponde", render(eta_s["availability"], x["states"], attrs=x["attrs"]), "False")
+mot = ferma["attributes"]["motivo"]
+x = alm("ok", 14.5); check("allarme allsky: motivo con foto vecchia", render(mot, x["states"], attrs=x["attrs"]), "ultima foto di 14.5 minuti fa")
+x = alm("non raggiungibile", None, motivo="non raggiungibile: timeout"); check("allarme allsky: motivo con Raspberry spento", render(mot, x["states"], attrs=x["attrs"]), "non raggiungibile: timeout")
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

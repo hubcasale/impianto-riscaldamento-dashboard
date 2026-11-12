@@ -1,0 +1,146 @@
+# Allarme "AllSky fermo": avvisa quando la foto del cielo smette di aggiornarsi (Raspberry bloccato, spento, rete o camera).
+#
+# Ogni 2 minuti lo script allsky/allsky_eta_foto.py (copiato in /config/allsky/) legge, con una richiesta HEAD, la data
+# dell'ultima foto sul Raspberry e ne calcola l'eta' in minuti. Se la foto e' piu' vecchia della soglia (10 minuti) o il
+# Raspberry non risponde, "AllSky foto ferma" passa a acceso; dopo altri 3 minuti arriva una notifica al telefono.
+# Di notte le foto continuano (circa una al minuto), quindi l'allarme vale sempre; 10 minuti sono un margine largo. Quando riparte arriva un secondo messaggio ("e' tornato").
+# Spegnendo input_boolean.allsky_allarme_attivo non partono notifiche (il sensore continua a funzionare).
+
+input_boolean:
+  allsky_allarme_attivo:
+    name: AllSky - notifiche di allarme attive
+    icon: mdi:bell-ring
+  allsky_allarme_inviato:
+    name: AllSky - allarme gia' inviato
+    icon: mdi:bell-check
+  allsky_allarme_defaults_impostati:
+    name: AllSky allarme - valori iniziali impostati
+    icon: mdi:check
+
+input_number:
+  allsky_allarme_minuti:
+    name: AllSky - foto piu' vecchia di (minuti) = allarme
+    min: 3
+    max: 120
+    step: 1
+    unit_of_measurement: min
+    mode: box
+    icon: mdi:timer-alert-outline
+
+command_line:
+  - sensor:
+      name: AllSky controllo foto
+      unique_id: allsky_controllo_foto
+      icon: mdi:camera-timer
+      command: python3 /config/allsky/allsky_eta_foto.py
+      scan_interval: 120
+      command_timeout: 20
+      value_template: "{{ 'ok' if value_json.ok else 'non raggiungibile' }}"
+      json_attributes:
+        - ok
+        - eta_min
+        - motivo
+
+template:
+  - sensor:
+      # eta' della foto in minuti (numerico: la command_line di sopra e' testuale)
+      - name: AllSky eta foto
+        unique_id: allsky_eta_foto
+        unit_of_measurement: min
+        state_class: measurement
+        icon: mdi:image-clock
+        availability: "{{ state_attr('sensor.allsky_controllo_foto', 'eta_min') is not none }}"
+        state: "{{ state_attr('sensor.allsky_controllo_foto', 'eta_min') | float(0) }}"
+
+  - binary_sensor:
+      - name: AllSky foto ferma
+        unique_id: allsky_foto_ferma
+        device_class: problem
+        icon: mdi:camera-off
+        # nessun allarme finche' il controllo non ha ancora girato (avvio di Home Assistant)
+        availability: "{{ states('sensor.allsky_controllo_foto') not in ['unknown', 'unavailable'] }}"
+        state: >
+          {% set stato = states('sensor.allsky_controllo_foto') %}
+          {% set eta = state_attr('sensor.allsky_controllo_foto', 'eta_min') | float(none) %}
+          {% set soglia = states('input_number.allsky_allarme_minuti') | float(10) %}
+          {{ stato != 'ok' or eta is none or eta > soglia }}
+        attributes:
+          motivo: >
+            {% if states('sensor.allsky_controllo_foto') != 'ok' %}{{ state_attr('sensor.allsky_controllo_foto', 'motivo') or 'il Raspberry non risponde' }}
+            {% else %}ultima foto di {{ state_attr('sensor.allsky_controllo_foto', 'eta_min') }} minuti fa{% endif %}
+
+automation:
+  - id: allsky_allarme_valori_iniziali
+    alias: AllSky - allarme, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.allsky_allarme_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.allsky_allarme_minuti}
+        data: {value: 10}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.allsky_allarme_attivo}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.allsky_allarme_defaults_impostati}
+
+  - id: allsky_allarme_foto_ferma
+    alias: AllSky - allarme foto ferma
+    description: Avvisa quando la foto non si aggiorna da piu' della soglia (+3 minuti di conferma).
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.allsky_foto_ferma
+        to: "on"
+        for: "00:03:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.allsky_allarme_attivo
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.allsky_allarme_inviato
+        state: "off"
+    actions:
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.allsky_allarme_inviato}
+      - action: notify.send_message
+        continue_on_error: true
+        target: {entity_id: notify.iphone_corrado}
+        data:
+          title: AllSky fermo
+          message: "{{ state_attr('binary_sensor.allsky_foto_ferma', 'motivo') }}. Controlla il Raspberry (alimentazione, rete) o riavvialo."
+      - action: persistent_notification.create
+        data:
+          notification_id: allsky_foto_ferma
+          title: AllSky fermo
+          message: "{{ state_attr('binary_sensor.allsky_foto_ferma', 'motivo') }}."
+
+  - id: allsky_allarme_ripartito
+    alias: AllSky - e' tornato
+    description: Dopo un allarme inviato, avvisa che le foto si aggiornano di nuovo.
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.allsky_foto_ferma
+        to: "off"
+        for: "00:02:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.allsky_allarme_inviato
+        state: "on"
+    actions:
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.allsky_allarme_inviato}
+      - action: persistent_notification.dismiss
+        data: {notification_id: allsky_foto_ferma}
+      - condition: state
+        entity_id: input_boolean.allsky_allarme_attivo
+        state: "on"
+      - action: notify.send_message
+        continue_on_error: true
+        target: {entity_id: notify.iphone_corrado}
+        data:
+          title: AllSky di nuovo attivo
+          message: "Le foto si aggiornano di nuovo (ultima di {{ state_attr('sensor.allsky_controllo_foto', 'eta_min') }} minuti fa)."
