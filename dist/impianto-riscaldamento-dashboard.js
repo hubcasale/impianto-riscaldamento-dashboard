@@ -4994,6 +4994,12 @@ function integrationPumpPill(running, called, blockEnabled, blockWanted, watts) 
   if (running === true) return { key: "running", label: `integrazione${pumpWatts(watts)}` };
   return { key: "idle", label: "integrazione" };
 }
+function stovePumpRunning(state) {
+  if (state === void 0 || state === null) return null;
+  const s4 = state.trim();
+  if (s4 === "" || s4 === "unknown" || s4 === "unavailable") return null;
+  return s4.toUpperCase() !== "OFF";
+}
 function collectorPumpPill(running, watts) {
   if (running === true) return { key: "running", label: `collettore${pumpWatts(watts)}` };
   return { key: "idle", label: "collettore" };
@@ -5715,7 +5721,21 @@ var ImpiantoOverviewCard = class extends i4 {
       <path d=${FLAME_PATH} fill="#fde047" transform="translate(0,6) scale(0.52)" />
     </g>`;
   }
-  _renderStoveImage(look, pellet) {
+  /**
+   * Circolatore della caldaia: un girante a tre palette dentro un cerchio. In marcia e' verde e gira; fermo e' grigio e
+   * sbiadito (cosi' si vede sempre dove sta); con il sensore che non risponde non compare.
+   */
+  _pumpIcon(cx, cy, r6, running) {
+    if (running === null) return A;
+    const vane = (a3) => w`<path d="M0,0 Q${r6 * 0.55},${-r6 * 0.1} ${r6 * 0.78},${-r6 * 0.72}" transform="rotate(${a3})" />`;
+    return w`<g class=${running ? "pump on" : "pump"} transform="translate(${cx},${cy})">
+      <title>${running ? "Circolatore acceso" : "Circolatore fermo"}</title>
+      <circle class="pumpring" r=${r6} />
+      <g class="pumprotor">${vane(0)}${vane(120)}${vane(240)}</g>
+      <circle class="pumphub" r="1.4" />
+    </g>`;
+  }
+  _renderStoveImage(look, pellet, pump = null) {
     const flame = look === "work" ? this._flame(90, 168, 1) : look === "start" ? this._flame(90, 168, 0.4) : look === "stopping" ? this._flame(90, 168, 0.22, 0.55) : A;
     const glow = look === "work" ? 0.55 : look === "start" ? 0.3 : 0;
     return b2`
@@ -5737,6 +5757,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <g class="flicker">${flame}</g>
         <rect x="20" y="190" width="140" height="8" rx="4" fill="#374151" />
         <circle cx="22" cy="222" r="5" fill="#64748b" /><circle cx="42" cy="222" r="5" fill="#64748b" />
+        ${this._pumpIcon(152, 220, 8, pump)}
       </svg>
     `;
   }
@@ -5771,7 +5792,7 @@ var ImpiantoOverviewCard = class extends i4 {
               </div>`}
         </div>
         <div class=${inline ? "top figure" : "top"}>
-          ${inline ? this._renderPolygonFigure(look, pellet, { state: stateRaw ?? "\u2013", water: this._n(e5.stove_water), since }) : b2`${this._renderStoveImage(look, pellet)}
+          ${inline ? this._renderPolygonFigure(look, pellet, { state: stateRaw ?? "\u2013", water: this._n(e5.stove_water), since, pump: stovePumpRunning(this._s(e5.pump)) }) : b2`${this._renderStoveImage(look, pellet, stovePumpRunning(this._s(e5.pump)))}
                 <div class="statecard">
                   <span class="scp"><span class="tl">Stato caldaia</span><span class="statepill ${look}">${stateRaw ?? "\u2013"}</span></span>
                   <span class="scp"><span class="tl">Acqua caldaia</span><span class="water">${fmt3(this._n(e5.stove_water), 1)}<small> °C</small></span></span>
@@ -6072,6 +6093,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <rect class="sp ${look}" x="206" y="188" width="62" height="28" rx="14" />
         <text class="spt ${look}" x="237" y="207" font-size=${stateFont} font-weight="700" text-anchor="middle">${d3.state}</text>
         <text x="342" y="208" font-size="19" font-weight="700" text-anchor="end" fill="#f1f5f9">${fmt3(d3.water, 1)}<tspan font-size="11" font-weight="500" fill="#94a3b8"> °C</tspan></text>
+        ${d3.pump === null ? A : w`${this._pumpIcon(215, 223, 6, d3.pump)}<text class=${d3.pump ? "pumplab on" : "pumplab"} x="225" y="226.3" font-size="9.5">circolatore</text>`}
         <!-- armadio del serbatoio (a sinistra) -->
         <g class="cabinet" role="button" tabindex="0" aria-label="Pellet nel serbatoio: aggiorna il conteggio" @click=${() => this._openPellet()} @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._openPellet()}>
           <rect x="10" y="56" width="178" height="174" rx="4" fill="url(#pf-armadio)" stroke="#3b3b44" stroke-width="1.5" />
@@ -6580,9 +6602,49 @@ var ImpiantoOverviewCard = class extends i4 {
         opacity: 0.35;
       }
     }
+    .pumpring {
+      fill: rgba(100, 116, 139, 0.12);
+      stroke: #64748b;
+      stroke-width: 1.4;
+    }
+    .pumprotor path {
+      fill: none;
+      stroke: #64748b;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+    }
+    .pumphub {
+      fill: #64748b;
+    }
+    .pump.on .pumpring {
+      fill: rgba(34, 197, 94, 0.16);
+      stroke: #22c55e;
+    }
+    .pump.on .pumprotor path {
+      stroke: #22c55e;
+    }
+    .pump.on .pumphub {
+      fill: #22c55e;
+    }
+    .pump.on .pumprotor {
+      transform-origin: 0 0;
+      animation: pumpspin 0.9s linear infinite;
+    }
+    @keyframes pumpspin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    .pumplab {
+      fill: #64748b;
+    }
+    .pumplab.on {
+      fill: #86efac;
+    }
     @media (prefers-reduced-motion: reduce) {
       .coilflow,
-      .pulse {
+      .pulse,
+      .pump.on .pumprotor {
         animation: none;
       }
     }
@@ -8342,7 +8404,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.4.26";
+var VERSION = "0.4.27";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

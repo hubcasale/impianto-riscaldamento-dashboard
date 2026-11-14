@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_MODEL, boostButton, collectorPumpPill, integrationPumpPill, panelColor, panelModel, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, sinceText, stufaButton, stufaKey, STUFA_LABEL } from "../src/plant-logic";
+import { DEFAULT_MODEL, boostButton, collectorPumpPill, integrationPumpPill, stovePumpRunning, panelColor, panelModel, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, sinceText, stufaButton, stufaKey, STUFA_LABEL } from "../src/plant-logic";
 
 test("docce: boiler caldo in alto, freddo in basso", () => {
   // zona alta 95 L a 55,6 °C -> 95*(40,6)/23 = 167,7 L a 38 °C -> 4 docce da 40 L
@@ -167,4 +167,13 @@ test("stufa: da quanto dura lo stato", () => {
   assert.equal(sinceText(125 * 60000), "da 2 h 05 min");
   assert.equal(sinceText(24 * 3600000), "da 1 giorno");
   assert.equal(sinceText(50 * 3600000), "da 2 giorni");
+});
+
+test("circolatore della caldaia: in marcia se non e' OFF, sconosciuto se il sensore non risponde", () => {
+  assert.equal(stovePumpRunning("ON"), true);
+  assert.equal(stovePumpRunning("OFF"), false);
+  assert.equal(stovePumpRunning("off"), false);
+  assert.equal(stovePumpRunning(undefined), null);
+  assert.equal(stovePumpRunning("unavailable"), null);
+  assert.equal(stovePumpRunning("unknown"), null);
 });

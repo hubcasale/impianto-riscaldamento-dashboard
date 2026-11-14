@@ -196,6 +196,14 @@ export function integrationPumpPill(
   return { key: "idle", label: "integrazione" };
 }
 
+/** Circolatore della caldaia (sensore con testo ON/OFF): in marcia se non e' OFF, null se il sensore manca o non risponde. */
+export function stovePumpRunning(state: string | undefined | null): boolean | null {
+  if (state === undefined || state === null) return null;
+  const s = state.trim();
+  if (s === "" || s === "unknown" || s === "unavailable") return null;
+  return s.toUpperCase() !== "OFF";
+}
+
 /** Pompa del collettore solare (i watt sono quelli letti sull'alimentazione dell'Elios). */
 export function collectorPumpPill(running: boolean | null, watts: number | null): PumpPill {
   if (running === true) return { key: "running", label: `collettore${pumpWatts(watts)}` };

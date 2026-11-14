@@ -21,7 +21,7 @@ import type { ImpiantoConfirmDialog } from "./confirm-dialog";
 import "./confirm-dialog";
 import { SECTIONS_USER_KEY, SECTION_KEYS, defaultSections, normalizeSections, sectionsToStore, toggleSection, visibleKeys, type SectionKey, type Sections } from "./sections-logic";
 import { summarize, type SummaryLine } from "./summary-logic";
-import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, sinceText, stoveLook, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
+import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, sinceText, stoveLook, stovePumpRunning, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
 const CARD_TAG = "impianto-overview-card";
 
@@ -792,7 +792,22 @@ export class ImpiantoOverviewCard extends LitElement {
     </g>`;
   }
 
-  private _renderStoveImage(look: StoveLook, pellet: ReturnType<typeof pelletStatus>) {
+  /**
+   * Circolatore della caldaia: un girante a tre palette dentro un cerchio. In marcia e' verde e gira; fermo e' grigio e
+   * sbiadito (cosi' si vede sempre dove sta); con il sensore che non risponde non compare.
+   */
+  private _pumpIcon(cx: number, cy: number, r: number, running: boolean | null) {
+    if (running === null) return nothing;
+    const vane = (a: number) => svg`<path d="M0,0 Q${r * 0.55},${-r * 0.1} ${r * 0.78},${-r * 0.72}" transform="rotate(${a})" />`;
+    return svg`<g class=${running ? "pump on" : "pump"} transform="translate(${cx},${cy})">
+      <title>${running ? "Circolatore acceso" : "Circolatore fermo"}</title>
+      <circle class="pumpring" r=${r} />
+      <g class="pumprotor">${vane(0)}${vane(120)}${vane(240)}</g>
+      <circle class="pumphub" r="1.4" />
+    </g>`;
+  }
+
+  private _renderStoveImage(look: StoveLook, pellet: ReturnType<typeof pelletStatus>, pump: boolean | null = null) {
     const flame =
       look === "work"
         ? this._flame(90, 168, 1.0)
@@ -821,6 +836,7 @@ export class ImpiantoOverviewCard extends LitElement {
         <g class="flicker">${flame}</g>
         <rect x="20" y="190" width="140" height="8" rx="4" fill="#374151" />
         <circle cx="22" cy="222" r="5" fill="#64748b" /><circle cx="42" cy="222" r="5" fill="#64748b" />
+        ${this._pumpIcon(152, 220, 8, pump)}
       </svg>
     `;
   }
@@ -867,8 +883,8 @@ export class ImpiantoOverviewCard extends LitElement {
         </div>
         <div class=${inline ? "top figure" : "top"}>
           ${inline
-            ? this._renderPolygonFigure(look, pellet, { state: stateRaw ?? "–", water: this._n(e.stove_water), since })
-            : html`${this._renderStoveImage(look, pellet)}
+            ? this._renderPolygonFigure(look, pellet, { state: stateRaw ?? "–", water: this._n(e.stove_water), since, pump: stovePumpRunning(this._s(e.pump)) })
+            : html`${this._renderStoveImage(look, pellet, stovePumpRunning(this._s(e.pump)))}
                 <div class="statecard">
                   <span class="scp"><span class="tl">Stato caldaia</span><span class="statepill ${look}">${stateRaw ?? "–"}</span></span>
                   <span class="scp"><span class="tl">Acqua caldaia</span><span class="water">${fmt(this._n(e.stove_water), 1)}<small> °C</small></span></span>
@@ -1155,7 +1171,7 @@ export class ImpiantoOverviewCard extends LitElement {
    * Nell'armadio il serbatoio del pellet riempito fino ai chili rimasti (si tocca per aggiornare il conteggio); nel corpo la
    * finestra con la fiamma, in alto l'ultimo cambio di stato, in basso lo stato e la temperatura dell'acqua.
    */
-  private _renderPolygonFigure(look: StoveLook, pellet: ReturnType<typeof pelletStatus>, d: { state: string; water: number | null; since: string | null }) {
+  private _renderPolygonFigure(look: StoveLook, pellet: ReturnType<typeof pelletStatus>, d: { state: string; water: number | null; since: string | null; pump: boolean | null }) {
     const kg = this._pelletKg();
     const days = daysLeft(kg, this._pelletPerDay());
     // quanto durerebbe un carico completo (120 kg) al consumo medio attuale
@@ -1191,6 +1207,7 @@ export class ImpiantoOverviewCard extends LitElement {
         <rect class="sp ${look}" x="206" y="188" width="62" height="28" rx="14" />
         <text class="spt ${look}" x="237" y="207" font-size=${stateFont} font-weight="700" text-anchor="middle">${d.state}</text>
         <text x="342" y="208" font-size="19" font-weight="700" text-anchor="end" fill="#f1f5f9">${fmt(d.water, 1)}<tspan font-size="11" font-weight="500" fill="#94a3b8"> °C</tspan></text>
+        ${d.pump === null ? nothing : svg`${this._pumpIcon(215, 223, 6, d.pump)}<text class=${d.pump ? "pumplab on" : "pumplab"} x="225" y="226.3" font-size="9.5">circolatore</text>`}
         <!-- armadio del serbatoio (a sinistra) -->
         <g class="cabinet" role="button" tabindex="0" aria-label="Pellet nel serbatoio: aggiorna il conteggio" @click=${() => this._openPellet()} @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openPellet()}>
           <rect x="10" y="56" width="178" height="174" rx="4" fill="url(#pf-armadio)" stroke="#3b3b44" stroke-width="1.5" />
@@ -1730,9 +1747,49 @@ export class ImpiantoOverviewCard extends LitElement {
         opacity: 0.35;
       }
     }
+    .pumpring {
+      fill: rgba(100, 116, 139, 0.12);
+      stroke: #64748b;
+      stroke-width: 1.4;
+    }
+    .pumprotor path {
+      fill: none;
+      stroke: #64748b;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+    }
+    .pumphub {
+      fill: #64748b;
+    }
+    .pump.on .pumpring {
+      fill: rgba(34, 197, 94, 0.16);
+      stroke: #22c55e;
+    }
+    .pump.on .pumprotor path {
+      stroke: #22c55e;
+    }
+    .pump.on .pumphub {
+      fill: #22c55e;
+    }
+    .pump.on .pumprotor {
+      transform-origin: 0 0;
+      animation: pumpspin 0.9s linear infinite;
+    }
+    @keyframes pumpspin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    .pumplab {
+      fill: #64748b;
+    }
+    .pumplab.on {
+      fill: #86efac;
+    }
     @media (prefers-reduced-motion: reduce) {
       .coilflow,
-      .pulse {
+      .pulse,
+      .pump.on .pumprotor {
         animation: none;
       }
     }

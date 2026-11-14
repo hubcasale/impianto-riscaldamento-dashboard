@@ -88,7 +88,7 @@ set("sensor.casale_potenza_reale", 100);
 set("sensor.casale_pressione_acqua", 1.2);
 set("sensor.casale_pressione_braciere", 0.9);
 set("sensor.casale_estrattore_fumi", 0);
-set("sensor.casale_pompa_acqua", "OFF");
+set("sensor.casale_pompa_acqua", q.get("pompa") || "OFF");
 set("sensor.casale_allarme", "____");
 set("number.casale_setpoint_boiler", 45, { min: 45, max: 70, step: 1, unit_of_measurement: "°C" });
 set("climate.casale_acqua", "heat", { temperature: 65, min_temp: 50, max_temp: 75, target_temp_step: 1 });
