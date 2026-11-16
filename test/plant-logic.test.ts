@@ -177,3 +177,14 @@ test("circolatore della caldaia: in marcia se non e' OFF, sconosciuto se il sens
   assert.equal(stovePumpRunning("unavailable"), null);
   assert.equal(stovePumpRunning("unknown"), null);
 });
+
+test("docce con la serpentina (CLESS): l'energia si conta sopra la temperatura minima, non fino all'acqua di rete", () => {
+  // zona alta 230 L a 65 °C, minima 47 °C: 230 * 18 / 23 = 180 L -> 4 docce da 40 L (con il conto da boiler sarebbero 12)
+  const cless = { ...DEFAULT_MODEL, volume: 510, topShare: 0.45, coilMin: 47 };
+  assert.equal(showersEstimate(65, 20, cless), 4);
+  assert.equal(showersEstimate(65, 20, { ...cless, coilMin: null }), 12);
+  // sotto la temperatura minima la zona non conta
+  assert.equal(showersEstimate(46, 20, cless), 0);
+  // la zona bassa scaldata dal sole sopra la minima conta anche lei
+  assert.ok((showersEstimate(65, 55, cless) ?? 0) > 4);
+});

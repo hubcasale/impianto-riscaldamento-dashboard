@@ -149,6 +149,8 @@ template:
       # numero di docce disponibili, come lo stima la scheda: la meta' alta del volume alla temperatura della sonda alta, la
       # meta' bassa a quella della sonda bassa; una zona conta solo se e' almeno a 38 C; una doccia = 40 L a 38 C miscelati con
       # l'acqua di rete (litri = volume zona x (T - T rete) / (38 - T rete)). Usato dalla salvaguardia accensioni.
+      # Col modo CLESS (serpentina sanitaria) l'energia si conta sopra la temperatura minima della zona, non fino all'acqua di rete:
+      # litri = volume zona x (T - T minima) / (38 - T rete); la serpentina non riesce a raffreddare l'accumulo piu' di cosi'.
       - name: Boiler solare - docce disponibili
         unique_id: boiler_solare_docce_disponibili
         unit_of_measurement: docce
@@ -165,9 +167,10 @@ template:
           {% set alto = states('sensor.boiler_solare_alto_stimato') | float(0) %}
           {% set basso = states('sensor.boiler_solare_basso_stimato') | float(alto) %}
           {% set tmin = states('input_number.boiler_solare_t_minima_zona') | float(38) %}
+          {% set cless = is_state('input_boolean.impianto_modo_cless', 'on') %}
           {% set ns = namespace(litri=0) %}
           {% for vol, t in [(v * w, alto), (v * (1 - w), basso)] %}
-            {% if t >= tmin %}{% set ns.litri = ns.litri + vol * (t - tr) / (38 - tr) %}{% endif %}
+            {% if t >= tmin %}{% set ns.litri = ns.litri + vol * (t - (tmin if cless else tr)) / (38 - tr) %}{% endif %}
           {% endfor %}
           {{ (ns.litri / 40) | int }}
 

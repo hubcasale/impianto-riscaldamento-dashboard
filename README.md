@@ -182,7 +182,7 @@ Le schede leggono sensori che qui sono forniti come esempio:
 Con l'accumulo REQ.A CLESS al posto del boiler solare da 200 L e del puffer da 50 L si accende `input_boolean.impianto_modo_cless` (pacchetto `ha-packages/impianto_cless.yaml`). Da acceso:
 
 - la scheda disegna l'accumulo senza puffer, senza serpentina e pompa di integrazione e senza il pulsante di accensione rapida; al posto dell'«Acqua pronta in» mostra il setpoint della sonda S. BOILER, e la finestra «Stato» parla della sonda S. BOILER invece del puffer;
-- il modello del serbatoio passa a 510 L (zona alta circa il 45 %), le correzioni delle sonde ESP32 vanno a 0 (da rifare confrontando la sonda alta con la S. BOILER) e una zona conta per le docce solo se è almeno a 47 °C;
+- il modello del serbatoio passa a 510 L (zona alta circa il 45 %), le correzioni delle sonde ESP32 vanno a 0 (da rifare confrontando la sonda alta con la S. BOILER) e le docce si contano sopra i 47 °C (la serpentina sanitaria non raffredda l'accumulo oltre quella soglia): con la cima a 65 °C sono circa 4, non 12 come col conto da boiler a serbatoio;
 - la salvaguardia delle partenze inutili, il blocco della pompa di integrazione e la misura del tempo per l'acqua pronta si fermano (la caldaia resta sempre accesa per l'acqua calda);
 - se la caldaia resta spenta più di 20 minuti (regolabile) senza programma settimanale e con qualcuno in casa arriva un avviso sul telefono; non viene riaccesa da sola.
 

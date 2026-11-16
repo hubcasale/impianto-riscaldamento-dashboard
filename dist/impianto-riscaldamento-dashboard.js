@@ -4960,9 +4960,13 @@ function showersEstimate(top, bottom, m2) {
     [m2.volume * m2.topShare, top],
     [m2.volume * (1 - m2.topShare), bottom ?? top]
   ];
+  const floor = m2.coilMin ?? null;
   let liters = 0;
   for (const [v2, t3] of zones) {
-    if (t3 !== null && t3 >= m2.showerTemp) liters += v2 * (t3 - m2.mainsTemp) / span;
+    if (t3 === null) continue;
+    if (floor !== null) {
+      if (t3 >= Math.max(floor, m2.showerTemp)) liters += v2 * (t3 - floor) / span;
+    } else if (t3 >= m2.showerTemp) liters += v2 * (t3 - m2.mainsTemp) / span;
   }
   return Math.floor(liters / m2.showerVolume);
 }
@@ -5318,7 +5322,8 @@ var DEFAULT_ENTITIES = {
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
   top_share: "input_number.boiler_solare_peso_alto",
-  mains_temp: "input_number.boiler_solare_t_rete"
+  mains_temp: "input_number.boiler_solare_t_rete",
+  zone_min: "input_number.boiler_solare_t_minima_zona"
 };
 var FLAME_PATH = "M0,-100 C10,-70 45,-50 45,-15 C45,12 25,25 0,25 C-25,25 -45,12 -45,-15 C-45,-32 -35,-45 -25,-58 C-22,-40 -12,-32 -6,-34 C-14,-60 -8,-82 0,-100 Z";
 var COIL_INTEGRATION = "M238 200 H398 M398 200 q14 12 0 24 H238 q-14 12 0 24 H398 q14 12 0 24 H238";
@@ -5564,7 +5569,9 @@ var ImpiantoOverviewCard = class extends i4 {
       topShare: share ?? DEFAULT_MODEL.topShare,
       mainsTemp: this._val(m2.mains_temp, DEFAULT_MODEL_ENTITIES.mains_temp) ?? DEFAULT_MODEL.mainsTemp,
       showerVolume: this._val(m2.shower_volume) ?? DEFAULT_MODEL.showerVolume,
-      showerTemp: this._val(m2.shower_temp) ?? DEFAULT_MODEL.showerTemp
+      showerTemp: this._val(m2.shower_temp) ?? DEFAULT_MODEL.showerTemp,
+      // col CLESS le docce si contano sopra la temperatura minima della zona (la serpentina non scende sotto)
+      coilMin: this._cless() ? this._val(void 0, DEFAULT_MODEL_ENTITIES.zone_min) ?? 47 : null
     };
   }
   _yes(id) {
@@ -8474,7 +8481,7 @@ __decorateClass([
 customElements.define(CARD_TAG2, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.4.29";
+var VERSION = "0.4.30";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

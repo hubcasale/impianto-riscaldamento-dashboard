@@ -630,15 +630,22 @@ check("pompa in marcia: il valore interno segue la misura (alla fermata riparte 
 # docce disponibili (stessa formula della scheda: zone alta e bassa, una zona conta se e' ad almeno 38 C, doccia da 40 L)
 BOI = yaml.safe_load(open("ha-packages/boiler_solare.yaml"))
 docce_tpl = next(e_ for t_ in BOI["template"] for e_ in t_.get("sensor", []) if e_["name"] == "Boiler solare - docce disponibili")["state"]
-def docce(alto, basso, vol="200", peso="50", rete="15"):
+def docce(alto, basso, vol="200", peso="50", rete="15", cless=None, tmin=None):
     st_ = {"sensor.boiler_solare_alto_stimato": alto, "sensor.boiler_solare_basso_stimato": basso, "input_number.boiler_solare_volume": vol,
            "input_number.boiler_solare_peso_alto": peso, "input_number.boiler_solare_t_rete": rete}
+    if cless is not None: st_["input_boolean.impianto_modo_cless"] = cless
+    if tmin is not None: st_["input_number.boiler_solare_t_minima_zona"] = tmin
     return render(docce_tpl, st_)
 check("docce: 44,6 sopra e 38,4 sotto sono 5 docce (come la scheda)", docce("44.6", "38.4"), "5")
 check("docce: 41,3 sopra e 35,0 sotto sono 2 docce (il fondo non conta)", docce("41.3", "35.0"), "2")
 check("docce: tutto freddo e' zero", docce("30", "20"), "0")
 check("docce: tutto a 60 C con 190 L sono 9 docce", docce("60", "60", vol="190"), "9")
 check("docce: senza sonda bassa vale la alta", docce("44.6", "unavailable"), "6")
+# modo CLESS: l'energia si conta sopra la temperatura minima della zona (serpentina sanitaria), non fino all'acqua di rete
+check("docce CLESS: 230 L a 65 C con minima 47 sono 4 docce", docce("65", "20", vol="510", peso="45", cless="on", tmin="47"), "4")
+check("docce CLESS spento: stessi valori col conto da boiler sono 12 docce", docce("65", "20", vol="510", peso="45", cless="off", tmin="47"), "12")
+check("docce CLESS: sotto la minima non conta", docce("46", "20", vol="510", peso="45", cless="on", tmin="47"), "0")
+check("docce CLESS: il fondo caldo di sole conta sopra la minima", docce("65", "55", vol="510", peso="45", cless="on", tmin="47"), "6")
 
 
 # ---------------------------------------------------------------- pellet: il totale non esiste se manca un addendo (niente salti nei contatori)

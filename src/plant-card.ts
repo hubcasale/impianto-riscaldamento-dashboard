@@ -270,6 +270,7 @@ const DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
   top_share: "input_number.boiler_solare_peso_alto",
   mains_temp: "input_number.boiler_solare_t_rete",
+  zone_min: "input_number.boiler_solare_t_minima_zona",
 };
 
 const FLAME_PATH =
@@ -551,6 +552,8 @@ export class ImpiantoOverviewCard extends LitElement {
       mainsTemp: this._val(m.mains_temp, DEFAULT_MODEL_ENTITIES.mains_temp) ?? DEFAULT_MODEL.mainsTemp,
       showerVolume: this._val(m.shower_volume) ?? DEFAULT_MODEL.showerVolume,
       showerTemp: this._val(m.shower_temp) ?? DEFAULT_MODEL.showerTemp,
+      // col CLESS le docce si contano sopra la temperatura minima della zona (la serpentina non scende sotto)
+      coilMin: this._cless() ? this._val(undefined, DEFAULT_MODEL_ENTITIES.zone_min) ?? 47 : null,
     };
   }
 

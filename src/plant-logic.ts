@@ -11,6 +11,11 @@ export interface BoilerModel {
   showerVolume: number;
   /** temperatura della doccia, °C */
   showerTemp: number;
+  /**
+   * Accumulo con serpentina sanitaria (CLESS): l'acqua esce dalla serpentina piu' fredda dell'accumulo, quindi una zona conta solo
+   * da questa temperatura in su e l'energia si conta sopra di essa (non fino all'acqua di rete). Assente = boiler a serbatoio.
+   */
+  coilMin?: number | null;
 }
 
 export const DEFAULT_MODEL: BoilerModel = {
@@ -36,9 +41,13 @@ export function showersEstimate(top: number | null, bottom: number | null, m: Bo
     [m.volume * m.topShare, top],
     [m.volume * (1 - m.topShare), bottom ?? top],
   ];
+  const floor = m.coilMin ?? null;
   let liters = 0;
   for (const [v, t] of zones) {
-    if (t !== null && t >= m.showerTemp) liters += (v * (t - m.mainsTemp)) / span;
+    if (t === null) continue;
+    if (floor !== null) {
+      if (t >= Math.max(floor, m.showerTemp)) liters += (v * (t - floor)) / span;
+    } else if (t >= m.showerTemp) liters += (v * (t - m.mainsTemp)) / span;
   }
   return Math.floor(liters / m.showerVolume);
 }
