@@ -193,6 +193,11 @@ automation:
         minutes: "/5"
       - trigger: homeassistant
         event: start
+    # col modo CLESS non c'e' piu' la pompa di integrazione: il segnale gia' dato scade da solo dopo 10 minuti
+    conditions:
+      - condition: state
+        entity_id: input_boolean.impianto_modo_cless
+        state: "off"
     actions:
       - choose:
           - conditions:

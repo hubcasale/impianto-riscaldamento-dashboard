@@ -101,6 +101,9 @@ automation:
       - condition: state
         entity_id: input_boolean.caldaia_misura_acqua_in_corso
         state: "off"
+      - condition: state
+        entity_id: input_boolean.impianto_modo_cless
+        state: "off"
     actions:
       - action: input_datetime.set_datetime
         target: {entity_id: input_datetime.caldaia_misura_acqua_avvio}

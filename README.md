@@ -75,6 +75,7 @@ Senza altro usa questi nomi di entità (cambiali in `entities:` se i tuoi sono d
 | `boiler_top` | `sensor.boiler_solare_alto_stimato` | `ha-packages/boiler_solare.yaml` |
 | `boiler_bottom` | `sensor.boiler_solare_basso_stimato` | idem |
 | `outlet` | *(assente: si usa la sonda alta)* | temperatura dell'acqua in uscita, se la misuri |
+| `cless_mode` | `input_boolean.impianto_modo_cless` | pacchetto `impianto_cless` (vedi «Modo CLESS») |
 | `solar_power`, `collector_temp` | `sensor.solare_termico_potenza`, `sensor.solare_termico_t_collettore_stimata` | pacchetto solare termico |
 | `puffer`, `stove_state`, `stove_water`, `smoke`, `flame`, `power`, `water_pressure`, `brazier_pressure`, `extractor`, `pump`, `alarm` | `sensor.casale_*` | integrazione `aguaiot_hubcasale` |
 | `set_boiler`, `set_water` | `number.casale_setpoint_boiler`, `climate.casale_acqua` (attributo `temperature`) | integrazione |
@@ -175,6 +176,17 @@ Le schede leggono sensori che qui sono forniti come esempio:
 - `ha-packages/caldaia_accensione_rapida.yaml`: pulsante **Avvia caldaia** per quando serve acqua calda e la Polygon è spenta,
   con spegnimento automatico (vedi sotto) e la stima `sensor.caldaia_acqua_pronta_tra`.
 - `esphome/solare-termico.yaml`: ESP32 con ADS1115 e sonde NTC 10k B3950 (serpentine) e due sonde sul boiler.
+
+## Modo CLESS
+
+Con l'accumulo REQ.A CLESS al posto del boiler solare da 200 L e del puffer da 50 L si accende `input_boolean.impianto_modo_cless` (pacchetto `ha-packages/impianto_cless.yaml`). Da acceso:
+
+- la scheda disegna l'accumulo senza puffer, senza serpentina e pompa di integrazione e senza il pulsante di accensione rapida; al posto dell'«Acqua pronta in» mostra il setpoint della sonda S. BOILER, e la finestra «Stato» parla della sonda S. BOILER invece del puffer;
+- il modello del serbatoio passa a 510 L (zona alta circa il 45 %), le correzioni delle sonde ESP32 vanno a 0 (da rifare confrontando la sonda alta con la S. BOILER) e una zona conta per le docce solo se è almeno a 47 °C;
+- la salvaguardia delle partenze inutili, il blocco della pompa di integrazione e la misura del tempo per l'acqua pronta si fermano (la caldaia resta sempre accesa per l'acqua calda);
+- se la caldaia resta spenta più di 20 minuti (regolabile) senza programma settimanale e con qualcuno in casa arriva un avviso sul telefono; non viene riaccesa da sola.
+
+Da spento torna tutto com'era (200 L, 50 %, correzioni +4 e +3 °C). Senza il pacchetto, o con il modo spento, la scheda non cambia.
 
 ## Pulsante «Stato»
 

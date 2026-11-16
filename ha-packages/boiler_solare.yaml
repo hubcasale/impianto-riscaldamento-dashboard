@@ -164,9 +164,10 @@ template:
           {% set tr = states('input_number.boiler_solare_t_rete') | float(15) %}
           {% set alto = states('sensor.boiler_solare_alto_stimato') | float(0) %}
           {% set basso = states('sensor.boiler_solare_basso_stimato') | float(alto) %}
+          {% set tmin = states('input_number.boiler_solare_t_minima_zona') | float(38) %}
           {% set ns = namespace(litri=0) %}
           {% for vol, t in [(v * w, alto), (v * (1 - w), basso)] %}
-            {% if t >= 38 %}{% set ns.litri = ns.litri + vol * (t - tr) / (38 - tr) %}{% endif %}
+            {% if t >= tmin %}{% set ns.litri = ns.litri + vol * (t - tr) / (38 - tr) %}{% endif %}
           {% endfor %}
           {{ (ns.litri / 40) | int }}
 

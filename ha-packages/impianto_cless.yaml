@@ -1,0 +1,144 @@
+# Modo CLESS: l'accumulo REQ.A CLESS 600 2S al posto del boiler solare da 200 L (e del puffer da 50 L).
+#
+# Si attiva con input_boolean.impianto_modo_cless (spento = impianto com'era). Da acceso:
+#   - il modello del serbatoio usa 510 L, la zona alta (acqua calda per ACS e termosifoni) circa il 44 %, e le sonde ESP32 non hanno
+#     piu' la correzione verso la centralina Elios (il CLESS non ha il boiler che le tarava): le correzioni vanno rifatte confrontando
+#     la sonda ESP32 alta con la sonda S. BOILER della Polygon (sensor.casale_temperatura_boiler)
+#   - una zona conta per le docce solo se e' almeno a 47 C (l'acqua sanitaria esce dalla serpentina sempre piu' fredda dell'accumulo)
+#   - la salvaguardia delle partenze inutili, il blocco della pompa di integrazione e la misura del tempo per l'acqua pronta si fermano:
+#     con la caldaia sempre accesa per l'ACS non hanno piu' senso (la salvaguardia anzi fermerebbe le ripartenze che servono all'acqua calda)
+#   - la scheda dell'impianto disegna l'accumulo CLESS senza puffer e senza serpentina di integrazione
+#   - se la caldaia resta spenta piu' di N minuti senza programma settimanale e con qualcuno in casa, arriva un avviso sul telefono
+#     (la caldaia non viene riaccesa da sola)
+# Da spento rimette i valori del vecchio impianto (200 L, 50 %, correzioni +4 e +3 C, zona utile da 38 C).
+
+input_boolean:
+  impianto_modo_cless:
+    name: Impianto - modo CLESS
+    icon: mdi:water-boiler
+  impianto_cless_avviso_spenta:
+    name: Impianto CLESS - avvisa se la caldaia si spegne
+    icon: mdi:bell-alert
+  impianto_cless_defaults_impostati:
+    name: Impianto CLESS - valori iniziali impostati
+    icon: mdi:check
+
+input_number:
+  boiler_solare_t_minima_zona:
+    name: Boiler - temperatura minima di una zona per contare le docce
+    min: 30
+    max: 60
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+  impianto_cless_spenta_minuti:
+    name: Impianto CLESS - minuti di caldaia spenta prima di avvisare
+    min: 5
+    max: 240
+    step: 5
+    unit_of_measurement: min
+    mode: box
+
+automation:
+  - id: impianto_cless_valori_iniziali
+    alias: Impianto CLESS - valori iniziali
+    description: Imposta una sola volta la soglia delle docce e i minuti dell'avviso di caldaia spenta.
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.impianto_cless_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.boiler_solare_t_minima_zona}
+        data: {value: 38}
+      - action: input_number.set_value
+        target: {entity_id: input_number.impianto_cless_spenta_minuti}
+        data: {value: 20}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.impianto_cless_avviso_spenta}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.impianto_cless_defaults_impostati}
+
+  - id: impianto_cless_parametri
+    alias: Impianto CLESS - parametri del modello del serbatoio
+    description: Accendendo il modo CLESS il modello passa a 510 L; spegnendolo torna il vecchio boiler da 200 L.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.impianto_modo_cless
+        to: ["on", "off"]
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.impianto_modo_cless
+                state: "on"
+            sequence:
+              - action: input_number.set_value
+                target: {entity_id: input_number.boiler_solare_volume}
+                data: {value: 510}
+              - action: input_number.set_value
+                target: {entity_id: input_number.boiler_solare_peso_alto}
+                data: {value: 45}
+              - action: input_number.set_value
+                target: {entity_id: input_number.boiler_solare_delta_alto}
+                data: {value: 0}
+              - action: input_number.set_value
+                target: {entity_id: input_number.boiler_solare_delta_basso}
+                data: {value: 0}
+              - action: input_number.set_value
+                target: {entity_id: input_number.boiler_solare_t_minima_zona}
+                data: {value: 47}
+        default:
+          - action: input_number.set_value
+            target: {entity_id: input_number.boiler_solare_volume}
+            data: {value: 200}
+          - action: input_number.set_value
+            target: {entity_id: input_number.boiler_solare_peso_alto}
+            data: {value: 50}
+          - action: input_number.set_value
+            target: {entity_id: input_number.boiler_solare_delta_alto}
+            data: {value: 4}
+          - action: input_number.set_value
+            target: {entity_id: input_number.boiler_solare_delta_basso}
+            data: {value: 3}
+          - action: input_number.set_value
+            target: {entity_id: input_number.boiler_solare_t_minima_zona}
+            data: {value: 38}
+
+  - id: impianto_cless_caldaia_spenta
+    alias: Impianto CLESS - avviso caldaia spenta
+    description: >
+      Con la caldaia sempre accesa per l'ACS, se resta OFF oltre i minuti scelti senza programma settimanale e con qualcuno in casa
+      manda un avviso sul telefono. Non la riaccende da sola.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.casale_stato
+        to: "OFF"
+        for:
+          minutes: "{{ states('input_number.impianto_cless_spenta_minuti') | int(20) }}"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.impianto_modo_cless
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.impianto_cless_avviso_spenta
+        state: "on"
+      - condition: state
+        entity_id: switch.casale_cronotermostato_settimanale
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.caldaia_nessuno_in_casa
+        state: "off"
+    actions:
+      - action: notify.send_message
+        target: {entity_id: notify.iphone_corrado}
+        data:
+          title: Caldaia spenta
+          message: >-
+            La caldaia è spenta da {{ states('input_number.impianto_cless_spenta_minuti') | int(20) }} minuti e il programma settimanale è disattivato:
+            l'acqua calda non viene più prodotta. Allarme: {{ states('sensor.casale_allarme') | replace('_', '') | trim or 'nessuno' }}.

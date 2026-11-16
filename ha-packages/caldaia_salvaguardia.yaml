@@ -66,6 +66,9 @@ automation:
       - condition: state
         entity_id: input_boolean.caldaia_salvaguardia_attiva
         state: "on"
+      - condition: state
+        entity_id: input_boolean.impianto_modo_cless
+        state: "off"
     actions:
       - delay: "00:00:10"
       - condition: state

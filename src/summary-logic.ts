@@ -28,6 +28,8 @@ export interface SummaryInput {
   boilerTop: number | null;
   collector: number | null;
   integrationPump: "running" | "blocked" | "idle";
+  /** modo CLESS: accumulo al posto del boiler solare, senza puffer ne' pompa di integrazione */
+  cless?: boolean;
   collectorPumpOn: boolean | null;
   /** minuti stimati per avere l'acqua calda (0 = già calda) */
   etaMinutes: number | null;
@@ -77,7 +79,7 @@ function stoveLine(i: SummaryInput): SummaryLine {
   if (raw === "ECO STOP") {
     const dove =
       i.setBoiler !== null
-        ? ` Riparte quando il puffer scende a circa ${fmt(i.setBoiler - RESTART_BELOW_SETPOINT)} °C${
+        ? ` Riparte quando ${i.cless ? "la sonda S. BOILER dell'accumulo" : "il puffer"} scende a circa ${fmt(i.setBoiler - RESTART_BELOW_SETPOINT)} °C${
             i.puffer !== null ? ` (ora ${fmt(i.puffer)} °C)` : ""
           }.`
         : "";
@@ -107,6 +109,8 @@ function whyOffLine(i: SummaryInput): SummaryLine | null {
   if (i.guardFlag)
     return { icon: "mdi:shield-check", text: "Ho annullato una partenza inutile: il boiler aveva già abbastanza docce e il termostato non chiedeva calore.", tone: "info" };
   if (i.boostActive) return null;
+  if (i.cless && i.cronoOn === false)
+    return { icon: "mdi:fire-alert", text: "Caldaia spenta: con il CLESS dovrebbe restare sempre accesa per produrre l'acqua calda.", tone: "warn" };
   if (i.cronoOn === false)
     return { icon: "mdi:palm-tree", text: "Cronotermostato disattivato (vacanza): non parte da sola.", tone: "info" };
   if (i.cronoOn && i.programActive === false)
@@ -117,6 +121,7 @@ function whyOffLine(i: SummaryInput): SummaryLine | null {
 }
 
 function pumpLine(i: SummaryInput): SummaryLine | null {
+  if (i.cless) return null;
   const p = i.puffer !== null ? `${fmt(i.puffer)} °C` : "–";
   const b = i.boilerTop !== null ? `${fmt(i.boilerTop)} °C` : "–";
   if (i.integrationPump === "running")
@@ -130,7 +135,7 @@ function solarLine(i: SummaryInput): SummaryLine | null {
   if (i.collectorPumpOn === true)
     return {
       icon: "mdi:solar-power",
-      text: `Il solare sta scaldando il boiler${i.collector !== null ? ` (collettore a ${fmt(i.collector)} °C)` : ""}.`,
+      text: `Il solare sta scaldando ${i.cless ? "l'accumulo" : "il boiler"}${i.collector !== null ? ` (collettore a ${fmt(i.collector)} °C)` : ""}.`,
       tone: "ok",
     };
   if (i.collectorPumpOn === false && i.collector !== null)

@@ -142,3 +142,27 @@ test("riepilogo sole: di notte o senza foto non dice niente sul sole", () => {
   assert.doesNotMatch(joined({ allskyOk: null, sunFree: null }), /sole è (libero|coperto)/);
   assert.doesNotMatch(joined({ sunElevation: -5, sunAboveHorizon: false, allskyOk: false }), /colline/);
 });
+
+test("modo CLESS: niente pompa di integrazione, la ripartenza parla della sonda S. BOILER e il solare scalda l'accumulo", () => {
+  const eco = summarize({ ...base, cless: true, stoveState: "ECO STOP", setBoiler: 65, puffer: 63, integrationPump: "running", collectorPumpOn: true, collector: 52 });
+  const txt = eco.map((l) => l.text).join(" | ");
+  assert.doesNotMatch(txt, /Pompa di integrazione/);
+  assert.match(txt, /sonda S\. BOILER dell'accumulo/);
+  assert.match(txt, /scaldando l'accumulo/);
+  assert.doesNotMatch(txt, /puffer/);
+  // senza CLESS resta tutto com'era
+  const old = summarize({ ...base, stoveState: "ECO STOP", setBoiler: 65, puffer: 63, integrationPump: "running", collectorPumpOn: true, collector: 52 }).map((l) => l.text).join(" | ");
+  assert.match(old, /Pompa di integrazione accesa/);
+  assert.match(old, /il puffer scende/);
+  assert.match(old, /scaldando il boiler/);
+});
+
+test("modo CLESS: caldaia spenta senza programma = avviso che dovrebbe restare accesa", () => {
+  const lines = summarize({ ...base, cless: true, stoveState: "OFF", cronoOn: false, programActive: false });
+  const warn = lines.find((l) => /sempre accesa/.test(l.text));
+  assert.ok(warn);
+  assert.equal(warn!.tone, "warn");
+  // nessuno in casa: resta la spiegazione dell'assenza
+  const away = summarize({ ...base, cless: true, stoveState: "OFF", cronoOn: false, awayFlag: true });
+  assert.ok(away.some((l) => /nessuno era in casa/.test(l.text)));
+});
