@@ -283,3 +283,26 @@ test("richiesta di acqua calda: riepilogo e frase con le soglie scelte", () => {
     "input_number.caldaia_acs_potenza_solare_min",
   ]);
 });
+
+test("preferenze: blocco Accumulo CLESS con l'interruttore generale, la correzione delle sonde e l'avviso", () => {
+  const states = {
+    "input_boolean.impianto_modo_cless": st("off"),
+    "input_number.boiler_solare_delta_alto": st("0.0", { min: -20, max: 20, step: 0.1, unit_of_measurement: "°C" }),
+    "input_number.boiler_solare_delta_basso": st("0.0", { min: -20, max: 20, step: 0.1, unit_of_measurement: "°C" }),
+    "input_number.boiler_solare_t_minima_zona": st("38", { min: 30, max: 60, step: 1, unit_of_measurement: "°C" }),
+    "input_boolean.impianto_cless_avviso_spenta": st("on"),
+    "input_number.impianto_cless_spenta_minuti": st("20", { min: 5, max: 240, step: 5, unit_of_measurement: "min" }),
+  };
+  const off = buildSettingsView(states).find((s) => s.id === "cless")!;
+  assert.equal(off.master?.entity, "input_boolean.impianto_modo_cless");
+  assert.equal(off.master?.on, false);
+  assert.equal(off.rows.length, 5);
+  assert.match(off.summary, /^Spento/);
+  assert.match(off.notes[0], /boiler solare/);
+  assert.equal(off.rows.find((r) => r.entity === "input_number.boiler_solare_delta_alto")?.step, 0.1);
+  const on = buildSettingsView({ ...states, "input_boolean.impianto_modo_cless": st("on") }).find((s) => s.id === "cless")!;
+  assert.match(on.summary, /^Acceso/);
+  assert.match(on.notes[0], /accumulo CLESS/);
+  // senza il pacchetto il blocco non compare
+  assert.equal(buildSettingsView({}).some((s) => s.id === "cless"), false);
+});

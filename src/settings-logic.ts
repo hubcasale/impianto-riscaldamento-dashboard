@@ -74,6 +74,58 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
     ],
   },
   {
+    id: "cless",
+    group: "riscaldamento",
+    master: "input_boolean.impianto_modo_cless",
+    icon: "mdi:water-boiler",
+    title: "Accumulo CLESS",
+    help: H(
+      "Si accende quando l'accumulo REQ.A CLESS ha preso il posto del boiler solare da 200 L e del puffer da 50 L. La scheda disegna l'accumulo senza puffer né pompa di integrazione, il modello del serbatoio passa a 510 L e le regole del vecchio boiler (salvaguardia delle partenze, blocco della pompa di integrazione, tempo per l'acqua pronta) si fermano: la caldaia resta accesa per produrre l'acqua calda.",
+      "Accendilo il giorno in cui il CLESS è installato; spegnendolo torna tutto com'era.",
+    ),
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.impianto_modo_cless",
+        label: "Modo CLESS",
+        hint: "Acceso: accumulo CLESS, senza puffer né pompa di integrazione. Spento: boiler solare e puffer di prima.",
+        help: H("Interruttore generale: passa l'impianto dal boiler solare con il puffer all'accumulo CLESS.", "Il giorno della posa del CLESS."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.boiler_solare_delta_alto",
+        label: "Correzione della sonda alta",
+        hint: "Si somma alla sonda ESP32 in cima: confrontala con la S. BOILER della caldaia.",
+        help: H("Gradi che si sommano alla lettura della sonda ESP32 in cima al serbatoio.", "Dopo la posa: con la caldaia ferma da un po', confronta la sonda alta con la S. BOILER della Polygon e correggi la differenza."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.boiler_solare_delta_basso",
+        label: "Correzione della sonda bassa",
+        help: H("Gradi che si sommano alla lettura della sonda ESP32 in fondo al serbatoio.", "Dopo la posa, con il serbatoio fermo da ore: le due sonde dovrebbero segnare quasi lo stesso valore in fondo."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.boiler_solare_t_minima_zona",
+        label: "Temperatura minima di una zona per contare le docce",
+        help: H("Una zona del serbatoio conta per le docce solo se è almeno a questa temperatura: l'acqua sanitaria esce dalla serpentina più fredda dell'accumulo.", "Alzala se le docce stimate sono più di quelle vere, abbassala nel caso opposto.", "47 °C"),
+      },
+      {
+        kind: "toggle",
+        entity: "input_boolean.impianto_cless_avviso_spenta",
+        label: "Avvisa se la caldaia si spegne",
+        hint: "Avviso sul telefono se resta spenta senza programma settimanale e con qualcuno in casa. Non la riaccende.",
+        help: H("Manda un avviso sul telefono se la caldaia resta spenta più dei minuti indicati, senza programma settimanale e con qualcuno in casa.", "Con la caldaia sempre accesa per l'acqua calda: segnala un allarme o una mancanza di corrente.", "Acceso."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.impianto_cless_spenta_minuti",
+        label: "Minuti di caldaia spenta prima dell'avviso",
+        help: H("Quanto deve restare spenta la caldaia prima di avvisarti.", "Allungalo se la caldaia si ferma spesso per brevi pulizie.", "20 minuti."),
+      },
+    ],
+  },
+  {
     id: "partenze",
     group: "riscaldamento",
     master: "input_boolean.caldaia_salvaguardia_attiva",
@@ -578,6 +630,8 @@ export function sectionSummaryText(sec: Pick<SectionView, "id" | "master">, rows
   switch (sec.id) {
     case "caldaia":
       return `Acqua ${italianValue(g("climate.casale_acqua"))} · puffer ${italianValue(g("number.casale_setpoint_boiler"))}`;
+    case "cless":
+      return sec.master?.on ? "Acceso: accumulo CLESS, senza puffer né integrazione" : "Spento: boiler solare da 200 L e puffer";
     case "partenze":
       return sec.master?.on
         ? `Attiva: annulla la partenza se il boiler ha già ${bare(g("input_number.caldaia_salvaguardia_docce_min"))} docce`
@@ -617,6 +671,13 @@ export function sectionNotes(sec: Pick<SectionView, "id" | "master">, rows: RowV
     if (max?.value == null) return [];
     const riparte = ist?.value != null ? ` e riparte sotto ${bare({ ...max, value: max.value - ist.value } as RowView)} °C` : "";
     return [`La pompa smette di scaldare quando la testa del boiler arriva a ${bare(max)} °C${riparte}.`];
+  }
+  if (sec.id === "cless") {
+    return [
+      sec.master?.on
+        ? "La scheda mostra l'accumulo CLESS. La salvaguardia delle partenze, il blocco della pompa di integrazione e il tempo per l'acqua pronta sono fermi: la caldaia resta accesa per l'acqua calda."
+        : "Sono attive le regole del boiler solare e del puffer da 50 litri.",
+    ];
   }
   if (sec.id === "assenza") {
     const min = g("input_number.caldaia_assenza_minuti");

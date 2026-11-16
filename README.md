@@ -186,7 +186,7 @@ Con l'accumulo REQ.A CLESS al posto del boiler solare da 200 L e del puffer da 5
 - la salvaguardia delle partenze inutili, il blocco della pompa di integrazione e la misura del tempo per l'acqua pronta si fermano (la caldaia resta sempre accesa per l'acqua calda);
 - se la caldaia resta spenta più di 20 minuti (regolabile) senza programma settimanale e con qualcuno in casa arriva un avviso sul telefono; non viene riaccesa da sola.
 
-Da spento torna tutto com'era (200 L, 50 %, correzioni +4 e +3 °C). Senza il pacchetto, o con il modo spento, la scheda non cambia.
+L'interruttore, le correzioni delle due sonde, la soglia delle docce e l'avviso di caldaia spenta stanno nelle **Preferenze impianto → Accumulo CLESS** (l'interruttore è nell'intestazione del blocco). Da spento torna tutto com'era (200 L, 50 %, correzioni +4 e +3 °C). Senza il pacchetto, o con il modo spento, la scheda non cambia.
 
 ## Pulsante «Stato»
 
