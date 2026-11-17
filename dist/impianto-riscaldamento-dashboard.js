@@ -5638,8 +5638,8 @@ var ImpiantoOverviewCard = class extends i4 {
     const viewBox = this._narrow ? "0 0 640 840" : `0 0 700 ${840 - d12}`;
     const s2y = short ? 536 : 640;
     const kwy = short ? 616 : 728;
-    const panIn = short ? "M598 440 H520 V512 H440" : cless ? "M598 500 H520 V617 H456" : "M598 500 H520 V560 H440";
-    const panOut = short ? "M440 536 H548 V492 H598" : cless ? "M456 631 H548 V552 H598" : "M440 656 H548 V552 H598";
+    const panIn = short ? "M598 440 H520 V512 H440" : cless ? "M536 548 H456" : "M598 500 H520 V560 H440";
+    const panOut = short ? "M440 536 H548 V492 H598" : cless ? "M456 636 H578 V614" : "M440 656 H548 V552 H598";
     return b2`
       <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${viewBox} role="img" aria-label=${cless ? "Accumulo CLESS" : "Boiler solare"}>
         <defs>
@@ -5787,9 +5787,9 @@ var ImpiantoOverviewCard = class extends i4 {
           <path d=${panIn} class="pipe hot thin" />
           <path d=${panOut} class="pipe cold thin" />
           ${collectorOn ? w`<path d=${panIn} class="coilflow" /><path d=${panOut} class="coilflow" />` : A}
-          <text x="462" y=${short ? 504 : cless ? 606 : 548} class="tv">${solarIn !== null ? `${fmt3(solarIn, 1)} \xB0C` : ""}</text>
+          <text x="462" y=${short ? 504 : cless ? 540 : 548} class="tv">${solarIn !== null ? `${fmt3(solarIn, 1)} \xB0C` : ""}</text>
           <text x="462" y=${short ? 528 : cless ? 656 : 644} class="tv">${solarOut !== null ? `${fmt3(solarOut, 1)} \xB0C` : ""}</text>
-          <g transform=${short ? "translate(0 -60)" : "translate(0 0)"}>${this._panelShape(panel, panelFill)}</g>
+          <g transform=${short ? "translate(0 -60)" : "translate(0 0)"}>${this._panelShape(panel, panelFill, cless)}</g>
         </g>
       </svg>
       ${this._narrow ? w`<svg class="boiler mini" viewBox="0 0 640 330" role="img" aria-label="Puffer e pannello solare">
@@ -5830,7 +5830,7 @@ var ImpiantoOverviewCard = class extends i4 {
   _clessSection(o6) {
     const water = "M195 112 H477 A95 95 0 0 1 572 207 V1395 A95 95 0 0 1 477 1490 H195 A95 95 0 0 1 100 1395 V207 A95 95 0 0 1 195 112 Z";
     const silhouette = "M25 110 Q25 20 130 20 H540 Q645 20 645 110 V1470 Q645 1495 600 1502 V1640 Q600 1662 560 1662 H110 Q70 1662 70 1640 V1502 Q25 1495 25 1470 Z";
-    const stubs = "M640 146 h36 v46 h-36 Z M640 372 h36 v26 h-36 Z M640 590 h36 v45 h-36 Z M640 700 h36 v200 h-36 Z M640 1310 h36 v85 h-36 Z";
+    const stubs = "M640 146 h36 v46 h-36 Z M640 372 h36 v26 h-36 Z M640 590 h36 v45 h-36 Z M640 700 h36 v200 h-36 Z";
     const minTxt = o6.minProbe === null ? "\u2013" : `${fmt3(o6.minProbe, 1)} \xB0C`;
     const tooCold = o6.waiting || o6.threshold !== null && o6.minProbe !== null && o6.minProbe < o6.threshold;
     const tag = tooCold ? "#f59e0b" : "#22c55e";
@@ -5857,6 +5857,10 @@ var ImpiantoOverviewCard = class extends i4 {
         ${o6.solarOn ? w`<path d=${this._coilPath(335, 200, 35, 1150, 40, 6, true)} class="clessflow" />
               <path d=${this._coilPath(335, 200, 35, 1150, 40, 6, false)} class="clessflow" clip-path="url(#clessSides)" />` : A}
       </g>
+
+      <!-- attacchi del solare: mandata dal pannello in alto sulla serpentina, ritorno in basso -->
+      <rect x="436" y="542" width="20" height="12" rx="2" class="stub" />
+      <rect x="436" y="630" width="20" height="12" rx="2" class="stub" />
 
       <!-- acqua sanitaria: i due tubi escono dalla flangia in alto -->
       <rect x="298" y="98" width="14" height="12" rx="2" class="stub" />
@@ -5913,8 +5917,9 @@ var ImpiantoOverviewCard = class extends i4 {
       ${estimated ? w`<text x="630" y="279" class="t2 s13" text-anchor="middle">stima sonda</text>` : A}`;
   }
   /** La sagoma del pannello con i suoi testi, con le coordinate del disegno largo (al centro x = 630). */
-  _panelShape(panel, fill) {
-    return w`
+  /** `near`: il pannello accanto al puffer (CLESS), con le scritte sotto il ritorno del collettore. */
+  _panelShape(panel, fill, near = false) {
+    const body = w`
       <text x="630" y="440" class="t1 b s16" text-anchor="middle">Pannello solare</text>
       <polygon points="616,462 692,462 676,568 592,568" fill=${fill} class="outline panelbody" />
       <g class="panelgrid">
@@ -5922,11 +5927,15 @@ var ImpiantoOverviewCard = class extends i4 {
         <line x1="604" y1="515" x2="684" y2="515" /><line x1="610" y1="541" x2="680" y2="541" /><line x1="610" y1="489" x2="688" y2="489" />
       </g>
       <polygon points="616,462 640,462 612,568 592,568" fill="#fff" opacity="0.16" />
-      <line x1="618" y1="568" x2="612" y2="586" class="panelleg" /><line x1="666" y1="568" x2="672" y2="586" class="panelleg" />
-      <text x="630" y="618" class="t1 b val" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt3(panel.value, 0)} \xB0C`}</text>
-      <text x="630" y="640" class="t2 s15" text-anchor="middle">${panel.caption}</text>
-      ${panel.maxPredicted !== null ? w`<text x="630" y="668" class="b s15" text-anchor="middle" fill="#f59e0b">max prevista ${fmt3(panel.maxPredicted, 0)} °C</text>` : A}
-      ${panel.maxToday !== null ? w`<text x="630" y="690" class="t2 s15" text-anchor="middle">raggiunta oggi ${fmt3(panel.maxToday, 0)} °C</text>` : A}`;
+      <line x1="618" y1="568" x2="612" y2="586" class="panelleg" /><line x1="666" y1="568" x2="672" y2="586" class="panelleg" />`;
+    const x2 = near ? 578 : 630;
+    const y3 = (normal, closer) => near ? closer : normal;
+    return w`
+      ${near ? w`<g transform="translate(-70 40)">${body}</g>` : body}
+      <text x=${x2} y=${y3(618, 668)} class="t1 b val" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt3(panel.value, 0)} \xB0C`}</text>
+      <text x=${x2} y=${y3(640, 690)} class="t2 s15" text-anchor="middle">${panel.caption}</text>
+      ${panel.maxPredicted !== null ? w`<text x=${x2} y=${y3(668, 716)} class="b s15" text-anchor="middle" fill="#f59e0b">max prevista ${fmt3(panel.maxPredicted, 0)} °C</text>` : A}
+      ${panel.maxToday !== null ? w`<text x=${x2} y=${y3(690, 738)} class="t2 s15" text-anchor="middle">raggiunta oggi ${fmt3(panel.maxToday, 0)} °C</text>` : A}`;
   }
   // ---- caldaia -----------------------------------------------------------
   _flame(cx, cy, k2, opacity = 1) {
