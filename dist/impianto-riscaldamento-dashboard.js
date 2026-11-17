@@ -5889,7 +5889,7 @@ var ImpiantoOverviewCard = class extends i4 {
       </g>
       <text x="43" y="372" class="t2" font-size="11" text-anchor="middle">Impianto</text>
       <text x="14" y="462" class="t2" font-size="11">Minima (b): ${minTxt}</text>
-      <text x="14" y="477" class="b" font-size="12" fill=${tag}>${o6.threshold === null ? "soglia non impostata" : o6.waiting ? `attende ${fmt3(o6.threshold, 0)} \xB0C` : `parte sopra ${fmt3(o6.threshold, 0)} \xB0C`}</text>
+      <text x="14" y="477" class="b" font-size="12" fill=${tag}>${o6.threshold === null ? "blocco riscaldamento spento" : o6.waiting ? `attende ${fmt3(o6.threshold, 0)} \xB0C` : `parte sopra ${fmt3(o6.threshold, 0)} \xB0C`}</text>
 
       <!-- uscita acqua calda e docce, a sinistra -->
       <rect x="14" y="492" width="136" height="112" rx="14" class="pill big" />
