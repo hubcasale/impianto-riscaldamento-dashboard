@@ -21,6 +21,7 @@ import type { ImpiantoConfirmDialog } from "./confirm-dialog";
 import "./confirm-dialog";
 import { SECTIONS_USER_KEY, SECTION_KEYS, defaultSections, normalizeSections, sectionsToStore, toggleSection, visibleKeys, type SectionKey, type Sections } from "./sections-logic";
 import { summarize, type SummaryLine } from "./summary-logic";
+import { CLESS_MASK, CLESS_RENDER } from "./cless-render";
 import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, sinceText, stoveLook, stovePumpRunning, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
 const CARD_TAG = "impianto-overview-card";
@@ -106,7 +107,7 @@ export interface PlantEntities {
   coil_solar_in: string;
   /** temperatura misurata in uscita dalla serpentina solare (ritorno al collettore) */
   coil_solar_out: string;
-  /** temperatura misurata in ingresso (mandata dal puffer) e in uscita (ritorno al puffer) della serpentina di integrazione */
+  /** sonde ESP32 nei pozzetti del CLESS: coil_integ_in = pozzetto c di destra (generatore), coil_integ_out = pozzetto b di sinistra (minima per il riscaldamento) */
   coil_integ_in: string;
   coil_integ_out: string;
   /** massima prevista del collettore oggi e massima gia' raggiunta */
@@ -114,6 +115,9 @@ export interface PlantEntities {
   panel_max_today: string;
   /** puffer: lettura della caldaia oppure, senza Internet, stima dalla sonda in ingresso alla serpentina */
   puffer_effective: string;
+  /** il termostato del riscaldamento (modalita', con soglia e attesa del puffer) e il suo "sta scaldando" */
+  thermo_mode: string;
+  heat_call: string;
   /** irraggiamento sul piano dei collettori: misurato dalla stazione, previsto da Open-Meteo, osservato dal satellite; nuvolosita' prevista */
   gti_station: string;
   gti_forecast: string;
@@ -192,11 +196,13 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   pellet_bag: "input_number.caldaia_pellet_sacco_kg",
   coil_solar_in: "sensor.solare_termico_solare_serpentina_ingresso",
   coil_solar_out: "sensor.solare_termico_solare_serpentina_uscita",
-  coil_integ_in: "sensor.solare_termico_integrazione_serpentina_ingresso",
-  coil_integ_out: "sensor.solare_termico_integrazione_serpentina_uscita",
+  coil_integ_in: "sensor.locale_caldaia_solare_termico_puffer_generatore",
+  coil_integ_out: "sensor.locale_caldaia_solare_termico_puffer_minima_riscaldamento",
   panel_max: "sensor.solare_pannello_massima_prevista",
   panel_max_today: "sensor.solare_pannello_massima_oggi",
   puffer_effective: "sensor.puffer_temperatura_effettiva",
+  thermo_mode: "sensor.termostato_riscaldamento_modalita",
+  heat_call: "binary_sensor.termostato_riscaldamento_sta_scaldando",
   gti_station: "sensor.solare_termico_irraggiamento_sul_piano",
   gti_forecast: "sensor.open_meteo_irraggiamento_previsto_sul_piano",
   gti_satellite: "sensor.open_meteo_irraggiamento_osservato_dal_satellite",
@@ -574,7 +580,7 @@ export class ImpiantoOverviewCard extends LitElement {
     const showers = showersEstimate(top, bottom, m);
     const pufferId = this.hass.states[e.puffer_effective] ? e.puffer_effective : e.puffer;
     const puffer = this._n(pufferId);
-    const pufferEstimated = this.hass.states[pufferId]?.attributes?.fonte === "sonda ingresso";
+    const pufferEstimated = this.hass.states[pufferId]?.attributes?.fonte === "sonda pozzetto";
     const solarKw = this._n(e.solar_power);
     const collector = this._n(e.collector_temp);
     const cTop = tempColor(top);
@@ -605,6 +611,7 @@ export class ImpiantoOverviewCard extends LitElement {
     const solarOut = this._n(e.coil_solar_out);
     const integIn = this._n(e.coil_integ_in);
     const integOut = this._n(e.coil_integ_out);
+    const thermo = (this.hass.states[e.thermo_mode]?.attributes ?? {}) as Record<string, unknown>;
     const btn = boostButton(this._s(e.boost_state), false);
     // altezza del pulsante di accensione rapida: col CLESS la caldaia resta accesa e il pulsante non c'e'
     const btnH = cless ? 0 : btn.sub ? 78 : 64;
@@ -619,8 +626,8 @@ export class ImpiantoOverviewCard extends LitElement {
     const viewBox = this._narrow ? "0 0 640 840" : `0 0 700 ${840 - d12}`;
     const s2y = short ? 536 : 640;
     const kwy = short ? 616 : 728;
-    const panIn = short ? "M598 440 H520 V512 H440" : "M598 500 H520 V560 H440";
-    const panOut = short ? "M440 536 H548 V492 H598" : "M440 656 H548 V552 H598";
+    const panIn = short ? "M598 440 H520 V512 H440" : cless ? "M598 500 H520 V617 H456" : "M598 500 H520 V560 H440";
+    const panOut = short ? "M440 536 H548 V492 H598" : cless ? "M456 631 H548 V552 H598" : "M440 656 H548 V552 H598";
 
     return html`
       <svg class=${this._narrow ? "boiler narrow" : "boiler"} viewBox=${viewBox} role="img" aria-label=${cless ? "Accumulo CLESS" : "Boiler solare"}>
@@ -646,8 +653,8 @@ export class ImpiantoOverviewCard extends LitElement {
         </defs>
 
         <!-- tubi -->
-        <path d="M420 135 H520 V95" class="pipe hot" />
-        <path d="M420 ${745 - d12} H520 V${775 - d12}" class="pipe cold" />
+        <path d=${cless ? "M305 108 V50 H540" : "M420 135 H520 V95"} class="pipe hot" />
+        <path d=${cless ? "M335 108 V72 H540" : `M420 ${745 - d12} H520 V${775 - d12}`} class="pipe cold" />
         ${cless ? nothing : svg`<g class="pufgroup">
           <path d="M440 208 H575" class="pipe hot thin" />
           <path d="M440 ${short ? 236 : 268} H520 V315 H575" class="pipe warm thin" />
@@ -658,6 +665,14 @@ export class ImpiantoOverviewCard extends LitElement {
         </g>`}
 
         <!-- boiler -->
+        ${cless
+          ? this._clessSection({
+              cTop, cMid, cBot, solarOn: collectorOn, boilerOn: stovePumpRunning(this._s(e.pump)) === true, outlet, showers,
+              heatingOn: this._yes(e.heat_call) === true,
+              minProbe: integOut, genProbe: integIn, boilerProbe: this._n(e.puffer),
+              threshold: toNumber(thermo.puffer_soglia as string | null | undefined), waiting: thermo.puffer_in_attesa === true,
+            })
+          : svg`
         <rect x="200" y="100" width="240" height=${660 - d12} rx="52" fill="url(#iso)" class="outline" />
         <rect x="222" y="122" width="196" height=${616 - d12} rx="38" fill="url(#acqua)" />
         <g class="coil">
@@ -684,6 +699,7 @@ export class ImpiantoOverviewCard extends LitElement {
         <text x="320" y=${434 - d1} class="t1 b" font-size="50" text-anchor="middle">${fmt(outlet, 1)}<tspan font-size="24" dy="-16"> °C</tspan></text>
         <line x1="262" y1=${456 - d1} x2="378" y2=${456 - d1} class="sep" />
         <text x="320" y=${490 - d1} class="t1 b" font-size="22" text-anchor="middle">${showers === null ? "(–)" : `(≈ ${showers} ${showers === 1 ? "doccia" : "docce"})`}</text>
+        `}
 
         <!-- sonde -->
         <circle cx="222" cy="168" r="8" class="probe" />
@@ -692,14 +708,36 @@ export class ImpiantoOverviewCard extends LitElement {
         <text x="82" y="156" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Alto (S3)</text>
         <text x="82" y="190" class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
 
-        <circle cx="222" cy=${676 - d12} r="8" class="probe" />
-        <line x1="214" y1=${676 - d12} x2="150" y2=${676 - d12} class="lead" />
+        <circle cx="222" cy=${(cless ? 650 : 676) - d12} r="8" class="probe" />
+        <line x1="214" y1=${(cless ? 650 : 676) - d12} x2="150" y2=${(cless ? 650 : 676) - d12} class="lead" />
         <rect x="14" y=${s2y} width="136" height="72" rx="14" class="card lo" />
         <text x="82" y=${s2y + 24} class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Basso (S2)</text>
         <text x="82" y=${s2y + 58} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#3b82f6">${fmt(bottom, 1)} °C</text>
 
         <!-- stima e pulsante -->
-        <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
+        ${cless
+          ? svg`<rect x="14" y="224" width="136" height="68" rx="14" class="card eta" />
+        <text x="82" y="243" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">Caldaia imposta a</text>
+        <text x="82" y="272" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e.set_boiler) === null ? "–" : `${fmt(this._n(e.set_boiler), 0)} °C`}</text>
+        <text x="82" y="286" class="t2" font-size="11" text-anchor="middle">sonda S. BOILER</text>
+        ${this._config.summary === false
+          ? nothing
+          : svg`<g class="btn info" role="button" tabindex="0" aria-label="Stato dell'impianto" @click=${() => this._openInfo()}
+              @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openInfo()}>
+              <rect x="14" y="300" width="66" height="44" rx="14" class="infobg" />
+              <circle cx="28" cy="322" r="7" class="infoc" />
+              <text x="28" y="325.5" class="b" font-size="10" text-anchor="middle">i</text>
+              <text x="40" y="327" class="b" font-size="12">Stato</text>
+            </g>`}
+        ${this._config.charts === false
+          ? nothing
+          : svg`<g class="btn info" role="button" tabindex="0" aria-label="Grafici" @click=${() => this._openCharts()}
+              @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openCharts()}>
+              <rect x="84" y="300" width="66" height="44" rx="14" class="infobg" />
+              <polyline points="90,328 95,319 99,324 105,314" class="infoc" />
+              <text x="108" y="327" class="b" font-size="11">Grafici</text>
+            </g>`}`
+          : svg`        <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
         <text x="82" y="248" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">${cless ? "Caldaia imposta a" : "Acqua pronta in"}</text>
         <text x="82" y="292" class="t1 b" font-size=${Math.round(34 * fs)} text-anchor="middle">${cless ? (this._n(e.set_boiler) === null ? "–" : `${fmt(this._n(e.set_boiler), 0)} °C`) : etaText(eta)}</text>
         <text x="82" y="314" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">${cless ? "sonda S. BOILER" : eta === 0 ? "già a temperatura" : eta === null ? "" : "stima media"}</text>
@@ -725,17 +763,18 @@ export class ImpiantoOverviewCard extends LitElement {
               <rect x="14" y=${(340 + btnH) + 66} width="136" height="44" rx="14" class="infobg" />
               <polyline points="28,${(340 + btnH) + 98} 35,${(340 + btnH) + 88} 41,${(340 + btnH) + 94} 51,${(340 + btnH) + 80}" class="infoc" />
               <text x="102" y=${(340 + btnH) + 94} class="b" font-size=${Math.round(17 * fs)} text-anchor="middle">Grafici</text>
-            </g>`}
+            </g>`}`}
 
         <!-- solare -->
         <rect x="14" y=${kwy} width="136" height="72" rx="14" class="card sun" />
         <text x="82" y=${kwy + 24} class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Solare</text>
         <text x="82" y=${kwy + 58} class="b" font-size=${Math.round(24 * fs)} text-anchor="middle" fill="#22c55e">${fmt(solarKw, 1)} kW</text>
 
-        <text x="532" y="80" class="b s14" fill="#ef4444">Acqua calda</text>
-        <text x="532" y="98" class="t2 s13">verso utenze</text>
-        <text x="532" y=${796 - d12} class="b s14" fill="#3b82f6">Acqua fredda</text>
-        <text x="532" y=${814 - d12} class="t2 s13">dalla rete</text>
+        <text x=${cless ? 548 : 532} y=${cless ? 46 : 80} class="b s14" fill="#ef4444">Acqua calda</text>
+        <text x=${cless ? 548 : 532} y=${cless ? 62 : 98} class="t2 s13">verso utenze</text>
+        ${cless ? svg`<text x="548" y="78" class="b s14" fill="#3b82f6">Acqua fredda</text><text x="548" y="94" class="t2 s13">dalla rete</text>` : nothing}
+        ${cless ? nothing : svg`<text x="532" y=${796 - d12} class="b s14" fill="#3b82f6">Acqua fredda</text>
+        <text x="532" y=${814 - d12} class="t2 s13">dalla rete</text>`}
 
         ${cless ? nothing : svg`<g class="pufgroup">${this._pufferShape(puffer, pufferEstimated)}</g>`}
 
@@ -744,8 +783,8 @@ export class ImpiantoOverviewCard extends LitElement {
           <path d=${panIn} class="pipe hot thin" />
           <path d=${panOut} class="pipe cold thin" />
           ${collectorOn ? svg`<path d=${panIn} class="coilflow" /><path d=${panOut} class="coilflow" />` : nothing}
-          <text x="448" y=${short ? 504 : 548} class="tv">${solarIn !== null ? `${fmt(solarIn, 1)} °C` : ""}</text>
-          <text x="448" y=${short ? 528 : 644} class="tv">${solarOut !== null ? `${fmt(solarOut, 1)} °C` : ""}</text>
+          <text x="462" y=${short ? 504 : cless ? 606 : 548} class="tv">${solarIn !== null ? `${fmt(solarIn, 1)} °C` : ""}</text>
+          <text x="462" y=${short ? 528 : cless ? 656 : 644} class="tv">${solarOut !== null ? `${fmt(solarOut, 1)} °C` : ""}</text>
           <g transform=${short ? "translate(0 -60)" : "translate(0 0)"}>${this._panelShape(panel, panelFill)}</g>
         </g>
       </svg>
@@ -758,6 +797,130 @@ export class ImpiantoOverviewCard extends LitElement {
             <text x="470" y="318" class="tv" text-anchor="middle">${solarIn !== null ? `→ ${fmt(solarIn, 1)} °C` : ""}   ${solarOut !== null ? `← ${fmt(solarOut, 1)} °C` : ""}</text>
           </svg>`
         : nothing}
+    `;
+  }
+
+  /**
+   * Percorso lungo le spire della serpentina (elica vista di lato, coordinate del render): parte a destra in alto
+   * e gira verso sinistra passando davanti, poi dietro. `front` = solo i tratti davanti, altrimenti solo quelli dietro.
+   */
+  private _coilPath(cx: number, r: number, ry: number, y0: number, pitch: number, turns: number, front: boolean): string {
+    const parts: string[] = [];
+    const n = 24;
+    for (let k = 0; k < turns; k++) {
+      for (let half = 0; half < 2; half++) {
+        if ((half === 0) !== front) continue;
+        const pts: string[] = [];
+        for (let i = 0; i <= n; i++) {
+          const t = (k + (half * 0.5 + (i / n) * 0.5)) * 2 * Math.PI;
+          const x = cx + r * Math.cos(t);
+          const y = y0 + (t / (2 * Math.PI)) * pitch + ry * Math.sin(t);
+          pts.push(`${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`);
+        }
+        parts.push(pts.join(" "));
+      }
+    }
+    return parts.join(" ");
+  }
+
+  /**
+   * Il CLESS in sezione: un render fisso come sfondo e, sopra, un SVG che lo colora con le temperature delle sonde
+   * e anima i flussi. Le coordinate del gruppo sono quelle del render (730 x 1710), poi ridotte nel disegno.
+   */
+  private _clessSection(o: {
+    cTop: string;
+    cMid: string;
+    cBot: string;
+    solarOn: boolean;
+    boilerOn: boolean;
+    outlet: number | null;
+    showers: number | null;
+    /** la pompa del riscaldamento gira (il termostato ambiente chiama calore) */
+    heatingOn: boolean;
+    /** sonde nei pozzetti: b sinistra (minima per il riscaldamento), c destra (generatore), b destra (S. BOILER della caldaia) */
+    minProbe: number | null;
+    genProbe: number | null;
+    boilerProbe: number | null;
+    /** temperatura minima del puffer perche' il riscaldamento parta, e se il termostato sta aspettando */
+    threshold: number | null;
+    waiting: boolean;
+  }) {
+    const water = "M195 112 H477 A95 95 0 0 1 572 207 V1395 A95 95 0 0 1 477 1490 H195 A95 95 0 0 1 100 1395 V207 A95 95 0 0 1 195 112 Z";
+    const silhouette =
+      "M25 110 Q25 20 130 20 H540 Q645 20 645 110 V1470 Q645 1495 600 1502 V1640 Q600 1662 560 1662 H110 Q70 1662 70 1640 V1502 Q25 1495 25 1470 Z";
+    const stubs = "M640 146 h36 v46 h-36 Z M640 372 h36 v26 h-36 Z M640 590 h36 v45 h-36 Z M640 700 h36 v200 h-36 Z M640 1310 h36 v85 h-36 Z";
+    const minTxt = o.minProbe === null ? "–" : `${fmt(o.minProbe, 1)} °C`;
+    const tooCold = o.waiting || (o.threshold !== null && o.minProbe !== null && o.minProbe < o.threshold);
+    const tag = tooCold ? "#f59e0b" : "#22c55e";
+    return svg`
+      <g transform="translate(190.3 100) scale(0.387)">
+        <defs>
+          <clipPath id="clessSil"><path d=${silhouette} /><path d=${stubs} /></clipPath>
+          <clipPath id="clessWater"><path d=${water} /></clipPath>
+          <clipPath id="clessSides"><rect x="100" y="1080" width="130" height="380" /><rect x="440" y="1080" width="132" height="380" /></clipPath>
+          <mask id="clessMask" maskUnits="userSpaceOnUse" x="0" y="0" width="730" height="1710">
+            <image href=${CLESS_MASK} x="0" y="0" width="730" height="1710" />
+          </mask>
+          <linearGradient id="clessTint" gradientUnits="userSpaceOnUse" x1="0" y1="112" x2="0" y2="1490">
+            <stop offset="0" stop-color=${o.cTop} />
+            <stop offset="0.43" stop-color=${o.cTop} />
+            <stop offset="0.52" stop-color=${o.cMid} />
+            <stop offset="0.65" stop-color=${o.cMid} />
+            <stop offset="0.70" stop-color=${o.cBot} />
+            <stop offset="1" stop-color=${o.cBot} />
+          </linearGradient>
+        </defs>
+        <image href=${CLESS_RENDER} x="0" y="0" width="730" height="1710" clip-path="url(#clessSil)" />
+        <rect x="100" y="112" width="472" height="1378" fill="url(#clessTint)" class="clesstint" clip-path="url(#clessWater)" mask="url(#clessMask)" />
+        ${o.solarOn
+          ? svg`<path d=${this._coilPath(335, 200, 35, 1150, 40, 6, true)} class="clessflow" />
+              <path d=${this._coilPath(335, 200, 35, 1150, 40, 6, false)} class="clessflow" clip-path="url(#clessSides)" />`
+          : nothing}
+      </g>
+
+      <!-- acqua sanitaria: i due tubi escono dalla flangia in alto -->
+      <rect x="298" y="98" width="14" height="12" rx="2" class="stub" />
+      <rect x="328" y="98" width="14" height="12" rx="2" class="stub" />
+
+      <!-- attacchi della caldaia, a destra: mandata (entra) e ritorno (esce) -->
+      <path d="M456 396 H500" class="pipe hot thin" />
+      <path d="M456 426 H500" class="pipe cold thin" />
+      <polygon points="486,389 470,396 486,403" fill="#ef4444" />
+      <polygon points="470,419 486,426 470,433" fill="#3b82f6" />
+      ${o.boilerOn
+        ? svg`<path d="M456 396 H500" class="coilflow" /><path d="M456 426 H500" class="coilflow" />`
+        : nothing}
+      <text x="506" y="376" class="b" font-size="13" fill="#fb923c">Caldaia</text>
+      <text x="506" y="389" class="t2" font-size="10">b · S. BOILER</text>
+      <text x="506" y="418" class="t1 b" font-size="14">${o.boilerProbe === null ? "–" : `${fmt(o.boilerProbe, 1)} °C`}</text>
+      <text x="506" y="446" class="t2" font-size="10">c · generatore</text>
+      <text x="506" y="460" class="t1 b" font-size="14">${o.genProbe === null ? "–" : `${fmt(o.genProbe, 1)} °C`}</text>
+
+      <!-- impianto di riscaldamento, a sinistra: la pompa spinge l'acqua nella mandata (esce), il ritorno entra -->
+      <rect x="188" y="390" width="16" height="12" rx="2" class="stub" />
+      <rect x="188" y="420" width="16" height="12" rx="2" class="stub" />
+      <path d="M188 396 H64" class="pipe hot thin" />
+      <path d="M64 426 H188" class="pipe cold thin" />
+      ${o.heatingOn
+        ? svg`<path d="M188 396 H64" class="coilflow" /><path d="M64 426 H188" class="coilflow" />`
+        : nothing}
+      <polygon points="112,389 96,396 112,403" fill="#ef4444" />
+      <polygon points="104,419 120,426 104,433" fill="#3b82f6" />
+      ${this._pumpIcon(152, 396, 11, o.heatingOn)}
+      <g class="radiator">
+        <rect x="22" y="380" width="42" height="62" rx="7" class="radbody" />
+        ${[32, 41, 50, 59].map((x) => svg`<line x1=${x} y1="386" x2=${x} y2="436" class="radfin" />`)}
+      </g>
+      <text x="43" y="372" class="t2" font-size="11" text-anchor="middle">Impianto</text>
+      <text x="14" y="462" class="t2" font-size="11">Minima (b): ${minTxt}</text>
+      <text x="14" y="477" class="b" font-size="12" fill=${tag}>${o.threshold === null ? "soglia non impostata" : o.waiting ? `attende ${fmt(o.threshold, 0)} °C` : `parte sopra ${fmt(o.threshold, 0)} °C`}</text>
+
+      <!-- uscita acqua calda e docce, a sinistra -->
+      <rect x="14" y="492" width="136" height="112" rx="14" class="pill big" />
+      <text x="82" y="512" class="t2 s13" text-anchor="middle">Uscita acqua calda</text>
+      <text x="82" y="556" class="t1 b" font-size="34" text-anchor="middle">${fmt(o.outlet, 1)}<tspan font-size="17" dy="-9"> °C</tspan></text>
+      <line x1="30" y1="568" x2="134" y2="568" class="sep" />
+      <text x="82" y="594" class="t1 b" font-size="18" text-anchor="middle">${o.showers === null ? "(–)" : `≈ ${o.showers} ${o.showers === 1 ? "doccia" : "docce"}`}</text>
     `;
   }
 
@@ -908,7 +1071,7 @@ export class ImpiantoOverviewCard extends LitElement {
         </div>
         ${noAlarm ? nothing : html`<div class="alarmbar" role="alert"><b>Allarme</b><span>${alarmRaw}</span></div>`}
         <div class="tiles">
-          ${this._tile(this._cless() ? "Sonda S. BOILER" : "Puffer 50 L", `${fmt(this._n(this.hass.states[e.puffer_effective] ? e.puffer_effective : e.puffer), 1)} °C${this.hass.states[e.puffer_effective]?.attributes?.fonte === "sonda ingresso" ? " (stima)" : ""}`, "#f59e0b")}
+          ${this._tile(this._cless() ? "Sonda S. BOILER" : "Puffer 50 L", `${fmt(this._n(this.hass.states[e.puffer_effective] ? e.puffer_effective : e.puffer), 1)} °C${this.hass.states[e.puffer_effective]?.attributes?.fonte === "sonda pozzetto" ? " (stima)" : ""}`, "#f59e0b")}
           ${this._tile("Set boiler", `${fmt(this._n(e.set_boiler), 0)} °C`)}
           ${this._tile("Set acqua", `${fmt(this._n(e.set_water), 0)} °C`)}
           ${this._tile("Potenza reale", `${fmt(this._n(e.power), 0)} %`)}
@@ -1061,7 +1224,7 @@ export class ImpiantoOverviewCard extends LitElement {
       setWater: this._n(e.set_water),
       setBoiler: this._n(e.set_boiler),
       puffer: this._n(pufferId),
-      pufferEstimated: this.hass.states[pufferId]?.attributes?.fonte === "sonda ingresso",
+      pufferEstimated: this.hass.states[pufferId]?.attributes?.fonte === "sonda pozzetto",
       boilerTop: this._n(e.boiler_top),
       collector: this._n(e.collector_temp),
       integrationPump: pill.key,
@@ -1740,6 +1903,19 @@ export class ImpiantoOverviewCard extends LitElement {
       stroke-width: 4;
       stroke-linecap: round;
     }
+    .clesstint { mix-blend-mode: color; opacity: 0.85; }
+    .clessflow { fill: none; stroke: #ffffff; stroke-opacity: 0.85; stroke-width: 7; stroke-linecap: round; stroke-dasharray: 14 30; animation: clessflow 1s linear infinite; }
+    @keyframes clessflow { to { stroke-dashoffset: -44; } }
+    .cutpipe { fill: var(--card-background-color, #fff); stroke-width: 2.6; }
+    .plate { fill: #64748b; }
+    .radbody { fill: var(--secondary-background-color, #e5e5e5); stroke: var(--secondary-text-color, #727272); stroke-width: 2; }
+    .radfin { stroke: var(--secondary-text-color, #727272); stroke-width: 2; opacity: 0.6; }
+    .stub { fill: #334155; stroke: #64748b; stroke-width: 1.5; }
+    .tube { fill: none; stroke: #94a3b8; stroke-width: 3; }
+    .tubefill { fill: rgba(255, 255, 255, 0.2); }
+    .inpipe { fill: none; stroke-width: 4; stroke-linecap: round; }
+    .inpipe.hot { stroke: #ef4444; }
+    .inpipe.cold { stroke: #3b82f6; }
     .coilflow {
       fill: none;
       stroke: #ffffff;

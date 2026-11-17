@@ -1,6 +1,15 @@
-# Sonde di temperatura del solare termico: 4 x NTC 10k B3950 lette da un ADS1115 (ESP32 dev)
-# + 2 sonde NTC del boiler (alto e basso) sugli ingressi analogici GPIO34 e GPIO35.
-# Il puffer NON si misura qui: la Polygon lo legge con le sue sonde (schema 02) e lo espone nel cloud.
+# Sonde dell'accumulo REQ.A CLESS 600 2S (puffer) e del solare termico: 4 x NTC 10k B3950 lette da un ADS1115 (ESP32 dev)
+# + 2 sonde NTC (alto e basso) sugli ingressi analogici GPIO34 e GPIO35.
+#
+# Dove sono (pozzetti del CLESS, vedi lo schema del costruttore: a = ACS, b = minima attivazione pompa circuito,
+# c = differenziale generatore, d = differenziale solare termico):
+#   Puffer alto  (GPIO34, "Boiler alto", S3)   pozzetto a (alto, lato sanitario)   sonda solare alta
+#   Puffer basso (GPIO35, "Boiler basso", S2)  pozzetto d (basso)                  sonda solare bassa
+#   A3 "Puffer minima riscaldamento"           pozzetto b di SINISTRA (lato impianto): e' la temperatura sopra la quale la
+#                                              pompa del riscaldamento puo' davvero partire; il termostato la usa come soglia
+#   A1 "Puffer generatore"                     pozzetto c di DESTRA (lato caldaia, camera di ritorno)
+#   Il pozzetto b di destra e' della caldaia (sonda S. BOILER, sensor.casale_temperatura_boiler), non di questo ESP32.
+#   A0 / A2: sonde a fascetta sui tubi di mandata e ritorno del collettore solare.
 #
 # COLLEGAMENTO (per ciascuna delle 4 sonde, tutte con la stessa regola):
 #
@@ -15,7 +24,7 @@
 #   (schermo a GND da un solo lato), sonda a contatto con il tubo con pasta termoconduttiva e isolata.
 #   Misura con un tester la tensione reale sul pin 3,3 V dell'ESP32 e scrivila in `reference_voltage`.
 #
-# Canali:  A0 = solare ingresso   A1 = solare uscita   A2 = integrazione ingresso   A3 = integrazione uscita
+# Canali:  A0 = solare ingresso (tubo)   A1 = puffer generatore (pozzetto c destra)   A2 = solare uscita (tubo)   A3 = puffer minima riscaldamento (pozzetto b sinistra)
 #
 # TARATURA: metti tutte e 4 le sonde insieme in un bagno d'acqua (circa 50 C) vicino a un termometro di
 # riferimento, leggi le differenze e scrivi la correzione nel filtro `offset` di ciascuna sonda.
@@ -76,8 +85,8 @@ sensor:
     multiplexer: A1_GND
     gain: 4.096
     sample_rate: 64
-    id: v_solare_uscita
-    name: "Tensione solare uscita"
+    id: v_puffer_generatore
+    name: "Tensione puffer generatore"
     internal: true
     update_interval: 5s
   - platform: ads1115
@@ -85,8 +94,8 @@ sensor:
     multiplexer: A2_GND
     gain: 4.096
     sample_rate: 64
-    id: v_integrazione_ingresso
-    name: "Tensione integrazione ingresso"
+    id: v_solare_uscita
+    name: "Tensione solare uscita"
     internal: true
     update_interval: 5s
   - platform: ads1115
@@ -94,8 +103,8 @@ sensor:
     multiplexer: A3_GND
     gain: 4.096
     sample_rate: 64
-    id: v_integrazione_uscita
-    name: "Tensione integrazione uscita"
+    id: v_puffer_minima
+    name: "Tensione puffer minima riscaldamento"
     internal: true
     update_interval: 5s
 
@@ -109,6 +118,14 @@ sensor:
     name: "Resistenza solare ingresso"
     internal: true
   - platform: resistance
+    sensor: v_puffer_generatore
+    configuration: DOWNSTREAM
+    resistor: 10kOhm
+    reference_voltage: ${vcc}
+    id: r_puffer_generatore
+    name: "Resistenza puffer generatore"
+    internal: true
+  - platform: resistance
     sensor: v_solare_uscita
     configuration: DOWNSTREAM
     resistor: 10kOhm
@@ -117,20 +134,12 @@ sensor:
     name: "Resistenza solare uscita"
     internal: true
   - platform: resistance
-    sensor: v_integrazione_ingresso
+    sensor: v_puffer_minima
     configuration: DOWNSTREAM
     resistor: 10kOhm
     reference_voltage: ${vcc}
-    id: r_integrazione_ingresso
-    name: "Resistenza integrazione ingresso"
-    internal: true
-  - platform: resistance
-    sensor: v_integrazione_uscita
-    configuration: DOWNSTREAM
-    resistor: 10kOhm
-    reference_voltage: ${vcc}
-    id: r_integrazione_uscita
-    name: "Resistenza integrazione uscita"
+    id: r_puffer_minima
+    name: "Resistenza puffer minima riscaldamento"
     internal: true
 
   # ---------- temperature (visibili in Home Assistant) ----------
@@ -154,6 +163,25 @@ sensor:
       - offset: 0.0   # correzione da taratura
 
   - platform: ntc
+    sensor: r_puffer_generatore
+    name: "Puffer generatore"
+    id: t_puffer_generatore
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 2
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+    filters:
+      - median:
+          window_size: 5
+          send_every: 3
+          send_first_at: 1
+      - offset: 0.0
+
+  - platform: ntc
     sensor: r_solare_uscita
     name: "Solare serpentina uscita"
     id: t_solare_uscita
@@ -173,28 +201,9 @@ sensor:
       - offset: 0.0
 
   - platform: ntc
-    sensor: r_integrazione_ingresso
-    name: "Integrazione serpentina ingresso"
-    id: t_integrazione_ingresso
-    unit_of_measurement: "°C"
-    device_class: temperature
-    state_class: measurement
-    accuracy_decimals: 2
-    calibration:
-      b_constant: 3950
-      reference_temperature: 25°C
-      reference_resistance: 10kOhm
-    filters:
-      - median:
-          window_size: 5
-          send_every: 3
-          send_first_at: 1
-      - offset: 0.0
-
-  - platform: ntc
-    sensor: r_integrazione_uscita
-    name: "Integrazione serpentina uscita"
-    id: t_integrazione_uscita
+    sensor: r_puffer_minima
+    name: "Puffer minima riscaldamento"
+    id: t_puffer_minima
     unit_of_measurement: "°C"
     device_class: temperature
     state_class: measurement
@@ -292,5 +301,9 @@ sensor:
   - platform: uptime
     name: "Tempo di attivita"
     entity_category: diagnostic
+
+button:
+  - platform: restart
+    name: "Riavvia"
 
 web_server:

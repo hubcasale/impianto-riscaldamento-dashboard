@@ -70,8 +70,8 @@ const S = {};
 const set = (id, state, attributes = {}) => (S[id] = { entity_id: id, state: String(state), last_changed: now, attributes });
 
 // boiler solare e stime
-set("sensor.boiler_solare_alto_stimato", 55.6, { unit_of_measurement: "°C" });
-set("sensor.boiler_solare_basso_stimato", 23.1, { unit_of_measurement: "°C" });
+set("sensor.boiler_solare_alto_stimato", parseFloat(q.get("alto") || "55.6"), { unit_of_measurement: "°C" });
+set("sensor.boiler_solare_basso_stimato", parseFloat(q.get("basso") || "23.1"), { unit_of_measurement: "°C" });
 set("input_number.boiler_solare_volume", 190);
 set("input_number.boiler_solare_peso_alto", 50);
 set("input_number.boiler_solare_t_rete", 15);
@@ -126,8 +126,10 @@ set("binary_sensor.casale_pellet_hopper_open", pel === "aperto" ? "on" : "off");
 const pan = q.get("pannello") || "ferma";
 set("sensor.solare_termico_solare_serpentina_ingresso", pan === "attiva" ? 33.5 : 24.7, { unit_of_measurement: "°C" });
 set("sensor.solare_termico_solare_serpentina_uscita", pan === "attiva" ? 21.9 : 25.1, { unit_of_measurement: "°C" });
-set("sensor.solare_termico_integrazione_serpentina_ingresso", 41.9, { unit_of_measurement: "°C" });
-set("sensor.solare_termico_integrazione_serpentina_uscita", 21.7, { unit_of_measurement: "°C" });
+set("sensor.locale_caldaia_solare_termico_puffer_generatore", 50.9, { unit_of_measurement: "°C" });
+set("sensor.locale_caldaia_solare_termico_puffer_minima_riscaldamento", parseFloat(q.get("minima") || "55.9"), { unit_of_measurement: "°C" });
+set("sensor.termostato_riscaldamento_modalita", "manuale", { puffer_soglia: 40, puffer_in_attesa: q.get("attesa") === "1" });
+set("binary_sensor.termostato_riscaldamento_sta_scaldando", q.get("riscaldamento") === "1" ? "on" : "off");
 set("sensor.solare_pannello_massima_prevista", pan === "sereno" ? 72 : 58, { unit_of_measurement: "°C" });
 set("sensor.solare_pannello_massima_oggi", pan === "sereno" ? 61 : 42, { unit_of_measurement: "°C" });
 // consumo di pellet (stima)
@@ -317,8 +319,8 @@ const hass = {
         else if (id.includes("temperatura_acqua")) v = 52 + 14 * Math.sin(h6 * 2 * Math.PI - 0.5);
         else if (id.includes("collettore")) v = 25 + 45 * Math.max(0, Math.sin(day - 1.5));
         else if (id.includes("potenza_reale")) v = cycle(t) === "WORK" ? 100 : cycle(t) === "START" ? 60 : 0;
-        else if (id.includes("integrazione_serpentina_ingresso")) v = 40 + 15 * Math.sin(h6 * 6.28);
-        else if (id.includes("integrazione_serpentina_uscita")) v = 33 + 9 * Math.sin(h6 * 6.28);
+        else if (id.includes("puffer_generatore")) v = 40 + 15 * Math.sin(h6 * 6.28);
+        else if (id.includes("puffer_minima_riscaldamento")) v = 33 + 9 * Math.sin(h6 * 6.28);
         else if (id.includes("garage_bs_pompa")) v = Math.sin(h6 * 6.28) > 0.2 ? 47 : 1;
         else if (id.includes("solare_serpentina_ingresso")) v = 30 + 40 * Math.max(0, Math.sin(day - 1.5));
         else if (id.includes("solare_serpentina_uscita")) v = 26 + 24 * Math.max(0, Math.sin(day - 1.3));

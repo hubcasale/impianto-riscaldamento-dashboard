@@ -332,7 +332,7 @@ check("previsione: senza servizio resta l'elenco precedente (vuoto)", out2, [])
 EFF = find("sensor", "Puffer temperatura effettiva", BLOCCO)
 def eff(cloud, sonda="55.3", pompa="on", minuti_da=10, attesa="5"):
     now_ = dt.datetime(2026, 10, 8, 19, 0)
-    stati = {"sensor.casale_temperatura_boiler": cloud, "sensor.solare_termico_integrazione_serpentina_ingresso": sonda,
+    stati = {"sensor.casale_temperatura_boiler": cloud, "sensor.locale_caldaia_solare_termico_puffer_generatore": sonda,
              "binary_sensor.caldaia_pompa_integrazione_attiva": pompa, "input_number.caldaia_puffer_attesa_minuti": attesa,
              "input_number.caldaia_puffer_k_sonda": "0.753", "input_number.caldaia_puffer_t_ambiente_sonda": "19.7"}
     ch = {"sensor.casale_temperatura_boiler": now_ - dt.timedelta(minutes=minuti_da)}
@@ -342,10 +342,10 @@ check("puffer: con la lettura della caldaia usa quella", eff("64.0")[1], "64.0")
 check("puffer: fonte caldaia", eff("64.0")[2], "caldaia")
 check("puffer: caldaia non disponibile da 3 minuti, si aspetta", eff("unavailable", minuti_da=3)[0], "False")
 check("puffer: caldaia non disponibile da 10 minuti, disponibile dalla sonda", eff("unavailable", minuti_da=10)[0], "True")
-check("puffer: dalla sonda 55,3 C con k=0,753", float(eff("unavailable")[1]), 67.0)
-check("puffer: fonte sonda ingresso", eff("unavailable")[2], "sonda ingresso")
+check("puffer: dalla sonda nel pozzetto, senza modello", float(eff("unavailable")[1]), 55.3)
+check("puffer: fonte sonda pozzetto", eff("unavailable")[2], "sonda pozzetto")
 check("puffer: sonda con pompa in marcia e' affidabile", eff("unavailable", pompa="on")[3], "True")
-check("puffer: sonda a pompa ferma non e' affidabile", eff("unavailable", pompa="off")[3], "False")
+check("puffer: la sonda nel pozzetto e' affidabile anche a pompa ferma", eff("unavailable", pompa="off")[3], "True")
 check("puffer: lettura della caldaia e' sempre affidabile", eff("64.0", pompa="off")[3], "True")
 check("puffer: nessuna delle due letture", eff("unavailable", sonda="unavailable")[0], "False")
 INU = find("binary_sensor", "Caldaia integrazione inutile", BLOCCO)["state"]
