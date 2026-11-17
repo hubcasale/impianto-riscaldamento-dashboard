@@ -623,9 +623,11 @@ export class ImpiantoOverviewCard extends LitElement {
     const d12 = short ? SHORT_D1 + SHORT_D2 : 0;
     const coilI = short ? COIL_INTEGRATION_SHORT : COIL_INTEGRATION;
     const coilS = short ? COIL_SOLAR_SHORT : COIL_SOLAR;
-    const viewBox = this._narrow ? "0 0 640 840" : `0 0 700 ${840 - d12}`;
-    const s2y = short ? 536 : 640;
-    const kwy = short ? 616 : 728;
+    const vh = cless ? 772 : 840;      // col CLESS sotto il serbatoio non resta niente: la scheda e' piu' bassa
+    const viewBox = this._narrow ? `0 0 640 ${vh}` : `0 0 700 ${vh - d12}`;
+    // col CLESS la potenza solare sta sopra S2 e S2 e' all'altezza della sonda nel pozzetto d
+    const s2y = cless ? 614 : short ? 536 : 640;
+    const kwy = cless ? 530 : short ? 616 : 728;
     const panIn = short ? "M598 440 H520 V512 H440" : cless ? "M536 548 H456" : "M598 500 H520 V560 H440";
     const panOut = short ? "M440 536 H548 V492 H598" : cless ? "M456 636 H578 V614" : "M440 656 H548 V552 H598";
 
@@ -667,7 +669,7 @@ export class ImpiantoOverviewCard extends LitElement {
         <!-- boiler -->
         ${cless
           ? this._clessSection({
-              cTop, cMid, cBot, solarOn: collectorOn, boilerOn: stovePumpRunning(this._s(e.pump)) === true, outlet, showers,
+              cTop, cMid, cBot, solarOn: collectorOn, boilerOn: stovePumpRunning(this._s(e.pump)) === true,
               heatingOn: this._yes(e.heat_call) === true,
               minProbe: integOut, genProbe: integIn, boilerProbe: this._n(e.puffer),
               threshold: toNumber(thermo.puffer_soglia as string | null | undefined), waiting: thermo.puffer_in_attesa === true,
@@ -704,9 +706,10 @@ export class ImpiantoOverviewCard extends LitElement {
         <!-- sonde -->
         <circle cx="222" cy="168" r="8" class="probe" />
         <line x1="214" y1="168" x2="150" y2="168" class="lead" />
-        <rect x="14" y="132" width="136" height="72" rx="14" class="card hi" />
-        <text x="82" y="156" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Alto (S3)</text>
-        <text x="82" y="190" class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
+        <rect x="14" y="132" width="136" height=${cless ? 90 : 72} rx="14" class="card hi" />
+        <text x="82" y="154" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Alto (S3)</text>
+        <text x="82" y=${cless ? 184 : 190} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
+        ${cless ? svg`<text x="82" y="208" class="t1 b" font-size=${Math.round(14 * fs)} text-anchor="middle">${showers === null ? "(–)" : `≈ ${showers} ${showers === 1 ? "doccia" : "docce"}`}</text>` : nothing}
 
         <circle cx="222" cy=${(cless ? 650 : 676) - d12} r="8" class="probe" />
         <line x1="214" y1=${(cless ? 650 : 676) - d12} x2="150" y2=${(cless ? 650 : 676) - d12} class="lead" />
@@ -716,26 +719,26 @@ export class ImpiantoOverviewCard extends LitElement {
 
         <!-- stima e pulsante -->
         ${cless
-          ? svg`<rect x="14" y="224" width="136" height="68" rx="14" class="card eta" />
-        <text x="82" y="243" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">Caldaia imposta a</text>
-        <text x="82" y="272" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e.set_boiler) === null ? "–" : `${fmt(this._n(e.set_boiler), 0)} °C`}</text>
-        <text x="82" y="286" class="t2" font-size="11" text-anchor="middle">sonda S. BOILER</text>
+          ? svg`<rect x="14" y="232" width="136" height="68" rx="14" class="card eta" />
+        <text x="82" y="251" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">Caldaia imposta a</text>
+        <text x="82" y="280" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e.set_boiler) === null ? "–" : `${fmt(this._n(e.set_boiler), 0)} °C`}</text>
+        <text x="82" y="294" class="t2" font-size="11" text-anchor="middle">sonda S. BOILER</text>
         ${this._config.summary === false
           ? nothing
           : svg`<g class="btn info" role="button" tabindex="0" aria-label="Stato dell'impianto" @click=${() => this._openInfo()}
               @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openInfo()}>
-              <rect x="14" y="300" width="66" height="44" rx="14" class="infobg" />
-              <circle cx="28" cy="322" r="7" class="infoc" />
-              <text x="28" y="325.5" class="b" font-size="10" text-anchor="middle">i</text>
-              <text x="40" y="327" class="b" font-size="12">Stato</text>
+              <rect x="14" y="308" width="66" height="44" rx="14" class="infobg" />
+              <circle cx="28" cy="330" r="7" class="infoc" />
+              <text x="28" y="333.5" class="b" font-size="10" text-anchor="middle">i</text>
+              <text x="40" y="335" class="b" font-size="12">Stato</text>
             </g>`}
         ${this._config.charts === false
           ? nothing
           : svg`<g class="btn info" role="button" tabindex="0" aria-label="Grafici" @click=${() => this._openCharts()}
               @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openCharts()}>
-              <rect x="84" y="300" width="66" height="44" rx="14" class="infobg" />
-              <polyline points="90,328 95,319 99,324 105,314" class="infoc" />
-              <text x="108" y="327" class="b" font-size="11">Grafici</text>
+              <rect x="84" y="308" width="66" height="44" rx="14" class="infobg" />
+              <polyline points="90,336 95,327 99,332 105,322" class="infoc" />
+              <text x="108" y="335" class="b" font-size="11">Grafici</text>
             </g>`}`
           : svg`        <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
         <text x="82" y="248" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">${cless ? "Caldaia imposta a" : "Acqua pronta in"}</text>
@@ -833,8 +836,6 @@ export class ImpiantoOverviewCard extends LitElement {
     cBot: string;
     solarOn: boolean;
     boilerOn: boolean;
-    outlet: number | null;
-    showers: number | null;
     /** la pompa del riscaldamento gira (il termostato ambiente chiama calore) */
     heatingOn: boolean;
     /** sonde nei pozzetti: b sinistra (minima per il riscaldamento), c destra (generatore), b destra (S. BOILER della caldaia) */
@@ -918,13 +919,6 @@ export class ImpiantoOverviewCard extends LitElement {
       <text x="43" y="372" class="t2" font-size="11" text-anchor="middle">Impianto</text>
       <text x="14" y="462" class="t2" font-size="11">Minima (b): ${minTxt}</text>
       <text x="14" y="477" class="b" font-size="12" fill=${tag}>${o.threshold === null ? "blocco riscaldamento spento" : o.waiting ? `attende ${fmt(o.threshold, 0)} °C` : `parte sopra ${fmt(o.threshold, 0)} °C`}</text>
-
-      <!-- uscita acqua calda e docce, a sinistra -->
-      <rect x="14" y="492" width="136" height="112" rx="14" class="pill big" />
-      <text x="82" y="512" class="t2 s13" text-anchor="middle">Uscita acqua calda</text>
-      <text x="82" y="556" class="t1 b" font-size="34" text-anchor="middle">${fmt(o.outlet, 1)}<tspan font-size="17" dy="-9"> °C</tspan></text>
-      <line x1="30" y1="568" x2="134" y2="568" class="sep" />
-      <text x="82" y="594" class="t1 b" font-size="18" text-anchor="middle">${o.showers === null ? "(–)" : `≈ ${o.showers} ${o.showers === 1 ? "doccia" : "docce"}`}</text>
     `;
   }
 

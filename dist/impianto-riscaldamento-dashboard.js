@@ -5635,9 +5635,10 @@ var ImpiantoOverviewCard = class extends i4 {
     const d12 = short ? SHORT_D1 + SHORT_D2 : 0;
     const coilI = short ? COIL_INTEGRATION_SHORT : COIL_INTEGRATION;
     const coilS = short ? COIL_SOLAR_SHORT : COIL_SOLAR;
-    const viewBox = this._narrow ? "0 0 640 840" : `0 0 700 ${840 - d12}`;
-    const s2y = short ? 536 : 640;
-    const kwy = short ? 616 : 728;
+    const vh = cless ? 772 : 840;
+    const viewBox = this._narrow ? `0 0 640 ${vh}` : `0 0 700 ${vh - d12}`;
+    const s2y = cless ? 614 : short ? 536 : 640;
+    const kwy = cless ? 530 : short ? 616 : 728;
     const panIn = short ? "M598 440 H520 V512 H440" : cless ? "M536 548 H456" : "M598 500 H520 V560 H440";
     const panOut = short ? "M440 536 H548 V492 H598" : cless ? "M456 636 H578 V614" : "M440 656 H548 V552 H598";
     return b2`
@@ -5682,8 +5683,6 @@ var ImpiantoOverviewCard = class extends i4 {
       cBot,
       solarOn: collectorOn,
       boilerOn: stovePumpRunning(this._s(e5.pump)) === true,
-      outlet,
-      showers,
       heatingOn: this._yes(e5.heat_call) === true,
       minProbe: integOut,
       genProbe: integIn,
@@ -5718,9 +5717,10 @@ var ImpiantoOverviewCard = class extends i4 {
         <!-- sonde -->
         <circle cx="222" cy="168" r="8" class="probe" />
         <line x1="214" y1="168" x2="150" y2="168" class="lead" />
-        <rect x="14" y="132" width="136" height="72" rx="14" class="card hi" />
-        <text x="82" y="156" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Alto (S3)</text>
-        <text x="82" y="190" class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt3(top, 1)} °C</text>
+        <rect x="14" y="132" width="136" height=${cless ? 90 : 72} rx="14" class="card hi" />
+        <text x="82" y="154" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Alto (S3)</text>
+        <text x="82" y=${cless ? 184 : 190} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt3(top, 1)} °C</text>
+        ${cless ? w`<text x="82" y="208" class="t1 b" font-size=${Math.round(14 * fs)} text-anchor="middle">${showers === null ? "(\u2013)" : `\u2248 ${showers} ${showers === 1 ? "doccia" : "docce"}`}</text>` : A}
 
         <circle cx="222" cy=${(cless ? 650 : 676) - d12} r="8" class="probe" />
         <line x1="214" y1=${(cless ? 650 : 676) - d12} x2="150" y2=${(cless ? 650 : 676) - d12} class="lead" />
@@ -5729,22 +5729,22 @@ var ImpiantoOverviewCard = class extends i4 {
         <text x="82" y=${s2y + 58} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#3b82f6">${fmt3(bottom, 1)} °C</text>
 
         <!-- stima e pulsante -->
-        ${cless ? w`<rect x="14" y="224" width="136" height="68" rx="14" class="card eta" />
-        <text x="82" y="243" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">Caldaia imposta a</text>
-        <text x="82" y="272" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e5.set_boiler) === null ? "\u2013" : `${fmt3(this._n(e5.set_boiler), 0)} \xB0C`}</text>
-        <text x="82" y="286" class="t2" font-size="11" text-anchor="middle">sonda S. BOILER</text>
+        ${cless ? w`<rect x="14" y="232" width="136" height="68" rx="14" class="card eta" />
+        <text x="82" y="251" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">Caldaia imposta a</text>
+        <text x="82" y="280" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e5.set_boiler) === null ? "\u2013" : `${fmt3(this._n(e5.set_boiler), 0)} \xB0C`}</text>
+        <text x="82" y="294" class="t2" font-size="11" text-anchor="middle">sonda S. BOILER</text>
         ${this._config.summary === false ? A : w`<g class="btn info" role="button" tabindex="0" aria-label="Stato dell'impianto" @click=${() => this._openInfo()}
               @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._openInfo()}>
-              <rect x="14" y="300" width="66" height="44" rx="14" class="infobg" />
-              <circle cx="28" cy="322" r="7" class="infoc" />
-              <text x="28" y="325.5" class="b" font-size="10" text-anchor="middle">i</text>
-              <text x="40" y="327" class="b" font-size="12">Stato</text>
+              <rect x="14" y="308" width="66" height="44" rx="14" class="infobg" />
+              <circle cx="28" cy="330" r="7" class="infoc" />
+              <text x="28" y="333.5" class="b" font-size="10" text-anchor="middle">i</text>
+              <text x="40" y="335" class="b" font-size="12">Stato</text>
             </g>`}
         ${this._config.charts === false ? A : w`<g class="btn info" role="button" tabindex="0" aria-label="Grafici" @click=${() => this._openCharts()}
               @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._openCharts()}>
-              <rect x="84" y="300" width="66" height="44" rx="14" class="infobg" />
-              <polyline points="90,328 95,319 99,324 105,314" class="infoc" />
-              <text x="108" y="327" class="b" font-size="11">Grafici</text>
+              <rect x="84" y="308" width="66" height="44" rx="14" class="infobg" />
+              <polyline points="90,336 95,327 99,332 105,322" class="infoc" />
+              <text x="108" y="335" class="b" font-size="11">Grafici</text>
             </g>`}` : w`        <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
         <text x="82" y="248" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">${cless ? "Caldaia imposta a" : "Acqua pronta in"}</text>
         <text x="82" y="292" class="t1 b" font-size=${Math.round(34 * fs)} text-anchor="middle">${cless ? this._n(e5.set_boiler) === null ? "\u2013" : `${fmt3(this._n(e5.set_boiler), 0)} \xB0C` : etaText(eta)}</text>
@@ -5894,13 +5894,6 @@ var ImpiantoOverviewCard = class extends i4 {
       <text x="43" y="372" class="t2" font-size="11" text-anchor="middle">Impianto</text>
       <text x="14" y="462" class="t2" font-size="11">Minima (b): ${minTxt}</text>
       <text x="14" y="477" class="b" font-size="12" fill=${tag}>${o6.threshold === null ? "blocco riscaldamento spento" : o6.waiting ? `attende ${fmt3(o6.threshold, 0)} \xB0C` : `parte sopra ${fmt3(o6.threshold, 0)} \xB0C`}</text>
-
-      <!-- uscita acqua calda e docce, a sinistra -->
-      <rect x="14" y="492" width="136" height="112" rx="14" class="pill big" />
-      <text x="82" y="512" class="t2 s13" text-anchor="middle">Uscita acqua calda</text>
-      <text x="82" y="556" class="t1 b" font-size="34" text-anchor="middle">${fmt3(o6.outlet, 1)}<tspan font-size="17" dy="-9"> °C</tspan></text>
-      <line x1="30" y1="568" x2="134" y2="568" class="sep" />
-      <text x="82" y="594" class="t1 b" font-size="18" text-anchor="middle">${o6.showers === null ? "(\u2013)" : `\u2248 ${o6.showers} ${o6.showers === 1 ? "doccia" : "docce"}`}</text>
     `;
   }
   /** Modo CLESS acceso: accumulo al posto del boiler solare e del puffer, senza pompa di integrazione ne' pulsante di accensione rapida. */
