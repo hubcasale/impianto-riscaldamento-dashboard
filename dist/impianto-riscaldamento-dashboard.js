@@ -5903,8 +5903,8 @@ var ImpiantoOverviewCard = class extends i4 {
       <text x="574" y="304" class="t2" font-size="13" text-anchor="middle">Puffer acqua calda</text>
       <text x="574" y="334" class="t1 b" font-size="27" text-anchor="middle">${o6.boilerProbe === null ? "\u2013" : `${fmt3(o6.boilerProbe, 1)} \xB0C`}</text>
       <text x="574" y="358" class="t1 b" font-size="14" text-anchor="middle">${o6.showers === null ? "(\u2013)" : `\u2248 ${o6.showers} ${o6.showers === 1 ? "doccia" : "docce"}`}</text>
-      <text x="506" y="446" class="t2" font-size="10">c · generatore</text>
-      <text x="506" y="460" class="t1 b" font-size="14">${o6.genProbe === null ? "\u2013" : `${fmt3(o6.genProbe, 1)} \xB0C`}</text>
+      <text x="506" y="401" class="t1 b" font-size="17">${o6.minProbe === null ? "\u2013" : `${fmt3(o6.minProbe, 1)} \xB0C`}</text>
+      <text x="506" y="431" class="t1 b" font-size="17">${o6.genProbe === null ? "\u2013" : `${fmt3(o6.genProbe, 1)} \xB0C`}</text>
 
       <!-- impianto di riscaldamento, a sinistra: la pompa spinge l'acqua nella mandata (esce), il ritorno entra -->
       <rect x="188" y="390" width="16" height="12" rx="2" class="stub" />

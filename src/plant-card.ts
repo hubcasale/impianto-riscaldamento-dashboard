@@ -901,8 +901,8 @@ export class ImpiantoOverviewCard extends LitElement {
       <text x="574" y="304" class="t2" font-size="13" text-anchor="middle">Puffer acqua calda</text>
       <text x="574" y="334" class="t1 b" font-size="27" text-anchor="middle">${o.boilerProbe === null ? "–" : `${fmt(o.boilerProbe, 1)} °C`}</text>
       <text x="574" y="358" class="t1 b" font-size="14" text-anchor="middle">${o.showers === null ? "(–)" : `≈ ${o.showers} ${o.showers === 1 ? "doccia" : "docce"}`}</text>
-      <text x="506" y="446" class="t2" font-size="10">c · generatore</text>
-      <text x="506" y="460" class="t1 b" font-size="14">${o.genProbe === null ? "–" : `${fmt(o.genProbe, 1)} °C`}</text>
+      <text x="506" y="401" class="t1 b" font-size="17">${o.minProbe === null ? "–" : `${fmt(o.minProbe, 1)} °C`}</text>
+      <text x="506" y="431" class="t1 b" font-size="17">${o.genProbe === null ? "–" : `${fmt(o.genProbe, 1)} °C`}</text>
 
       <!-- impianto di riscaldamento, a sinistra: la pompa spinge l'acqua nella mandata (esce), il ritorno entra -->
       <rect x="188" y="390" width="16" height="12" rx="2" class="stub" />
