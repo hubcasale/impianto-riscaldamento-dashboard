@@ -49,22 +49,34 @@ esp32_ble_tracker:
     interval: 320ms
     window: 40ms
     active: true
-  # segnala quando vede il modulo della stufa (aggiornato al massimo ogni 30 s)
+  # segnala quando vede il modulo della stufa: ultimo avviso sempre registrato, testo e RSSI pubblicati al massimo ogni 30 s
   on_ble_advertise:
     then:
       - lambda: |-
-          static uint32_t ultimo = 0;
           const std::string &n = x.get_name();
           if (n.rfind("T009_", 0) == 0 || n.rfind("NAVEL_", 0) == 0 || n.rfind("Navel_", 0) == 0) {
-            if (millis() - ultimo < 30000 && ultimo != 0) return;
-            ultimo = millis();
+            uint32_t ora = millis();
+            bool primo = id(ble_ultimo_avviso) == 0;
+            id(ble_ultimo_avviso) = ora;
+            if (!primo && ora - id(ble_ultima_pubblicazione) < 30000) return;
+            id(ble_ultima_pubblicazione) = ora;
             char buf[80];
             snprintf(buf, sizeof(buf), "%s %s %d dBm", n.c_str(), x.address_str().c_str(), x.get_rssi());
             id(ble_modulo_stufa).publish_state(buf);
+            id(ble_rssi_stufa).publish_state(x.get_rssi());
           }
 
 bluetooth_proxy:
   active: true
+
+# istanti (millis) dell'ultimo avviso del modulo della stufa e dell'ultima pubblicazione dei dati
+globals:
+  - id: ble_ultimo_avviso
+    type: uint32_t
+    initial_value: "0"
+  - id: ble_ultima_pubblicazione
+    type: uint32_t
+    initial_value: "0"
 
 text_sensor:
   - platform: template
@@ -82,3 +94,39 @@ sensor:
     name: "Tempo di attivita"
     update_interval: 60s
     entity_category: diagnostic
+  # segnale del modulo della stufa, dall'ultimo avviso ricevuto
+  - platform: template
+    name: "RSSI modulo stufa"
+    id: ble_rssi_stufa
+    unit_of_measurement: "dBm"
+    device_class: signal_strength
+    state_class: measurement
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    name: "Ultimo segnale modulo stufa"
+    unit_of_measurement: "s"
+    device_class: duration
+    state_class: measurement
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: |-
+      if (id(ble_ultimo_avviso) == 0) return NAN;
+      return (millis() - id(ble_ultimo_avviso)) / 1000.0;
+
+binary_sensor:
+  # acceso finche' il modulo della stufa e' stato sentito negli ultimi 2 minuti
+  - platform: template
+    name: "Modulo stufa visibile"
+    device_class: connectivity
+    entity_category: diagnostic
+    lambda: |-
+      return id(ble_ultimo_avviso) != 0 && (millis() - id(ble_ultimo_avviso)) < 120000;
+
+button:
+  - platform: restart
+    name: "Riavvia"
+
+web_server:
+  port: 80
