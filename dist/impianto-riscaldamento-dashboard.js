@@ -5688,7 +5688,8 @@ var ImpiantoOverviewCard = class extends i4 {
       genProbe: integIn,
       boilerProbe: this._n(e5.puffer),
       threshold: toNumber(thermo.puffer_soglia),
-      waiting: thermo.puffer_in_attesa === true
+      waiting: thermo.puffer_in_attesa === true,
+      showers
     }) : w`
         <rect x="200" y="100" width="240" height=${660 - d12} rx="52" fill="url(#iso)" class="outline" />
         <rect x="222" y="122" width="196" height=${616 - d12} rx="38" fill="url(#acqua)" />
@@ -5717,10 +5718,9 @@ var ImpiantoOverviewCard = class extends i4 {
         <!-- sonde -->
         <circle cx="222" cy="168" r="8" class="probe" />
         <line x1="214" y1="168" x2="150" y2="168" class="lead" />
-        <rect x="14" y="132" width="136" height=${cless ? 90 : 72} rx="14" class="card hi" />
+        <rect x="14" y="132" width="136" height="72" rx="14" class="card hi" />
         <text x="82" y="154" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Alto (S3)</text>
-        <text x="82" y=${cless ? 184 : 190} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt3(top, 1)} °C</text>
-        ${cless ? w`<text x="82" y="208" class="t1 b" font-size=${Math.round(14 * fs)} text-anchor="middle">${showers === null ? "(\u2013)" : `\u2248 ${showers} ${showers === 1 ? "doccia" : "docce"}`}</text>` : A}
+        <text x="82" y="190" class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt3(top, 1)} °C</text>
 
         <circle cx="222" cy=${(cless ? 650 : 676) - d12} r="8" class="probe" />
         <line x1="214" y1=${(cless ? 650 : 676) - d12} x2="150" y2=${(cless ? 650 : 676) - d12} class="lead" />
@@ -5729,22 +5729,22 @@ var ImpiantoOverviewCard = class extends i4 {
         <text x="82" y=${s2y + 58} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#3b82f6">${fmt3(bottom, 1)} °C</text>
 
         <!-- stima e pulsante -->
-        ${cless ? w`<rect x="14" y="232" width="136" height="68" rx="14" class="card eta" />
-        <text x="82" y="251" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">Caldaia imposta a</text>
-        <text x="82" y="280" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e5.set_boiler) === null ? "\u2013" : `${fmt3(this._n(e5.set_boiler), 0)} \xB0C`}</text>
-        <text x="82" y="294" class="t2" font-size="11" text-anchor="middle">sonda S. BOILER</text>
+        ${cless ? w`<rect x="14" y="216" width="136" height="68" rx="14" class="card eta" />
+        <text x="82" y="235" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">Caldaia imposta a</text>
+        <text x="82" y="264" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e5.set_boiler) === null ? "\u2013" : `${fmt3(this._n(e5.set_boiler), 0)} \xB0C`}</text>
+        <text x="82" y="278" class="t2" font-size="11" text-anchor="middle">sonda S. BOILER</text>
         ${this._config.summary === false ? A : w`<g class="btn info" role="button" tabindex="0" aria-label="Stato dell'impianto" @click=${() => this._openInfo()}
               @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._openInfo()}>
-              <rect x="14" y="308" width="66" height="44" rx="14" class="infobg" />
-              <circle cx="28" cy="330" r="7" class="infoc" />
-              <text x="28" y="333.5" class="b" font-size="10" text-anchor="middle">i</text>
-              <text x="40" y="335" class="b" font-size="12">Stato</text>
+              <rect x="14" y="292" width="66" height="44" rx="14" class="infobg" />
+              <circle cx="28" cy="314" r="7" class="infoc" />
+              <text x="28" y="317.5" class="b" font-size="10" text-anchor="middle">i</text>
+              <text x="40" y="319" class="b" font-size="12">Stato</text>
             </g>`}
         ${this._config.charts === false ? A : w`<g class="btn info" role="button" tabindex="0" aria-label="Grafici" @click=${() => this._openCharts()}
               @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._openCharts()}>
-              <rect x="84" y="308" width="66" height="44" rx="14" class="infobg" />
-              <polyline points="90,336 95,327 99,332 105,322" class="infoc" />
-              <text x="108" y="335" class="b" font-size="11">Grafici</text>
+              <rect x="84" y="292" width="66" height="44" rx="14" class="infobg" />
+              <polyline points="90,320 95,311 99,316 105,306" class="infoc" />
+              <text x="108" y="319" class="b" font-size="11">Grafici</text>
             </g>`}` : w`        <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
         <text x="82" y="248" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">${cless ? "Caldaia imposta a" : "Acqua pronta in"}</text>
         <text x="82" y="292" class="t1 b" font-size=${Math.round(34 * fs)} text-anchor="middle">${cless ? this._n(e5.set_boiler) === null ? "\u2013" : `${fmt3(this._n(e5.set_boiler), 0)} \xB0C` : etaText(eta)}</text>
@@ -5872,9 +5872,11 @@ var ImpiantoOverviewCard = class extends i4 {
       <polygon points="486,389 470,396 486,403" fill="#ef4444" />
       <polygon points="470,419 486,426 470,433" fill="#3b82f6" />
       ${o6.boilerOn ? w`<path d="M456 396 H500" class="coilflow" /><path d="M456 426 H500" class="coilflow" />` : A}
-      <text x="506" y="376" class="b" font-size="13" fill="#fb923c">Caldaia</text>
-      <text x="506" y="389" class="t2" font-size="10">b · S. BOILER</text>
-      <text x="506" y="418" class="t1 b" font-size="14">${o6.boilerProbe === null ? "\u2013" : `${fmt3(o6.boilerProbe, 1)} \xB0C`}</text>
+      <text x="506" y="274" class="b" font-size="13" fill="#fb923c">Caldaia</text>
+      <rect x="506" y="282" width="136" height="90" rx="14" class="card eta" />
+      <text x="574" y="304" class="t2" font-size="13" text-anchor="middle">Puffer acqua calda</text>
+      <text x="574" y="334" class="t1 b" font-size="27" text-anchor="middle">${o6.boilerProbe === null ? "\u2013" : `${fmt3(o6.boilerProbe, 1)} \xB0C`}</text>
+      <text x="574" y="358" class="t1 b" font-size="14" text-anchor="middle">${o6.showers === null ? "(\u2013)" : `\u2248 ${o6.showers} ${o6.showers === 1 ? "doccia" : "docce"}`}</text>
       <text x="506" y="446" class="t2" font-size="10">c · generatore</text>
       <text x="506" y="460" class="t1 b" font-size="14">${o6.genProbe === null ? "\u2013" : `${fmt3(o6.genProbe, 1)} \xB0C`}</text>
 

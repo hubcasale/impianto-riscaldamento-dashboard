@@ -672,7 +672,7 @@ export class ImpiantoOverviewCard extends LitElement {
               cTop, cMid, cBot, solarOn: collectorOn, boilerOn: stovePumpRunning(this._s(e.pump)) === true,
               heatingOn: this._yes(e.heat_call) === true,
               minProbe: integOut, genProbe: integIn, boilerProbe: this._n(e.puffer),
-              threshold: toNumber(thermo.puffer_soglia as string | null | undefined), waiting: thermo.puffer_in_attesa === true,
+              threshold: toNumber(thermo.puffer_soglia as string | null | undefined), waiting: thermo.puffer_in_attesa === true, showers,
             })
           : svg`
         <rect x="200" y="100" width="240" height=${660 - d12} rx="52" fill="url(#iso)" class="outline" />
@@ -706,10 +706,9 @@ export class ImpiantoOverviewCard extends LitElement {
         <!-- sonde -->
         <circle cx="222" cy="168" r="8" class="probe" />
         <line x1="214" y1="168" x2="150" y2="168" class="lead" />
-        <rect x="14" y="132" width="136" height=${cless ? 90 : 72} rx="14" class="card hi" />
+        <rect x="14" y="132" width="136" height="72" rx="14" class="card hi" />
         <text x="82" y="154" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Alto (S3)</text>
-        <text x="82" y=${cless ? 184 : 190} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
-        ${cless ? svg`<text x="82" y="208" class="t1 b" font-size=${Math.round(14 * fs)} text-anchor="middle">${showers === null ? "(–)" : `≈ ${showers} ${showers === 1 ? "doccia" : "docce"}`}</text>` : nothing}
+        <text x="82" y="190" class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
 
         <circle cx="222" cy=${(cless ? 650 : 676) - d12} r="8" class="probe" />
         <line x1="214" y1=${(cless ? 650 : 676) - d12} x2="150" y2=${(cless ? 650 : 676) - d12} class="lead" />
@@ -719,26 +718,26 @@ export class ImpiantoOverviewCard extends LitElement {
 
         <!-- stima e pulsante -->
         ${cless
-          ? svg`<rect x="14" y="232" width="136" height="68" rx="14" class="card eta" />
-        <text x="82" y="251" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">Caldaia imposta a</text>
-        <text x="82" y="280" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e.set_boiler) === null ? "–" : `${fmt(this._n(e.set_boiler), 0)} °C`}</text>
-        <text x="82" y="294" class="t2" font-size="11" text-anchor="middle">sonda S. BOILER</text>
+          ? svg`<rect x="14" y="216" width="136" height="68" rx="14" class="card eta" />
+        <text x="82" y="235" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">Caldaia imposta a</text>
+        <text x="82" y="264" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e.set_boiler) === null ? "–" : `${fmt(this._n(e.set_boiler), 0)} °C`}</text>
+        <text x="82" y="278" class="t2" font-size="11" text-anchor="middle">sonda S. BOILER</text>
         ${this._config.summary === false
           ? nothing
           : svg`<g class="btn info" role="button" tabindex="0" aria-label="Stato dell'impianto" @click=${() => this._openInfo()}
               @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openInfo()}>
-              <rect x="14" y="308" width="66" height="44" rx="14" class="infobg" />
-              <circle cx="28" cy="330" r="7" class="infoc" />
-              <text x="28" y="333.5" class="b" font-size="10" text-anchor="middle">i</text>
-              <text x="40" y="335" class="b" font-size="12">Stato</text>
+              <rect x="14" y="292" width="66" height="44" rx="14" class="infobg" />
+              <circle cx="28" cy="314" r="7" class="infoc" />
+              <text x="28" y="317.5" class="b" font-size="10" text-anchor="middle">i</text>
+              <text x="40" y="319" class="b" font-size="12">Stato</text>
             </g>`}
         ${this._config.charts === false
           ? nothing
           : svg`<g class="btn info" role="button" tabindex="0" aria-label="Grafici" @click=${() => this._openCharts()}
               @keydown=${(ev: KeyboardEvent) => (ev.key === "Enter" || ev.key === " ") && this._openCharts()}>
-              <rect x="84" y="308" width="66" height="44" rx="14" class="infobg" />
-              <polyline points="90,336 95,327 99,332 105,322" class="infoc" />
-              <text x="108" y="335" class="b" font-size="11">Grafici</text>
+              <rect x="84" y="292" width="66" height="44" rx="14" class="infobg" />
+              <polyline points="90,320 95,311 99,316 105,306" class="infoc" />
+              <text x="108" y="319" class="b" font-size="11">Grafici</text>
             </g>`}`
           : svg`        <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
         <text x="82" y="248" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">${cless ? "Caldaia imposta a" : "Acqua pronta in"}</text>
@@ -845,6 +844,8 @@ export class ImpiantoOverviewCard extends LitElement {
     /** temperatura minima del puffer perche' il riscaldamento parta, e se il termostato sta aspettando */
     threshold: number | null;
     waiting: boolean;
+    /** stima delle docce disponibili */
+    showers: number | null;
   }) {
     const water = "M195 112 H477 A95 95 0 0 1 572 207 V1395 A95 95 0 0 1 477 1490 H195 A95 95 0 0 1 100 1395 V207 A95 95 0 0 1 195 112 Z";
     const silhouette =
@@ -895,9 +896,11 @@ export class ImpiantoOverviewCard extends LitElement {
       ${o.boilerOn
         ? svg`<path d="M456 396 H500" class="coilflow" /><path d="M456 426 H500" class="coilflow" />`
         : nothing}
-      <text x="506" y="376" class="b" font-size="13" fill="#fb923c">Caldaia</text>
-      <text x="506" y="389" class="t2" font-size="10">b · S. BOILER</text>
-      <text x="506" y="418" class="t1 b" font-size="14">${o.boilerProbe === null ? "–" : `${fmt(o.boilerProbe, 1)} °C`}</text>
+      <text x="506" y="274" class="b" font-size="13" fill="#fb923c">Caldaia</text>
+      <rect x="506" y="282" width="136" height="90" rx="14" class="card eta" />
+      <text x="574" y="304" class="t2" font-size="13" text-anchor="middle">Puffer acqua calda</text>
+      <text x="574" y="334" class="t1 b" font-size="27" text-anchor="middle">${o.boilerProbe === null ? "–" : `${fmt(o.boilerProbe, 1)} °C`}</text>
+      <text x="574" y="358" class="t1 b" font-size="14" text-anchor="middle">${o.showers === null ? "(–)" : `≈ ${o.showers} ${o.showers === 1 ? "doccia" : "docce"}`}</text>
       <text x="506" y="446" class="t2" font-size="10">c · generatore</text>
       <text x="506" y="460" class="t1 b" font-size="14">${o.genProbe === null ? "–" : `${fmt(o.genProbe, 1)} °C`}</text>
 

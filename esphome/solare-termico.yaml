@@ -5,10 +5,12 @@
 # c = differenziale generatore, d = differenziale solare termico):
 #   Puffer alto  (GPIO34, "Boiler alto", S3)   pozzetto a (alto, lato sanitario)   sonda solare alta
 #   Puffer basso (GPIO35, "Boiler basso", S2)  pozzetto d (basso)                  sonda solare bassa
-#   A3 "Puffer minima riscaldamento"           pozzetto b di SINISTRA (lato impianto): e' la temperatura sopra la quale la
+#   A1 "Puffer minima riscaldamento"           pozzetto b di SINISTRA (lato impianto): e' la temperatura sopra la quale la
 #                                              pompa del riscaldamento puo' davvero partire; il termostato la usa come soglia
-#   A1 "Puffer generatore"                     pozzetto c di DESTRA (lato caldaia, camera di ritorno)
-#   Il pozzetto b di destra e' della caldaia (sonda S. BOILER, sensor.casale_temperatura_boiler), non di questo ESP32.
+#   A3 "Puffer generatore"                     pozzetto c di DESTRA (lato caldaia, camera di ritorno)
+#   La sonda S. BOILER della caldaia (sensor.casale_temperatura_boiler) non e' di questo ESP32: con lo schema 01 (attuale, dal 18/11/2026)
+#   sta nel pozzetto a (alto, accanto a S3) e legge l'acqua calda sanitaria; con lo schema 02 (dopo l'intervento del tecnico Nobis)
+#   le sonde della caldaia andranno nei pozzetti b e c.
 #   A0 / A2: sonde a fascetta sui tubi di mandata e ritorno del collettore solare.
 #
 # COLLEGAMENTO (per ciascuna delle 4 sonde, tutte con la stessa regola):
@@ -24,7 +26,7 @@
 #   (schermo a GND da un solo lato), sonda a contatto con il tubo con pasta termoconduttiva e isolata.
 #   Misura con un tester la tensione reale sul pin 3,3 V dell'ESP32 e scrivila in `reference_voltage`.
 #
-# Canali:  A0 = solare ingresso (tubo)   A1 = puffer generatore (pozzetto c destra)   A2 = solare uscita (tubo)   A3 = puffer minima riscaldamento (pozzetto b sinistra)
+# Canali:  A0 = solare ingresso (tubo)   A1 = puffer minima riscaldamento (pozzetto b sinistra)   A2 = solare uscita (tubo)   A3 = puffer generatore (pozzetto c destra)
 #
 # TARATURA: metti tutte e 4 le sonde insieme in un bagno d'acqua (circa 50 C) vicino a un termometro di
 # riferimento, leggi le differenze e scrivi la correzione nel filtro `offset` di ciascuna sonda.
@@ -82,7 +84,7 @@ sensor:
     update_interval: 5s
   - platform: ads1115
     ads1115_id: ads_solare
-    multiplexer: A1_GND
+    multiplexer: A3_GND
     gain: 4.096
     sample_rate: 64
     id: v_puffer_generatore
@@ -100,7 +102,7 @@ sensor:
     update_interval: 5s
   - platform: ads1115
     ads1115_id: ads_solare
-    multiplexer: A3_GND
+    multiplexer: A1_GND
     gain: 4.096
     sample_rate: 64
     id: v_puffer_minima
