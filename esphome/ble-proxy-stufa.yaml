@@ -68,6 +68,11 @@ esp32_ble_tracker:
 
 bluetooth_proxy:
   active: true
+  # i 3 slot di connessione (valore predefinito) con un id, per poterli leggere e contare i dispositivi collegati
+  connections:
+    - id: ble_conn_1
+    - id: ble_conn_2
+    - id: ble_conn_3
 
 # istanti (millis) dell'ultimo avviso del modulo della stufa e dell'ultima pubblicazione dei dati
 globals:
@@ -84,6 +89,20 @@ text_sensor:
     id: ble_modulo_stufa
     entity_category: diagnostic
     icon: mdi:bluetooth
+  # indirizzi dei dispositivi Bluetooth collegati in questo momento attraverso il proxy
+  - platform: template
+    name: "Dispositivi collegati (indirizzi)"
+    entity_category: diagnostic
+    icon: mdi:bluetooth-connect
+    update_interval: 10s
+    lambda: |-
+      std::string r;
+      if (id(ble_conn_1)->connected()) r += std::string(id(ble_conn_1)->address_str()) + " ";
+      if (id(ble_conn_2)->connected()) r += std::string(id(ble_conn_2)->address_str()) + " ";
+      if (id(ble_conn_3)->connected()) r += std::string(id(ble_conn_3)->address_str()) + " ";
+      if (r.empty()) return std::string("nessuno");
+      r.pop_back();
+      return r;
 
 sensor:
   - platform: wifi_signal
@@ -94,6 +113,17 @@ sensor:
     name: "Tempo di attivita"
     update_interval: 60s
     entity_category: diagnostic
+  # quanti dispositivi sono collegati al proxy (su 3 slot)
+  - platform: template
+    name: "Dispositivi collegati al proxy"
+    unit_of_measurement: ""
+    state_class: measurement
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    icon: mdi:bluetooth-connect
+    update_interval: 10s
+    lambda: |-
+      return (id(ble_conn_1)->connected() ? 1 : 0) + (id(ble_conn_2)->connected() ? 1 : 0) + (id(ble_conn_3)->connected() ? 1 : 0);
   # segnale del modulo della stufa, dall'ultimo avviso ricevuto
   - platform: template
     name: "RSSI modulo stufa"
