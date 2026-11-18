@@ -221,7 +221,7 @@ sensor:
           send_first_at: 1
       - offset: 0.0
 
-  # ---------- boiler: alto e basso (ingressi analogici ESP32, precisione ridotta ma sufficiente) ----------
+  # ---------- puffer: alto e basso (S3 e S2, ingressi analogici ESP32, precisione ridotta ma sufficiente) ----------
   # Usare solo pin ADC1 (GPIO32-39): l'ADC2 non funziona con il Wi-Fi acceso.
   - platform: adc
     pin: GPIO34
@@ -259,7 +259,7 @@ sensor:
 
   - platform: ntc
     sensor: r_boiler_alto
-    name: "Boiler alto"
+    name: "Puffer alto"
     id: t_boiler_alto
     unit_of_measurement: "°C"
     device_class: temperature
@@ -278,7 +278,7 @@ sensor:
 
   - platform: ntc
     sensor: r_boiler_basso
-    name: "Boiler basso"
+    name: "Puffer basso"
     id: t_boiler_basso
     unit_of_measurement: "°C"
     device_class: temperature

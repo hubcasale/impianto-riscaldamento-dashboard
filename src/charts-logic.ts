@@ -310,12 +310,12 @@ const S = {
   puffer: { id: "puffer", entityKey: "puffer_effective", label: "Puffer 50 L", unit: "°C", color: "#f97316", axis: "l", decimals: 1 },
   boilerTop: { id: "boilerTop", entityKey: "boiler_top", label: "Boiler alto (S3)", unit: "°C", color: "#ef4444", axis: "l", decimals: 1 },
   boilerBottom: { id: "boilerBottom", entityKey: "boiler_bottom", label: "Boiler basso (S2)", unit: "°C", color: "#3b82f6", axis: "l", decimals: 1 },
+  integIn: { id: "integIn", entityKey: "coil_integ_in", label: "Puffer, pozzetto c (generatore)", unit: "°C", color: "#ec4899", axis: "l", decimals: 1 },
+  integOut: { id: "integOut", entityKey: "coil_integ_out", label: "Puffer, pozzetto b (minima riscaldamento)", unit: "°C", color: "#0ea5e9", axis: "l", decimals: 1 },
   stoveWater: { id: "stoveWater", entityKey: "stove_water", label: "Acqua caldaia", unit: "°C", color: "#a855f7", axis: "l", decimals: 1 },
   collector: { id: "collector", entityKey: "collector_temp", label: "Collettore solare", unit: "°C", color: "#eab308", axis: "l", decimals: 1 },
   smoke: { id: "smoke", entityKey: "smoke", label: "Fumi", unit: "°C", color: "#94a3b8", axis: "l", decimals: 0 },
   power: { id: "power", entityKey: "power", label: "Potenza caldaia", unit: "%", color: "#22c55e", axis: "r", decimals: 0 },
-  integIn: { id: "integIn", entityKey: "coil_integ_in", label: "Puffer, pozzetto c (generatore)", unit: "°C", color: "#ec4899", axis: "l", decimals: 1 },
-  integOut: { id: "integOut", entityKey: "coil_integ_out", label: "Puffer, pozzetto b (minima riscaldamento)", unit: "°C", color: "#0ea5e9", axis: "l", decimals: 1 },
   integW: { id: "integW", entityKey: "integration_power", label: "Pompa integrazione", unit: "W", color: "#22c55e", axis: "r", decimals: 0 },
   solarIn: { id: "solarIn", entityKey: "coil_solar_in", label: "Serpentina solare, ingresso", unit: "°C", color: "#f59e0b", axis: "l", decimals: 1 },
   solarOut: { id: "solarOut", entityKey: "coil_solar_out", label: "Serpentina solare, uscita", unit: "°C", color: "#06b6d4", axis: "l", decimals: 1 },
@@ -367,9 +367,35 @@ export const CHART_GROUPS: GroupDef[] = [
   },
 ];
 
+/** Col CLESS tutte le sonde dell'accumulo hanno la stessa forma «Puffer …», come i nomi dei sensori in Home Assistant. */
+const CLESS_LABELS: Record<string, string> = {
+  puffer: "Puffer S. BOILER (caldaia)",
+  boilerTop: "Puffer alto (S3)",
+  boilerBottom: "Puffer basso (S2)",
+  integIn: "Puffer generatore (c)",
+  integOut: "Puffer minima riscaldamento (b)",
+};
+
+function clessSeries(s: SeriesDef): SeriesDef {
+  const label = CLESS_LABELS[s.id];
+  return label ? { ...s, label } : s;
+}
+
+/** Gruppi della finestra Grafici; col CLESS il gruppo della pompa di integrazione lascia il posto a quello del puffer. */
+export function chartGroups(cless = false): GroupDef[] {
+  if (!cless) return CHART_GROUPS;
+  return CHART_GROUPS.map((g) =>
+    g.id === "integrazione"
+      ? { id: "puffer", title: "Puffer", series: [on(S.boilerTop), on(S.boilerBottom), on(S.puffer), on(S.integIn), on(S.integOut)].map(clessSeries) }
+      : { ...g, series: g.series.map(clessSeries) },
+  );
+}
+
 /** Tutte le serie, per il confronto libero (scala 0-100 %). */
-export function allSeries(): SeriesDef[] {
-  return Object.values(S).map((s) => ({ ...s, on: ["puffer", "boilerTop", "stoveWater"].includes(s.id) }));
+export function allSeries(cless = false): SeriesDef[] {
+  return Object.values(S)
+    .filter((s) => !(cless && s.id === "integW"))
+    .map((s) => ({ ...(cless ? clessSeries(s) : s), on: ["puffer", "boilerTop", "stoveWater"].includes(s.id) }));
 }
 
 export interface RangeDef {

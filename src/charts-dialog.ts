@@ -3,7 +3,7 @@ import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
 import type { PlantEntities } from "./plant-card";
 import {
-  CHART_GROUPS, RANGES, allSeries, formatMoment, formatValue, linePath, niceAxis, normalizeValue, parseNumeric, parseStates,
+  CHART_GROUPS, RANGES, allSeries, chartGroups, formatMoment, formatValue, linePath, niceAxis, normalizeValue, parseNumeric, parseStates,
   resample, seriesStats, stateAt, statusSegments, stoveStateColor, timeTicks,
   type Axis, type GroupDef, type Pt, type RawState, type SeriesDef, type Stats,
 } from "./charts-logic";
@@ -14,7 +14,7 @@ const PLOT_H = 210;
 const MT = 10;
 const LABELS_H = 22;
 const STRIP_H = 12;
-const LIBERO: GroupDef = { id: "libero", title: "Confronto libero", normalized: true, series: allSeries() };
+const libero = (cless: boolean): GroupDef => ({ id: "libero", title: "Confronto libero", normalized: true, series: allSeries(cless) });
 
 interface Computed {
   def: SeriesDef;
@@ -89,7 +89,18 @@ export class ImpiantoChartsDialog extends LitElement {
   // ---- dati ----------------------------------------------------------------
 
   private get _def(): GroupDef {
-    return this._group === LIBERO.id ? LIBERO : CHART_GROUPS.find((g) => g.id === this._group) ?? CHART_GROUPS[0];
+    const groups = this._groups();
+    return groups.find((g) => g.id === this._group) ?? groups[0];
+  }
+
+  /** col modo CLESS acceso i nomi delle sonde dell'accumulo sono quelli del puffer */
+  private _cless(): boolean {
+    return this.hass?.states[this.entities?.cless_mode]?.state === "on";
+  }
+
+  private _groups(): GroupDef[] {
+    const c = this._cless();
+    return [...chartGroups(c), libero(c)];
   }
 
   private _entityOf(def: SeriesDef): string | undefined {
@@ -368,7 +379,7 @@ export class ImpiantoChartsDialog extends LitElement {
 
   render() {
     if (!this.hass || !this.entities) return nothing;
-    const groups = [...CHART_GROUPS, LIBERO];
+    const groups = this._groups();
     const available = this._available();
     const visible = this._computed.filter((c) => this._isOn(c.def));
     const forced = !!this._def.normalized;

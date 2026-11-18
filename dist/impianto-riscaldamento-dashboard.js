@@ -2439,12 +2439,12 @@ var S3 = {
   puffer: { id: "puffer", entityKey: "puffer_effective", label: "Puffer 50 L", unit: "\xB0C", color: "#f97316", axis: "l", decimals: 1 },
   boilerTop: { id: "boilerTop", entityKey: "boiler_top", label: "Boiler alto (S3)", unit: "\xB0C", color: "#ef4444", axis: "l", decimals: 1 },
   boilerBottom: { id: "boilerBottom", entityKey: "boiler_bottom", label: "Boiler basso (S2)", unit: "\xB0C", color: "#3b82f6", axis: "l", decimals: 1 },
+  integIn: { id: "integIn", entityKey: "coil_integ_in", label: "Puffer, pozzetto c (generatore)", unit: "\xB0C", color: "#ec4899", axis: "l", decimals: 1 },
+  integOut: { id: "integOut", entityKey: "coil_integ_out", label: "Puffer, pozzetto b (minima riscaldamento)", unit: "\xB0C", color: "#0ea5e9", axis: "l", decimals: 1 },
   stoveWater: { id: "stoveWater", entityKey: "stove_water", label: "Acqua caldaia", unit: "\xB0C", color: "#a855f7", axis: "l", decimals: 1 },
   collector: { id: "collector", entityKey: "collector_temp", label: "Collettore solare", unit: "\xB0C", color: "#eab308", axis: "l", decimals: 1 },
   smoke: { id: "smoke", entityKey: "smoke", label: "Fumi", unit: "\xB0C", color: "#94a3b8", axis: "l", decimals: 0 },
   power: { id: "power", entityKey: "power", label: "Potenza caldaia", unit: "%", color: "#22c55e", axis: "r", decimals: 0 },
-  integIn: { id: "integIn", entityKey: "coil_integ_in", label: "Puffer, pozzetto c (generatore)", unit: "\xB0C", color: "#ec4899", axis: "l", decimals: 1 },
-  integOut: { id: "integOut", entityKey: "coil_integ_out", label: "Puffer, pozzetto b (minima riscaldamento)", unit: "\xB0C", color: "#0ea5e9", axis: "l", decimals: 1 },
   integW: { id: "integW", entityKey: "integration_power", label: "Pompa integrazione", unit: "W", color: "#22c55e", axis: "r", decimals: 0 },
   solarIn: { id: "solarIn", entityKey: "coil_solar_in", label: "Serpentina solare, ingresso", unit: "\xB0C", color: "#f59e0b", axis: "l", decimals: 1 },
   solarOut: { id: "solarOut", entityKey: "coil_solar_out", label: "Serpentina solare, uscita", unit: "\xB0C", color: "#06b6d4", axis: "l", decimals: 1 },
@@ -2493,8 +2493,25 @@ var CHART_GROUPS = [
     series: [on(S3.collector), on(S3.solarIn), on(S3.solarOut), on(S3.boilerBottom), off(S3.solarKw)]
   }
 ];
-function allSeries() {
-  return Object.values(S3).map((s4) => ({ ...s4, on: ["puffer", "boilerTop", "stoveWater"].includes(s4.id) }));
+var CLESS_LABELS = {
+  puffer: "Puffer S. BOILER (caldaia)",
+  boilerTop: "Puffer alto (S3)",
+  boilerBottom: "Puffer basso (S2)",
+  integIn: "Puffer generatore (c)",
+  integOut: "Puffer minima riscaldamento (b)"
+};
+function clessSeries(s4) {
+  const label = CLESS_LABELS[s4.id];
+  return label ? { ...s4, label } : s4;
+}
+function chartGroups(cless = false) {
+  if (!cless) return CHART_GROUPS;
+  return CHART_GROUPS.map(
+    (g2) => g2.id === "integrazione" ? { id: "puffer", title: "Puffer", series: [on(S3.boilerTop), on(S3.boilerBottom), on(S3.puffer), on(S3.integIn), on(S3.integOut)].map(clessSeries) } : { ...g2, series: g2.series.map(clessSeries) }
+  );
+}
+function allSeries(cless = false) {
+  return Object.values(S3).filter((s4) => !(cless && s4.id === "integW")).map((s4) => ({ ...cless ? clessSeries(s4) : s4, on: ["puffer", "boilerTop", "stoveWater"].includes(s4.id) }));
 }
 var RANGES = [
   { id: "6h", label: "6 h", hours: 6 },
@@ -2518,7 +2535,7 @@ var PLOT_H = 210;
 var MT = 10;
 var LABELS_H = 22;
 var STRIP_H = 12;
-var LIBERO = { id: "libero", title: "Confronto libero", normalized: true, series: allSeries() };
+var libero = (cless) => ({ id: "libero", title: "Confronto libero", normalized: true, series: allSeries(cless) });
 var ImpiantoChartsDialog = class extends i4 {
   constructor() {
     super(...arguments);
@@ -2574,7 +2591,16 @@ var ImpiantoChartsDialog = class extends i4 {
   }
   // ---- dati ----------------------------------------------------------------
   get _def() {
-    return this._group === LIBERO.id ? LIBERO : CHART_GROUPS.find((g2) => g2.id === this._group) ?? CHART_GROUPS[0];
+    const groups = this._groups();
+    return groups.find((g2) => g2.id === this._group) ?? groups[0];
+  }
+  /** col modo CLESS acceso i nomi delle sonde dell'accumulo sono quelli del puffer */
+  _cless() {
+    return this.hass?.states[this.entities?.cless_mode]?.state === "on";
+  }
+  _groups() {
+    const c4 = this._cless();
+    return [...chartGroups(c4), libero(c4)];
   }
   _entityOf(def) {
     return this.entities[def.entityKey];
@@ -2822,7 +2848,7 @@ var ImpiantoChartsDialog = class extends i4 {
   }
   render() {
     if (!this.hass || !this.entities) return A;
-    const groups = [...CHART_GROUPS, LIBERO];
+    const groups = this._groups();
     const available = this._available();
     const visible = this._computed.filter((c4) => this._isOn(c4.def));
     const forced = !!this._def.normalized;

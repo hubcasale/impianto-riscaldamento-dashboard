@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  CHART_GROUPS, MAX_GAP_MS, allSeries, formatValue, linePath, niceAxis, normalizeValue, parseNumeric, parseStates,
+  CHART_GROUPS, MAX_GAP_MS, allSeries, chartGroups, formatValue, linePath, niceAxis, normalizeValue, parseNumeric, parseStates,
   resample, seriesStats, stateAt, statusSegments, stoveStateColor, timeTicks,
 } from "../src/charts-logic";
 
@@ -141,4 +141,23 @@ test("gruppo allsky: irraggiamento orizzontale a sinistra e copertura a destra",
   assert.deepEqual([...new Set(g.series.filter((s) => s.axis === "l").map((s) => s.unit))], ["W/m²"]);
   assert.deepEqual([...new Set(g.series.filter((s) => s.axis === "r").map((s) => s.unit))], ["%"]);
   assert.ok(g.series.filter((s) => s.on).length >= 2);
+});
+
+test("col CLESS le sonde dell'accumulo hanno tutte l'etichetta «Puffer …» e c'e' il gruppo Puffer", () => {
+  const g = chartGroups(true);
+  assert.ok(!g.some((x) => x.id === "integrazione"));
+  const puffer = g.find((x) => x.id === "puffer");
+  assert.deepEqual(
+    puffer?.series.map((x) => x.label),
+    ["Puffer alto (S3)", "Puffer basso (S2)", "Puffer S. BOILER (caldaia)", "Puffer generatore (c)", "Puffer minima riscaldamento (b)"],
+  );
+  const labels = g.flatMap((x) => x.series.map((y) => y.label));
+  assert.ok(!labels.some((l) => /Boiler|50 L|pozzetto/.test(l)));
+  assert.ok(!allSeries(true).some((x) => x.id === "integW"));
+  assert.ok(allSeries(true).some((x) => x.label === "Puffer alto (S3)"));
+});
+
+test("senza CLESS i gruppi restano quelli di prima", () => {
+  assert.equal(chartGroups(false), CHART_GROUPS);
+  assert.ok(allSeries(false).some((x) => x.label === "Boiler alto (S3)"));
 });
