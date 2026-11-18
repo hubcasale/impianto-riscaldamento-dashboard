@@ -1,0 +1,177 @@
+# Termostato Beca (BHT-002, versione GxLW con WiFi ESP8266) con ESPHome al posto di WThermostat.
+#
+# Il WiFi del Beca e' un modulo Tuya (TYWE3S, ESP8266) collegato via UART (9600 baud) al microcontrollore
+# del termostato, che comanda display, relè e sonda: ESPHome sostituisce solo il firmware del modulo WiFi.
+# Datapoint ricavati dal codice di WThermostat (fashberg/WThermostatBeca, WBecaDevice.h):
+#   1 acceso/spento (bool)          2 obiettivo manuale (intero, 0,5 °C per unita')
+#   3 temperatura misurata (0,5)    4 programma interno (0 = automatico, 1 = manuale)
+#   5 eco (bool)                    6 blocco tasti (bool)
+#   102 (0x66) sonda a pavimento (0,5), solo con sonda esterna collegata
+#   101 (0x65) programma settimanale interno (raw, non usato qui)
+#
+# Entita': il climate si chiama come il dispositivo ("Termostato"), cosi' in Home Assistant diventa climate.termostato
+# come prima, ma solo se la vecchia entita' MQTT con lo stesso nome e' stata rimossa PRIMA (altrimenti diventa
+# climate.termostato_2 e va aggiornato l'id in integrazione, pacchetti e dashboard).
+#
+# "Sta scaldando" (hvac_action): il Beca non lo comunica sul bus. ESPHome lo calcola come faceva WThermostat
+# ("Relay State Calculation"): scalda quando obiettivo - misurata >= 1 °C e continua finche' misurata >= obiettivo.
+# Vale solo se la banda morta del termostato (opzione 2 del menu di installazione, di fabbrica 1 °C) e' 1 °C.
+# Con la modifica hardware (due resistenze da 10 kOhm sul GPIO5 del modulo) si puo' leggere il relè vero:
+# aggiungere sotto al climate  heating_state_pin: GPIO5  (vedi il commento piu' in basso).
+
+esphome:
+  name: termostato
+  friendly_name: Termostato
+  # Dopo una mancanza di corrente il Beca riparte da solo a 23 °C e il riscaldamento si accende.
+  # Se il riavvio dell'ESP e' dovuto alla corrente (non a OTA, Wi-Fi o riavvio da Home Assistant)
+  # si rimette l'ultimo obiettivo e l'ultimo modo ricordati prima dell'interruzione.
+  on_boot:
+    priority: -100
+    then:
+      - delay: 30s            # il microcontrollore del Beca deve aver comunicato il suo stato
+      - lambda: |-
+          if (ESP.getResetInfoPtr()->reason == REASON_DEFAULT_RST) {
+            auto call = id(beca).make_call();
+            call.set_mode(id(ultimo_modo_acceso) ? climate::CLIMATE_MODE_HEAT : climate::CLIMATE_MODE_OFF);
+            call.set_target_temperature(id(ultimo_obiettivo));
+            call.perform();
+            ESP_LOGW("ripristino", "Mancanza di corrente: rimesso obiettivo %.1f e modo %s",
+                     id(ultimo_obiettivo), id(ultimo_modo_acceso) ? "heat" : "off");
+            id(ultimo_ripristino).publish_state("rimesso " + to_string(id(ultimo_obiettivo)) + " °C");
+          }
+          id(ripristino_fatto) = true;
+
+esp8266:
+  board: esp01_1m
+  restore_from_flash: true   # senza questa riga i valori ricordati si perdono quando manca la corrente
+
+# L'ultimo obiettivo e l'ultimo modo, ricordati anche a scheda spenta (si aggiornano a ogni cambio, mai nei primi 30 s dopo l'avvio)
+globals:
+  - id: ultimo_obiettivo
+    type: float
+    restore_value: yes
+    initial_value: "5.0"
+  - id: ultimo_modo_acceso
+    type: bool
+    restore_value: yes
+    initial_value: "true"
+  - id: ripristino_fatto
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+debug:
+
+logger:
+  baud_rate: 0          # l'UART0 del modulo e' occupata dal microcontrollore del termostato
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: true
+  ap:
+    ssid: Termostato Fallback
+    password: !secret hotspot_password
+captive_portal:
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+uart:
+  tx_pin: GPIO1
+  rx_pin: GPIO3
+  baud_rate: 9600
+
+tuya:
+  # il microcontrollore usa l'ora per il display e per il programma interno
+  time_id: ha_time
+
+climate:
+  - platform: tuya
+    id: beca
+    name: None            # prende il nome del dispositivo: "Termostato"
+    on_state:
+      then:
+        - lambda: |-
+            if (!id(ripristino_fatto)) return;
+            float t = id(beca).target_temperature;
+            if (!std::isnan(t) && t >= 5.0f && t <= 35.0f && fabsf(t - id(ultimo_obiettivo)) > 0.01f)
+              id(ultimo_obiettivo) = t;
+            bool acceso = id(beca).mode != climate::CLIMATE_MODE_OFF;
+            if (acceso != id(ultimo_modo_acceso)) id(ultimo_modo_acceso) = acceso;
+    switch_datapoint: 1
+    target_temperature_datapoint: 2
+    current_temperature_datapoint: 3
+    temperature_multiplier: 0.5
+    # relè vero, solo con la modifica hardware sul GPIO5 (altrimenti lasciare calcolare ad ESPHome):
+    # heating_state_pin: GPIO5
+    preset:
+      eco:
+        datapoint: 5
+        temperature: 20 °C       # temperatura dell'economia del Beca (se cambia sul termostato, aggiornare qui)
+    visual:
+      min_temperature: 5 °C
+      max_temperature: 35 °C
+      temperature_step: 0.5 °C
+
+text_sensor:
+  - platform: debug
+    reset_reason:
+      name: "Motivo ultimo riavvio"
+      entity_category: diagnostic
+  - platform: template
+    name: "Ultimo ripristino dopo la corrente"
+    id: ultimo_ripristino
+    entity_category: diagnostic
+
+sensor:
+  # sonda a pavimento (solo se collegata e abilitata sul termostato)
+  - platform: tuya
+    name: "Temperatura pavimento"
+    sensor_datapoint: 102
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    filters:
+      - multiply: 0.5
+    disabled_by_default: true
+
+  - platform: wifi_signal
+    name: "Segnale WiFi"
+    update_interval: 60s
+    entity_category: diagnostic
+
+switch:
+  - platform: tuya
+    name: "Blocco tasti"
+    icon: "mdi:lock"
+    switch_datapoint: 6
+    entity_category: config
+
+select:
+  # programma interno del Beca: con "Manuale" il termostato non cambia da solo l'obiettivo
+  # (la programmazione la fa l'integrazione Termostato riscaldamento)
+  - platform: tuya
+    name: "Programma interno"
+    icon: "mdi:calendar"
+    enum_datapoint: 4
+    options:
+      0: "Automatico (programma del termostato)"
+      1: "Manuale"
+    entity_category: config
+
+button:
+  - platform: restart
+    name: "Riavvia"
+    entity_category: diagnostic
+
+web_server:
