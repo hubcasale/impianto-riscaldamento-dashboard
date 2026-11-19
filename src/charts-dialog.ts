@@ -2,13 +2,15 @@ import { LitElement, html, css, svg, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
 import type { PlantEntities } from "./plant-card";
+import type { RoomDef } from "./rooms-logic";
 import {
-  CHART_GROUPS, RANGES, allSeries, chartGroups, formatMoment, formatValue, linePath, niceAxis, normalizeValue, parseNumeric, parseStates,
+  CHART_GROUPS, RANGES, allSeries, chartGroups, roomEntityOf, roomsGroup, formatMoment, formatValue, linePath, niceAxis, normalizeValue, parseNumeric, parseStates,
   resample, seriesStats, stateAt, statusSegments, stoveStateColor, timeTicks,
   type Axis, type GroupDef, type Pt, type RawState, type SeriesDef, type Stats,
 } from "./charts-logic";
 
 const TAG = "impianto-charts-dialog";
+
 const H_MS = 3600000;
 const PLOT_H = 210;
 const MT = 10;
@@ -30,6 +32,10 @@ interface Computed {
 export class ImpiantoChartsDialog extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
   @property({ attribute: false }) entities!: PlantEntities;
+  /** stanze con i loro sensori (scheda «Stanze»): compare il gruppo «Stanze» */
+  @property({ attribute: false }) rooms?: RoomDef[];
+  /** stanza da mostrare per prima all'apertura (id) */
+  @property({ attribute: false }) focusRoom?: string;
   @state() private _group = CHART_GROUPS[0].id;
   @state() private _range = "24h";
   @state() private _compare = false;
@@ -56,6 +62,7 @@ export class ImpiantoChartsDialog extends LitElement {
 
   connectedCallback(): void {
     super.connectedCallback();
+    if (this.focusRoom && this.rooms?.length) this._group = "stanze";
     window.addEventListener("keydown", this._onKey);
     this._timer = window.setInterval(() => void this._load(), 60000);
     void this._load();
@@ -100,10 +107,13 @@ export class ImpiantoChartsDialog extends LitElement {
 
   private _groups(): GroupDef[] {
     const c = this._cless();
-    return [...chartGroups(c), libero(c)];
+    const stanze = this.rooms?.length ? [roomsGroup(this.rooms, this.focusRoom)] : [];
+    return [...chartGroups(c), ...stanze, libero(c)];
   }
 
   private _entityOf(def: SeriesDef): string | undefined {
+    const room = roomEntityOf(this.rooms, def.entityKey);
+    if (room !== undefined) return room;
     return (this.entities as unknown as Record<string, string | undefined>)[def.entityKey];
   }
 
@@ -272,7 +282,9 @@ export class ImpiantoChartsDialog extends LitElement {
     };
     const ticks = timeTicks(this._t0, this._t1, Math.max(3, Math.floor(plotW / 80)));
     const xOfT = (t: number) => ml + ((t - this._t0) / (this._t1 - this._t0)) * plotW;
-    const segs = statusSegments(this._states, this._t0, this._t1);
+    // la fascia dello stato della caldaia non serve nel gruppo delle stanze
+    const showStrip = this._def.id !== "stanze";
+    const segs = showStrip ? statusSegments(this._states, this._t0, this._t1) : [];
     const hov = this._hover;
     const hx = hov !== null ? xOf(hov) : null;
     const gridAxis = axL ?? axR;
@@ -323,13 +335,15 @@ export class ImpiantoChartsDialog extends LitElement {
         </svg>
         ${hov !== null ? this._renderTip(visible, hov, hx as number) : nothing}
       </div>
-      <div class="strip-legend">
-        <span class="swatch" style="background:#ef4444"></span>in lavoro
-        <span class="swatch" style="background:#f59e0b"></span>accensione
-        <span class="swatch" style="background:#60a5fa"></span>ECO STOP
-        <span class="swatch" style="background:#475569"></span>spenta
-        <small>(fascia sotto il grafico: stato della caldaia)</small>
-      </div>
+      ${showStrip
+        ? html`<div class="strip-legend">
+            <span class="swatch" style="background:#ef4444"></span>in lavoro
+            <span class="swatch" style="background:#f59e0b"></span>accensione
+            <span class="swatch" style="background:#60a5fa"></span>ECO STOP
+            <span class="swatch" style="background:#475569"></span>spenta
+            <small>(fascia sotto il grafico: stato della caldaia)</small>
+          </div>`
+        : nothing}
     `;
   }
 

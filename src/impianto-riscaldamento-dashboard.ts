@@ -1,7 +1,8 @@
 import "./plant-card";
 import "./schedule-card";
+import "./rooms-card";
 
-const VERSION = "0.4.30";
+const VERSION = "0.5.0";
 
 declare global {
   interface Window {
@@ -15,6 +16,11 @@ window.customCards.push(
     type: "impianto-overview-card",
     name: "Impianto: boiler solare e caldaia",
     description: "Boiler solare con temperature alta e bassa, docce stimate, puffer e caldaia a pellet con i dati principali.",
+  },
+  {
+    type: "impianto-rooms-card",
+    name: "Stanze: temperatura e umidità",
+    description: "Temperatura e umidità di ogni stanza in colonne affiancate, con l'obiettivo del termostato e i grafici al tocco.",
   },
   {
     type: "caldaia-schedule-card",

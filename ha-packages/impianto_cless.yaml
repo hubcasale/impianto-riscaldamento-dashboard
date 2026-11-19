@@ -7,9 +7,11 @@
 #   - una zona conta per le docce solo se e' almeno a 47 C (l'acqua sanitaria esce dalla serpentina sempre piu' fredda dell'accumulo)
 #   - la salvaguardia delle partenze inutili, il blocco della pompa di integrazione e la misura del tempo per l'acqua pronta si fermano:
 #     con la caldaia sempre accesa per l'ACS non hanno piu' senso (la salvaguardia anzi fermerebbe le ripartenze che servono all'acqua calda)
+#   - la gestione dall'accumulo (ha-packages/caldaia_accumulo.yaml) decide le ripartenze della caldaia dalla sonda S. BOILER
+#     (non lascia ripartire la caldaia con l'accumulo caldo, la riaccende quando scende) e l'avviso di caldaia spenta la tiene d'occhio
 #   - la scheda dell'impianto disegna l'accumulo CLESS senza puffer e senza serpentina di integrazione
 #   - se la caldaia resta spenta piu' di N minuti senza programma settimanale e con qualcuno in casa, arriva un avviso sul telefono
-#     (la caldaia non viene riaccesa da sola)
+#     (la caldaia non viene riaccesa da sola; nessun avviso se l'ha spenta la gestione dall'accumulo)
 # Da spento rimette i valori del vecchio impianto (200 L, 50 %, correzioni +4 e +3 C, zona utile da 38 C).
 
 input_boolean:
@@ -134,6 +136,9 @@ automation:
       - condition: state
         entity_id: binary_sensor.caldaia_nessuno_in_casa
         state: "off"
+      # se l'ha spenta la gestione dall'accumulo (ha-packages/caldaia_accumulo.yaml) e' voluto: l'accumulo e' caldo
+      - condition: template
+        value_template: "{{ not is_state('input_boolean.caldaia_accumulo_ha_spento', 'on') }}"
     actions:
       - action: notify.send_message
         target: {entity_id: notify.iphone_corrado}

@@ -1,0 +1,201 @@
+# Gestione della caldaia dall'accumulo CLESS (solo con il modo CLESS acceso).
+#
+# La Polygon decide da sola le ripartenze guardando la sua acqua: con il confort acceso e l'ECO STOP riparte quando l'acqua
+# scende sotto il target meno l'isteresi (per esempio 65 - 10 = 55 C), anche se l'accumulo e' ancora caldissimo (S. BOILER 75 C).
+# Qui le ripartenze le decide l'accumulo, letto dalla sonda S. BOILER (sensor.casale_temperatura_boiler):
+#
+#   - la caldaia parte da sola da ECO STOP (o da STAND BY) e S. BOILER e' ancora a caldaia_accumulo_t_spegni (55 C) o piu':
+#     la partenza e' inutile e si annulla, spegnendola in fase di accensione (prima di bruciare pellet);
+#   - con la caldaia spenta da questa automazione, si riaccende quando S. BOILER scende sotto caldaia_accumulo_t_accendi
+#     (53 C), oppure quando il termostato della caldaia chiede riscaldamento e l'accumulo e' sotto la soglia di spegnimento.
+#     (Una Polygon spenta non riparte da sola.)
+#
+# Cosa NON tocca:
+#   - le partenze da OFF (accensione a mano, dall'app o con il pulsante di accensione rapida): sono volute;
+#   - con un'accensione rapida in corso (input_boolean.caldaia_boost_attivo) o con un allarme della caldaia;
+#   - la richiesta di riscaldamento non blocca l'annullamento: i radiatori prendono calore dall'accumulo (S. BOILER caldo), non
+#     dalla caldaia; conta solo per riaccenderla quando l'accumulo scende (binary_sensor.caldaia_richiesta_riscaldamento).
+# La caldaia si spegne comunque da sola in ECO STOP quando l'acqua arriva al target (+ qualche grado): qui si decide solo quando
+# non deve ripartire.
+#
+# Si disattiva con input_boolean.caldaia_accumulo_attivo. Se la caldaia viene accesa a mano mentre e' spenta da qui, il ricordo
+# (input_boolean.caldaia_accumulo_ha_spento) si azzera e la gestione non interferisce.
+# Il ritardo vero e' quello del sondaggio del cloud (update_interval dell'integrazione, 60 s di serie): il pellet puo' partire per
+# qualche istante prima dello spegnimento.
+
+input_boolean:
+  caldaia_accumulo_attivo:
+    name: Caldaia - gestione dall'accumulo
+    icon: mdi:water-boiler-auto
+  caldaia_accumulo_ha_spento:
+    name: Caldaia - spenta dalla gestione dall'accumulo
+    icon: mdi:shield-off
+  caldaia_accumulo_defaults_impostati:
+    name: Caldaia - gestione dall'accumulo, valori iniziali impostati
+    icon: mdi:check
+
+input_number:
+  caldaia_accumulo_t_spegni:
+    name: Caldaia - non lasciarla ripartire se S. BOILER e' almeno
+    min: 40
+    max: 75
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+  caldaia_accumulo_t_accendi:
+    name: Caldaia - riaccendila se S. BOILER scende sotto
+    min: 35
+    max: 70
+    step: 1
+    unit_of_measurement: °C
+    mode: box
+
+automation:
+  - id: caldaia_accumulo_annulla_partenza
+    alias: Caldaia - accumulo, annulla partenza inutile
+    description: >
+      Parte da ECO STOP o STAND BY verso WAIT/START; dopo 10 secondi, se l'accumulo (S. BOILER) e' ancora caldo (anche con
+      il termostato che chiede calore: i radiatori sono serviti dall'accumulo), spegne la caldaia in fase di accensione.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.casale_stato
+        from: ["ECO STOP", "STAND BY"]
+        to: ["WAIT", "START"]
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_accumulo_attivo
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.impianto_modo_cless
+        state: "on"
+    actions:
+      - delay: "00:00:10"
+      - condition: state
+        entity_id: sensor.casale_stato
+        state: ["WAIT", "START"]
+      - condition: state
+        entity_id: input_boolean.caldaia_accumulo_attivo
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.caldaia_boost_attivo
+        state: "off"
+      # i radiatori prendono calore dall'accumulo, non dalla caldaia: con S. BOILER alto la richiesta del termostato non
+      # serve a far partire la caldaia (la riaccensione, sotto soglia, la considera)
+      # con un allarme la caldaia non si tocca
+      - condition: template
+        value_template: "{{ states('sensor.casale_allarme') | replace('_', '') | trim in ['', 'unknown', 'unavailable'] }}"
+      - condition: template
+        value_template: >
+          {% set s = states('sensor.casale_temperatura_boiler') %}
+          {{ is_number(s) and s | float >= states('input_number.caldaia_accumulo_t_spegni') | float(55) }}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_accumulo_ha_spento}
+      - action: climate.set_hvac_mode
+        target: {entity_id: climate.casale_acqua}
+        data: {hvac_mode: "off"}
+      - action: logbook.log
+        data:
+          name: Caldaia
+          message: >
+            partenza annullata dalla gestione dall'accumulo (S. BOILER {{ states('sensor.casale_temperatura_boiler') }} °C,
+            soglia {{ states('input_number.caldaia_accumulo_t_spegni') | float(55) | round(0) }} °C, acqua caldaia
+            {{ states('sensor.casale_temperatura_acqua') }} °C, nessuna richiesta del termostato)
+
+  - id: caldaia_accumulo_riaccendi
+    alias: Caldaia - accumulo, riaccendi se serve
+    description: >
+      Con la caldaia spenta dalla gestione dall'accumulo, la riaccende quando S. BOILER scende sotto la soglia di accensione
+      o quando il termostato della caldaia chiede calore e l'accumulo e' sotto la soglia di spegnimento.
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.casale_temperatura_boiler
+        below: input_number.caldaia_accumulo_t_accendi
+      - trigger: state
+        entity_id: binary_sensor.caldaia_richiesta_riscaldamento
+        to: "on"
+      - trigger: time_pattern
+        minutes: "/5"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_accumulo_ha_spento
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.caldaia_accumulo_attivo
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.impianto_modo_cless
+        state: "on"
+      - condition: state
+        entity_id: sensor.casale_stato
+        state: ["OFF", "STOP"]
+      - condition: template
+        value_template: >
+          {% set s = states('sensor.casale_temperatura_boiler') %}
+          {% set accendi = states('input_number.caldaia_accumulo_t_accendi') | float(53) %}
+          {% set spegni = states('input_number.caldaia_accumulo_t_spegni') | float(55) %}
+          {{ is_number(s) and (s | float < accendi
+                               or (is_state('binary_sensor.caldaia_richiesta_riscaldamento', 'on') and s | float < spegni)) }}
+    actions:
+      - action: climate.set_hvac_mode
+        target: {entity_id: climate.casale_acqua}
+        data: {hvac_mode: heat}
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_accumulo_ha_spento}
+      - action: logbook.log
+        data:
+          name: Caldaia
+          message: >
+            riaccesa dalla gestione dall'accumulo (S. BOILER {{ states('sensor.casale_temperatura_boiler') }} °C, soglia
+            {{ states('input_number.caldaia_accumulo_t_accendi') | float(53) | round(0) }} °C)
+
+  - id: caldaia_accumulo_accesa_a_mano
+    alias: Caldaia - accumulo, accesa a mano
+    description: Se la caldaia viene accesa da un'altra parte mentre risulta spenta dalla gestione, il ricordo si azzera.
+    triggers:
+      - trigger: state
+        entity_id: climate.casale_acqua
+        to: "heat"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_accumulo_ha_spento
+        state: "on"
+    actions:
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_accumulo_ha_spento}
+
+  - id: caldaia_accumulo_disattivata
+    alias: Caldaia - accumulo, disattivata
+    description: Disattivando l'interruttore, o spegnendo il modo CLESS, si azzera il ricordo di un annullamento precedente.
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.caldaia_accumulo_attivo
+        to: "off"
+      - trigger: state
+        entity_id: input_boolean.impianto_modo_cless
+        to: "off"
+    actions:
+      - action: input_boolean.turn_off
+        target: {entity_id: input_boolean.caldaia_accumulo_ha_spento}
+
+  - id: caldaia_accumulo_valori_iniziali
+    alias: Caldaia - accumulo, valori iniziali
+    triggers:
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.caldaia_accumulo_defaults_impostati
+        state: "off"
+    actions:
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_accumulo_t_spegni}
+        data: {value: 55}
+      - action: input_number.set_value
+        target: {entity_id: input_number.caldaia_accumulo_t_accendi}
+        data: {value: 53}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_accumulo_attivo}
+      - action: input_boolean.turn_on
+        target: {entity_id: input_boolean.caldaia_accumulo_defaults_impostati}

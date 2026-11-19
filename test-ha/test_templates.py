@@ -707,5 +707,40 @@ mot = ferma["attributes"]["motivo"]
 x = alm("ok", 14.5); check("allarme allsky: motivo con foto vecchia", render(mot, x["states"], attrs=x["attrs"]), "ultima foto di 14.5 minuti fa")
 x = alm("non raggiungibile", None, motivo="non raggiungibile: timeout"); check("allarme allsky: motivo con Raspberry spento", render(mot, x["states"], attrs=x["attrs"]), "non raggiungibile: timeout")
 
+
+# ---------------------------------------------------------------- gestione dall'accumulo: non lasciar ripartire con l'accumulo caldo, riaccendere quando scende
+ACC = yaml.safe_load(open("ha-packages/caldaia_accumulo.yaml"))
+_acc_annulla = next(a for a in ACC["automation"] if a["id"] == "caldaia_accumulo_annulla_partenza")
+_acc_tpl = [c["value_template"] for c in _acc_annulla["actions"] if isinstance(c, dict) and c.get("condition") == "template"]
+_acc_allarme, _acc_caldo = _acc_tpl
+_acc_riaccendi = next(a for a in ACC["automation"] if a["id"] == "caldaia_accumulo_riaccendi")
+_acc_serve = next(c["value_template"] for c in _acc_riaccendi["conditions"] if c.get("condition") == "template")
+def acc_caldo(s_boiler, spegni="55"):
+    return render(_acc_caldo, {"sensor.casale_temperatura_boiler": s_boiler, "input_number.caldaia_accumulo_t_spegni": spegni})
+def acc_serve(s_boiler, richiesta="off", accendi="53", spegni="55"):
+    return render(_acc_serve, {"sensor.casale_temperatura_boiler": s_boiler, "binary_sensor.caldaia_richiesta_riscaldamento": richiesta,
+                               "input_number.caldaia_accumulo_t_accendi": accendi, "input_number.caldaia_accumulo_t_spegni": spegni})
+check("accumulo: S. BOILER 75 con soglia 55 annulla la partenza", acc_caldo("75"), "True")
+check("accumulo: esattamente 55 annulla la partenza", acc_caldo("55"), "True")
+check("accumulo: 54 non annulla (la caldaia puo' partire)", acc_caldo("54"), "False")
+check("accumulo: soglia 60 con 58 non annulla", acc_caldo("58", spegni="60"), "False")
+check("accumulo: sonda non disponibile non annulla", acc_caldo("unavailable"), "False")
+check("accumulo: allarme assente (____) non blocca", render(_acc_allarme, {"sensor.casale_allarme": "____"}), "True")
+check("accumulo: allarme presente blocca", render(_acc_allarme, {"sensor.casale_allarme": "A01"}), "False")
+check("accumulo: allarme non disponibile non blocca", render(_acc_allarme, {"sensor.casale_allarme": "unavailable"}), "True")
+check("accumulo: S. BOILER 52 riaccende (sotto 53)", acc_serve("52"), "True")
+check("accumulo: esattamente 53 non riaccende", acc_serve("53"), "False")
+check("accumulo: 54 senza richiesta non riaccende", acc_serve("54"), "False")
+check("accumulo: 54 con richiesta di riscaldamento riaccende", acc_serve("54", richiesta="on"), "True")
+check("accumulo: 56 con richiesta di riscaldamento non riaccende (accumulo gia' caldo)", acc_serve("56", richiesta="on"), "False")
+check("accumulo: sonda non disponibile non riaccende", acc_serve("unavailable", richiesta="on"), "False")
+check("accumulo: l'annulla parte solo da ECO STOP e STAND BY", _acc_annulla["triggers"][0]["from"], ["ECO STOP", "STAND BY"])
+check("accumulo: l'annulla non guarda la richiesta di riscaldamento", any(c.get("entity_id") == "binary_sensor.caldaia_richiesta_riscaldamento" for c in _acc_annulla["actions"] if isinstance(c, dict) and c.get("condition") == "state"), False)
+_cless = yaml.safe_load(open("ha-packages/impianto_cless.yaml"))
+_avviso = next(a for a in _cless["automation"] if a["id"] == "impianto_cless_caldaia_spenta")
+_avv_tpl = next(c["value_template"] for c in _avviso["conditions"] if c.get("condition") == "template")
+check("avviso caldaia spenta: non scatta se l'ha spenta la gestione dall'accumulo", render(_avv_tpl, {"input_boolean.caldaia_accumulo_ha_spento": "on"}), "False")
+check("avviso caldaia spenta: scatta senza la gestione (o pacchetto assente)", render(_avv_tpl, {}), "True")
+
 print("\nTutto ok" if not fails else f"\n{fails} prove FALLITE")
 sys.exit(1 if fails else 0)

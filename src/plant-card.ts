@@ -9,6 +9,8 @@ import type { DetailGroup, ImpiantoDetailsDialog } from "./details-dialog";
 import "./details-dialog";
 import type { ImpiantoChartsDialog } from "./charts-dialog";
 import "./charts-dialog";
+import "./rooms-card";
+import { DEFAULT_ROOMS, normalizeRooms, roomExists } from "./rooms-logic";
 import { HOPPER, afterBags, consumptionPerDay, daysLeft, kgAtDepth, remainingKg } from "./hopper-logic";
 import { hopperShape } from "./hopper-svg";
 import type { ImpiantoPelletDialog, PelletInfo } from "./pellet-dialog";
@@ -259,6 +261,11 @@ export interface PlantCardConfig {
   show?: SectionKey[];
   /** false per nascondere il termostato ambiente (compare se è installata l'integrazione termostato_riscaldamento); entry_id se hai più termostati */
   thermostat?: boolean | { entry_id?: string; title?: string };
+  /**
+   * Scheda «Stanze» (temperatura e umidità) accanto al termostato; false per nasconderla.
+   * `rooms`: elenco di { name, temperature, humidity, short?, id? } al posto delle stanze di partenza.
+   */
+  rooms?: boolean | { title?: string; rooms?: unknown; target_entity?: string };
   entities?: Partial<PlantEntities>;
   model?: {
     /** litri del boiler solare (utili: 190 per un Bolly 2 da 200 L) */
@@ -338,6 +345,8 @@ export class ImpiantoOverviewCard extends LitElement {
   private _stufaLoading = false;
   private _thermo?: HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
   private _thermoKey = "";
+  private _roomsEl?: HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
+  private _roomsKey = "";
   /** passati alcuni secondi dall'avvio: se una scheda collegata non si e' ancora caricata lo si dice (sul tablet non c'e' la console) */
   @state() private _waited = false;
   private _waitTimer?: number;
@@ -439,6 +448,7 @@ export class ImpiantoOverviewCard extends LitElement {
     if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
     if (changed.has("hass") && this._details) this._details.groups = this._detailGroups();
     if (changed.has("hass") && this._thermo) this._thermo.hass = this.hass;
+    if (changed.has("hass") && this._roomsEl) this._roomsEl.hass = this.hass;
     if (changed.has("hass") && this._stufaDlg) this._stufaDlg.hass = this.hass;
     if (changed.has("hass") && this._scheduleDlg) this._scheduleDlg.hass = this.hass;
     if (changed.has("hass") && this._pelletDlg) this._pelletDlg.info = this._pelletInfo();
@@ -1209,6 +1219,25 @@ export class ImpiantoOverviewCard extends LitElement {
     return html`<div class="thermo">${this._thermo}</div>`;
   }
 
+  /** La scheda «Stanze» accanto al termostato: compare se almeno un sensore delle stanze esiste. */
+  private _renderRooms() {
+    const opt = this._config.rooms;
+    if (opt === false) return nothing;
+    const cfg = typeof opt === "object" && opt !== null ? opt : {};
+    const rooms = cfg.rooms === undefined ? DEFAULT_ROOMS : normalizeRooms(cfg.rooms);
+    const exists = (id: string) => !!id && this.hass.states[id] !== undefined;
+    if (!rooms.some((r) => roomExists(r, exists))) return nothing;
+    const key = JSON.stringify(cfg);
+    if (!this._roomsEl || this._roomsKey !== key) {
+      const el = document.createElement("impianto-rooms-card") as HTMLElement & { hass: HomeAssistant; setConfig(c: Record<string, unknown>): void };
+      el.setConfig({ type: "custom:impianto-rooms-card", embedded: true, stove_state: this._e.stove_state, ...cfg });
+      this._roomsEl = el;
+      this._roomsKey = key;
+    }
+    this._roomsEl.hass = this.hass;
+    return html`<div class="roomsbox">${this._roomsEl}</div>`;
+  }
+
   /** Le righe della finestra "Stato": poche frasi sul momento dell'impianto. */
   private _summaryLines(): SummaryLine[] {
     const e = this._e;
@@ -1576,6 +1605,7 @@ export class ImpiantoOverviewCard extends LitElement {
     if (!this._config || !this.hass) return nothing;
     const sec = this._effectiveSections();
     const thermo = sec.termostato ? this._renderThermostat() : nothing;
+    const rooms = sec.termostato ? this._renderRooms() : nothing;
     const stufa = sec.stufa ? this._renderStufa() : nothing;
     const split = this._config.layout === "split";
     // senza la scheda della caldaia (dove sta l'ingranaggio) le preferenze restano raggiungibili da una barra in alto
@@ -1601,13 +1631,15 @@ export class ImpiantoOverviewCard extends LitElement {
             ${sec.boiler ? html`<section class="boilerpanel">${this._renderBoiler()}</section>` : nothing}
             ${sec.caldaia ? this._renderStove() : nothing}
             ${stufa}
-            ${thermo === nothing ? nothing : html`<div class="splitthermo">${thermo}</div>`}
+            ${thermo === nothing && rooms === nothing
+              ? nothing
+              : html`<div class=${thermo !== nothing && rooms !== nothing ? "splitthermo two" : "splitthermo"}>${thermo}${rooms}</div>`}
           </div>
         </ha-card>
       `;
     }
-    const right = html`${sec.caldaia ? (stufa === nothing ? this._renderStove() : html`<div class="stoverow">${this._renderStove()}${stufa}</div>`) : stufa}${thermo}`;
-    const hasRight = sec.caldaia || stufa !== nothing || thermo !== nothing;
+    const right = html`${sec.caldaia ? (stufa === nothing ? this._renderStove() : html`<div class="stoverow">${this._renderStove()}${stufa}</div>`) : stufa}${thermo}${rooms}`;
+    const hasRight = sec.caldaia || stufa !== nothing || thermo !== nothing || rooms !== nothing;
     const two = sec.boiler && hasRight;
     return html`
       <ha-card>
@@ -2217,6 +2249,12 @@ export class ImpiantoOverviewCard extends LitElement {
     }
     .splitthermo {
       min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+    .roomsbox {
+      min-width: 0;
     }
     .missingbox {
       background: var(--secondary-background-color);
@@ -2287,6 +2325,11 @@ export class ImpiantoOverviewCard extends LitElement {
       }
       .layout.split > .splitthermo {
         grid-column: 1 / -1;
+      }
+      /* con le stanze il termostato sta su meta' riga e la scheda delle stanze sull'altra meta' */
+      .layout.split > .splitthermo.two {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: stretch;
       }
       .layout.split svg.boiler {
         margin: 0 auto;

@@ -177,6 +177,26 @@ Le schede leggono sensori che qui sono forniti come esempio:
   con spegnimento automatico (vedi sotto) e la stima `sensor.caldaia_acqua_pronta_tra`.
 - `esphome/solare-termico.yaml`: ESP32 con ADS1115 e sonde NTC 10k B3950 (serpentine) e due sonde sul boiler.
 
+## Stanze: temperatura e umidità
+
+Accanto al termostato la scheda dell'impianto mostra la scheda **Stanze**: una colonna per ogni stanza (altezza e colore secondo la temperatura, umidità sotto), la linea tratteggiata dell'obiettivo del termostato e, in alto, tre chip: la stanza più calda, la più fredda e quelle con umidità da 70 % in su. Nel layout `split` (tablet, scheda larga almeno 1150 px) il termostato occupa metà riga e le stanze l'altra metà; sotto quella larghezza stanno una sotto l'altra. Un tocco su una colonna apre i **Grafici** sul gruppo *Stanze*, con temperatura (scala a sinistra) e umidità (a destra) di quella stanza; gli altri sensori si accendono dai pulsanti sopra il grafico.
+
+- Colori della temperatura: da 22 °C in su arancione, sotto 19 °C azzurro, in mezzo verde. Umidità: da 60 % gialla, da 70 % rossa, sotto 40 % azzurra.
+- Le stanze di partenza e i loro sensori MQTT: Soggiorno, Cucina, Camera matrimoniale, Camera Matilde, Camera Camilla, Bagno Blu (`sensor.sensore_<stanza>_temperature` e `..._humidity`) e Bagno Verde, che resta un segnaposto finché non esiste il suo sensore. La scheda compare se almeno uno di questi sensori esiste.
+- Con la configurazione YAML si cambiano le stanze, il titolo o il termostato dell'obiettivo; `rooms: false` la nasconde:
+
+```yaml
+type: custom:impianto-overview-card
+layout: split
+rooms:
+  title: Stanze
+  target_entity: climate.termostato
+  rooms:
+    - { id: studio, name: Studio, short: Studio, temperature: sensor.studio_temperatura, humidity: sensor.studio_umidita }
+```
+
+La scheda si può usare anche da sola: `type: custom:impianto-rooms-card` (opzioni `title`, `rooms`, `target_entity`).
+
 ## Modo CLESS
 
 Con l'accumulo REQ.A CLESS al posto del boiler solare da 200 L e del puffer da 50 L si accende `input_boolean.impianto_modo_cless` (pacchetto `ha-packages/impianto_cless.yaml`). Da acceso:
@@ -185,6 +205,7 @@ Con l'accumulo REQ.A CLESS al posto del boiler solare da 200 L e del puffer da 5
 - il modello del serbatoio passa a 510 L (zona alta circa il 45 %), le correzioni delle sonde ESP32 vanno a 0 (da rifare confrontando la sonda alta con la S. BOILER) e le docce si contano sopra i 47 °C (la serpentina sanitaria non raffredda l'accumulo oltre quella soglia): con la cima a 65 °C sono circa 4, non 12 come col conto da boiler a serbatoio;
 - la salvaguardia delle partenze inutili, il blocco della pompa di integrazione e la misura del tempo per l'acqua pronta si fermano (la caldaia resta sempre accesa per l'acqua calda);
 - se la caldaia resta spenta più di 20 minuti (regolabile) senza programma settimanale e con qualcuno in casa arriva un avviso sul telefono; non viene riaccesa da sola.
+- la **gestione dall'accumulo** (pacchetto `ha-packages/caldaia_accumulo.yaml`, interruttore `input_boolean.caldaia_accumulo_attivo`) decide le ripartenze dalla sonda S. BOILER invece che dall'acqua della caldaia: se la caldaia riparte da sola da ECO STOP o STAND BY con S. BOILER a 55 °C o più (`input_number.caldaia_accumulo_t_spegni`) e nessuno chiede calore, la partenza si annulla in fase di accensione (anche se il termostato chiede riscaldamento: i radiatori sono serviti dall'accumulo); spenta così, si riaccende quando S. BOILER scende sotto 53 °C (`..._t_accendi`) o quando la caldaia chiede riscaldamento con l'accumulo sotto la soglia di spegnimento. Non tocca le partenze da OFF (a mano, app, accensione rapida), l'accensione rapida in corso e gli allarmi; in questo caso l'avviso di caldaia spenta non scatta.
 
 L'interruttore, le correzioni delle due sonde, la soglia delle docce e l'avviso di caldaia spenta stanno nelle **Preferenze impianto → Accumulo CLESS** (l'interruttore è nell'intestazione del blocco). Da spento torna tutto com'era (200 L, 50 %, correzioni +4 e +3 °C). Senza il pacchetto, o con il modo spento, la scheda non cambia.
 

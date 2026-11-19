@@ -1,6 +1,8 @@
 // Logica pura dei grafici: lettura dello storico di Home Assistant, campionamento, scale e assi, statistiche.
 // Nessuna dipendenza da Lit o da Home Assistant, così si prova con node:test.
 
+import type { RoomDef } from "./rooms-logic";
+
 export interface Pt {
   /** millisecondi */
   t: number;
@@ -389,6 +391,45 @@ export function chartGroups(cless = false): GroupDef[] {
       ? { id: "puffer", title: "Puffer", series: [on(S.boilerTop), on(S.boilerBottom), on(S.puffer), on(S.integIn), on(S.integOut)].map(clessSeries) }
       : { ...g, series: g.series.map(clessSeries) },
   );
+}
+
+const ROOM_COLORS = ["#f97316", "#22c55e", "#a855f7", "#ec4899", "#0ea5e9", "#14b8a6", "#eab308", "#ef4444"];
+
+/** Un colore piu' chiaro (verso il bianco): `amount` 0..1. */
+export function lighten(hex: string, amount: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const mix = (c: number) => Math.round(c + (255 - c) * amount);
+  const r = mix((n >> 16) & 255), g = mix((n >> 8) & 255), b = mix(n & 255);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
+/** Chiave delle serie di una stanza (la finestra dei grafici la traduce nell'entità del sensore). */
+export function roomEntityKey(id: string, kind: "t" | "h"): string {
+  return `room_${id}_${kind}`;
+}
+
+/** Il sensore (temperatura o umidità) di una stanza, dalla chiave `room_<id>_<t|h>`; `undefined` se la chiave non è di una stanza. */
+export function roomEntityOf(rooms: RoomDef[] | undefined, key: string): string | undefined {
+  const m = /^room_(.+)_(t|h)$/.exec(key);
+  if (!m) return undefined;
+  const room = rooms?.find((r) => r.id === m[1]);
+  return room ? (m[2] === "t" ? room.temperature : room.humidity) : undefined;
+}
+
+/**
+ * Il gruppo «Stanze»: temperatura (scala a sinistra) e umidità (a destra) di ogni stanza.
+ * Con una stanza in primo piano sono accese solo le sue due serie; senza, le temperature di tutte.
+ */
+export function roomsGroup(rooms: RoomDef[], focus?: string): GroupDef {
+  const series: SeriesDef[] = [];
+  rooms.forEach((r, i) => {
+    const color = ROOM_COLORS[i % ROOM_COLORS.length];
+    series.push({ id: `${r.id}_t`, entityKey: roomEntityKey(r.id, "t"), label: `${r.name}, temperatura`, unit: "°C", color, axis: "l", decimals: 1, on: focus ? r.id === focus : true });
+    series.push({ id: `${r.id}_h`, entityKey: roomEntityKey(r.id, "h"), label: `${r.name}, umidità`, unit: "%", color: lighten(color, 0.5), axis: "r", decimals: 0, on: focus ? r.id === focus : false });
+  });
+  return { id: "stanze", title: "Stanze", series };
 }
 
 /** Tutte le serie, per il confronto libero (scala 0-100 %). */
