@@ -121,11 +121,11 @@ export class ImpiantoRoomsCard extends LitElement {
         <div class="head">
           <h3>${this._config.title ?? "Stanze"}</h3>
           <div class="sum">
-          ${sum.warmest ? html`<div class="chip">Più calda: <b style="color:${TEMP_COLOR.warm}">${shortName(sum.warmest.room)} ${fmtNum(sum.warmest.t)} °C</b></div>` : nothing}
+          ${sum.warmest ? html`<div class="chip">Calda: <b style="color:${TEMP_COLOR.warm}">${shortName(sum.warmest.room)} ${fmtNum(sum.warmest.t)} °C</b></div>` : nothing}
           ${sum.coolest && sum.coolest !== sum.warmest
-            ? html`<div class="chip">Più fredda: <b style="color:${TEMP_COLOR.cool}">${shortName(sum.coolest.room)} ${fmtNum(sum.coolest.t)} °C</b></div>`
+            ? html`<div class="chip">Fredda: <b style="color:${TEMP_COLOR.cool}">${shortName(sum.coolest.room)} ${fmtNum(sum.coolest.t)} °C</b></div>`
             : nothing}
-          ${sum.humid.map((h) => html`<div class="chip bad">Umidità alta: <b>${shortName(h.room)} ${Math.round(h.h as number)} %</b></div>`)}
+          ${sum.humid.map((h) => html`<div class="chip bad">Umidità: <b>${shortName(h.room)} ${Math.round(h.h as number)} %</b></div>`)}
           </div>
         </div>
         <div class="area" style="--n:${values.length}">
@@ -167,8 +167,11 @@ export class ImpiantoRoomsCard extends LitElement {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-wrap: wrap;
       gap: 6px 10px;
+      min-width: 0;
+    }
+    h3 {
+      flex: none;
     }
     h3 {
       margin: 0;
@@ -177,17 +180,20 @@ export class ImpiantoRoomsCard extends LitElement {
       color: var(--primary-text-color);
     }
     .sum {
+      flex: 1;
+      min-width: 0;
       display: flex;
       flex-wrap: wrap;
       justify-content: flex-end;
-      gap: 6px;
+      gap: 4px 6px;
     }
     .chip {
       background: var(--card-background-color);
       border: 1px solid var(--divider-color);
       border-radius: 12px;
-      padding: 3px 10px;
-      font-size: 12px;
+      padding: 2px 9px;
+      font-size: 11.5px;
+      white-space: nowrap;
       color: var(--primary-text-color);
     }
     .chip.bad {

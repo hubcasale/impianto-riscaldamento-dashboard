@@ -3243,9 +3243,9 @@ var ImpiantoRoomsCard = class extends i4 {
         <div class="head">
           <h3>${this._config.title ?? "Stanze"}</h3>
           <div class="sum">
-          ${sum.warmest ? b2`<div class="chip">Più calda: <b style="color:${TEMP_COLOR.warm}">${shortName(sum.warmest.room)} ${fmtNum(sum.warmest.t)} °C</b></div>` : A}
-          ${sum.coolest && sum.coolest !== sum.warmest ? b2`<div class="chip">Più fredda: <b style="color:${TEMP_COLOR.cool}">${shortName(sum.coolest.room)} ${fmtNum(sum.coolest.t)} °C</b></div>` : A}
-          ${sum.humid.map((h3) => b2`<div class="chip bad">Umidità alta: <b>${shortName(h3.room)} ${Math.round(h3.h)} %</b></div>`)}
+          ${sum.warmest ? b2`<div class="chip">Calda: <b style="color:${TEMP_COLOR.warm}">${shortName(sum.warmest.room)} ${fmtNum(sum.warmest.t)} °C</b></div>` : A}
+          ${sum.coolest && sum.coolest !== sum.warmest ? b2`<div class="chip">Fredda: <b style="color:${TEMP_COLOR.cool}">${shortName(sum.coolest.room)} ${fmtNum(sum.coolest.t)} °C</b></div>` : A}
+          ${sum.humid.map((h3) => b2`<div class="chip bad">Umidità: <b>${shortName(h3.room)} ${Math.round(h3.h)} %</b></div>`)}
           </div>
         </div>
         <div class="area" style="--n:${values.length}">
@@ -3285,8 +3285,11 @@ var ImpiantoRoomsCard = class extends i4 {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-wrap: wrap;
       gap: 6px 10px;
+      min-width: 0;
+    }
+    h3 {
+      flex: none;
     }
     h3 {
       margin: 0;
@@ -3295,17 +3298,20 @@ var ImpiantoRoomsCard = class extends i4 {
       color: var(--primary-text-color);
     }
     .sum {
+      flex: 1;
+      min-width: 0;
       display: flex;
       flex-wrap: wrap;
       justify-content: flex-end;
-      gap: 6px;
+      gap: 4px 6px;
     }
     .chip {
       background: var(--card-background-color);
       border: 1px solid var(--divider-color);
       border-radius: 12px;
-      padding: 3px 10px;
-      font-size: 12px;
+      padding: 2px 9px;
+      font-size: 11.5px;
+      white-space: nowrap;
       color: var(--primary-text-color);
     }
     .chip.bad {
@@ -8878,7 +8884,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.4";
+var VERSION = "0.5.5";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
