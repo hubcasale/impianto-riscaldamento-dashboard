@@ -2,7 +2,7 @@ import "./plant-card";
 import "./schedule-card";
 import "./rooms-card";
 
-const VERSION = "0.5.7";
+const VERSION = "0.5.8";
 
 declare global {
   interface Window {

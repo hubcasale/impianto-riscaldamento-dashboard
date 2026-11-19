@@ -6204,12 +6204,12 @@ var ImpiantoOverviewCard = class extends i4 {
       <rect x="298" y="98" width="14" height="12" rx="2" class="stub" />
       <rect x="328" y="98" width="14" height="12" rx="2" class="stub" />
 
-      <!-- attacchi della caldaia, a destra: mandata (entra) e ritorno (esce) -->
+      <!-- attacchi della caldaia, a destra: mandata (entra) e ritorno (esce); il tratteggio segue il verso dell'acqua: la mandata va dalla caldaia verso l'accumulo -->
       <path d="M456 396 H500" class="pipe hot thin" />
       <path d="M456 426 H500" class="pipe cold thin" />
       <polygon points="486,389 470,396 486,403" fill="#ef4444" />
       <polygon points="470,419 486,426 470,433" fill="#3b82f6" />
-      ${o6.boilerOn ? w`<path d="M456 396 H500" class="coilflow" /><path d="M456 426 H500" class="coilflow" />` : A}
+      ${o6.boilerOn ? w`<path d="M500 396 H456" class="coilflow" /><path d="M456 426 H500" class="coilflow" />` : A}
       <text x="506" y="274" class="b" font-size="13" fill="#fb923c">Caldaia</text>
       <rect x="506" y="282" width="136" height="90" rx="14" class="card eta" />
       <text x="574" y="304" class="t2" font-size="13" text-anchor="middle">Puffer acqua calda</text>
@@ -9012,7 +9012,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.7";
+var VERSION = "0.5.8";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
