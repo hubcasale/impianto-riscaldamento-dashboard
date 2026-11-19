@@ -3237,20 +3237,21 @@ var ImpiantoRoomsCard = class extends i4 {
     const sum = summarize(values);
     const target = this._target();
     const embedded = this._config.embedded === true;
-    const targetFrac = target === null ? null : barFraction(target);
+    const targetFrac = target === null || target < BAR_MIN || target > BAR_MAX ? null : barFraction(target);
     const body = b2`
       <div class="rooms">
-        <div class="head"><h3>${this._config.title ?? "Stanze"}</h3></div>
-        <div class="sum">
+        <div class="head">
+          <h3>${this._config.title ?? "Stanze"}</h3>
+          <div class="sum">
           ${sum.warmest ? b2`<div class="chip">Più calda: <b style="color:${TEMP_COLOR.warm}">${sum.warmest.room.name} ${fmtNum(sum.warmest.t)} °C</b></div>` : A}
           ${sum.coolest && sum.coolest !== sum.warmest ? b2`<div class="chip">Più fredda: <b style="color:${TEMP_COLOR.cool}">${sum.coolest.room.name} ${fmtNum(sum.coolest.t)} °C</b></div>` : A}
           ${sum.humid.map((h3) => b2`<div class="chip bad">Umidità alta: <b>${h3.room.name} ${Math.round(h3.h)} %</b></div>`)}
+          </div>
         </div>
         <div class="area" style="--n:${values.length}">
           ${targetFrac === null ? A : b2`<div class="tline" style="bottom:calc(var(--below) + (100% - var(--below)) * ${targetFrac.toFixed(4)})"><span>obiettivo ${fmtNum(target)}</span></div>`}
           ${values.map((v2) => this._column(v2))}
         </div>
-        <div class="scale">scala ${BAR_MIN}–${BAR_MAX} °C</div>
       </div>
     `;
     return embedded ? b2`<div class="embed">${body}</div>` : b2`<ha-card>${body}</ha-card>`;
@@ -3272,13 +3273,20 @@ var ImpiantoRoomsCard = class extends i4 {
       box-sizing: border-box;
     }
     .rooms {
-      padding: 14px 16px 10px;
+      padding: 10px 14px 8px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 4px;
       height: 100%;
       box-sizing: border-box;
-      --below: 60px;
+      --below: 50px;
+    }
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px 10px;
     }
     h3 {
       margin: 0;
@@ -3289,14 +3297,15 @@ var ImpiantoRoomsCard = class extends i4 {
     .sum {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      justify-content: flex-end;
+      gap: 6px;
     }
     .chip {
       background: var(--card-background-color);
       border: 1px solid var(--divider-color);
-      border-radius: 14px;
-      padding: 5px 12px;
-      font-size: 13px;
+      border-radius: 12px;
+      padding: 3px 10px;
+      font-size: 12px;
       color: var(--primary-text-color);
     }
     .chip.bad {
@@ -3309,8 +3318,8 @@ var ImpiantoRoomsCard = class extends i4 {
       grid-template-columns: repeat(var(--n), minmax(0, 1fr));
       gap: 6px;
       flex: 1;
-      min-height: 210px;
-      margin-top: 6px;
+      min-height: 150px;
+      margin-top: 14px;
     }
     .col {
       display: grid;
@@ -3332,7 +3341,7 @@ var ImpiantoRoomsCard = class extends i4 {
     .plot {
       width: 100%;
       height: 100%;
-      min-height: 140px;
+      min-height: 96px;
       display: flex;
       align-items: flex-end;
       justify-content: center;
@@ -3351,21 +3360,21 @@ var ImpiantoRoomsCard = class extends i4 {
       min-height: 10px;
     }
     .hum {
-      margin-top: 8px;
-      font-size: 13px;
+      margin-top: 6px;
+      font-size: 12.5px;
       font-weight: 700;
       background: var(--card-background-color);
       border-radius: 10px;
       padding: 2px 9px;
     }
     .nm {
-      margin-top: 5px;
+      margin-top: 3px;
       font-size: 11.5px;
       line-height: 1.15;
       text-align: center;
       color: var(--secondary-text-color);
       overflow-wrap: break-word;
-      min-height: 26px;
+      min-height: 14px;
     }
     .tline {
       position: absolute;
@@ -3409,12 +3418,6 @@ var ImpiantoRoomsCard = class extends i4 {
         font-size: 12px;
         padding: 4px 10px;
       }
-    }
-    .scale {
-      font-size: 10.5px;
-      color: var(--secondary-text-color);
-      text-align: right;
-      opacity: 0.7;
     }
   `;
   }
@@ -8873,7 +8876,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.2";
+var VERSION = "0.5.3";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

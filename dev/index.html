@@ -52,7 +52,7 @@
     else document.write('<script src="' + src + '"><\/script>');
   }
 }</script>
-<script>if (new URLSearchParams(location.search).get("termostato")) document.write('<script src="/termostato-riscaldamento/dev/bundle.js"><\/script>');</script>
+<script>{ const t = new URLSearchParams(location.search).get("termostato"); if (t === "file") document.write('<script src="../../impianto-riscaldamento/cards/termostato/dev/bundle.js"><\/script>'); else if (t) document.write('<script src="/termostato-riscaldamento/dev/bundle.js"><\/script>'); }</script>
 <script>
 
 const q = new URLSearchParams(location.search);
