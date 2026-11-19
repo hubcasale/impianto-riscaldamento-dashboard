@@ -1,36 +1,39 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SETTINGS_GROUPS, SETTINGS_SECTIONS, applyPending, buildSettingsView, clampValue, integrazioneBar, stepValue, valueText, writeService } from "../src/settings-logic";
+import { SETTINGS_GROUPS, SETTINGS_SECTIONS, applyPending, buildSettingsView, clampValue, stepValue, valueText, writeService } from "../src/settings-logic";
 
 const st = (state: string, attributes: Record<string, unknown> = {}) => ({ state, attributes });
 
+const MIN = (v: string) => st(v, { min: 10, max: 240, step: 5, unit_of_measurement: "min" });
+
 test("preferenze: le entità mancanti non compaiono e le sezioni vuote spariscono", () => {
   const v = buildSettingsView({
-    "input_boolean.caldaia_integrazione_blocco_attivo": st("on"),
-    "input_number.caldaia_integrazione_temp_max": st("55", { min: 40, max: 70, step: 1, unit_of_measurement: "°C" }),
+    "input_boolean.caldaia_assenza_attiva": st("on"),
+    "input_number.caldaia_assenza_minuti": MIN("60"),
   });
   assert.equal(v.length, 1);
-  assert.equal(v[0].title, "Pompa di integrazione");
-  assert.deepEqual(v[0].rows.map((r) => r.entity), ["input_boolean.caldaia_integrazione_blocco_attivo", "input_number.caldaia_integrazione_temp_max"]);
+  assert.equal(v[0].title, "Spegnimento se nessuno è in casa");
+  assert.equal(v[0].master?.entity, "input_boolean.caldaia_assenza_attiva");
+  assert.deepEqual(v[0].rows.map((r) => r.entity), ["input_number.caldaia_assenza_minuti"]);
 });
 
 test("preferenze: interruttori e numeri", () => {
   const v = buildSettingsView({
-    "input_boolean.caldaia_integrazione_blocco_attivo": st("on"),
-    "input_boolean.caldaia_integrazione_forzatura_attiva": st("off"),
-    "input_number.caldaia_integrazione_delta_blocco": st("4.0", { min: 0, max: 15, step: 0.5, unit_of_measurement: "°C" }),
+    "input_boolean.caldaia_assenza_attiva": st("on"),
+    "input_boolean.caldaia_assenza_ospiti": st("off"),
+    "input_number.caldaia_assenza_minuti": st("60", { min: 10, max: 240, step: 0.5, unit_of_measurement: "min" }),
   });
   const rows = v[0].rows;
-  assert.equal(rows[0].on, true);
-  assert.equal(rows[1].on, false);
-  assert.equal(rows[2].value, 4);
-  assert.equal(rows[2].max, 15);
-  assert.equal(rows[2].step, 0.5);
-  assert.equal(rows[2].unit, "°C");
+  assert.equal(v[0].master?.on, true);
+  assert.equal(rows[0].on, false);
+  assert.equal(rows[1].value, 60);
+  assert.equal(rows[1].max, 240);
+  assert.equal(rows[1].step, 0.5);
+  assert.equal(rows[1].unit, "min");
 });
 
 test("preferenze: entità non disponibile", () => {
-  const v = buildSettingsView({ "input_number.caldaia_integrazione_temp_max": st("unavailable", { min: 40, max: 70 }) });
+  const v = buildSettingsView({ "input_number.caldaia_assenza_minuti": st("unavailable", { min: 10, max: 240 }) });
   assert.equal(v[0].rows[0].unavailable, true);
   assert.equal(v[0].rows[0].value, null);
 });
@@ -112,8 +115,8 @@ test("attesa di conferma: finita quando il valore reale coincide o scade", () =>
 });
 
 test("attesa di conferma: gli interruttori non sono toccati", () => {
-  const v = buildSettingsView({ "input_boolean.caldaia_integrazione_blocco_attivo": st("on") });
-  const r = applyPending(v, { "input_boolean.caldaia_integrazione_blocco_attivo": { value: 1, until: 1000 } }, 500);
+  const v = buildSettingsView({ "input_boolean.caldaia_assenza_ospiti": st("on") });
+  const r = applyPending(v, { "input_boolean.caldaia_assenza_ospiti": { value: 1, until: 1000 } }, 500);
   assert.equal(r.sections[0].rows[0].saving, undefined);
   assert.deepEqual(r.settled, []);
 });
@@ -144,11 +147,11 @@ test("blocchi: ognuno ha identificativo, icona e spiegazione; ogni voce ha la su
 
 test("blocchi: la vista porta gruppo, icona, spiegazione e spiegazione delle righe", () => {
   const v = buildSettingsView({
-    "input_boolean.caldaia_salvaguardia_attiva": st("on"),
-    "input_number.caldaia_salvaguardia_t_puffer": st("40", { min: 30, max: 70, step: 1, unit_of_measurement: "°C" }),
+    "input_boolean.caldaia_assenza_attiva": st("on"),
+    "input_number.caldaia_assenza_minuti": MIN("60"),
   });
-  assert.equal(v[0].id, "partenze");
-  assert.equal(v[0].group, "riscaldamento");
+  assert.equal(v[0].id, "assenza");
+  assert.equal(v[0].group, "casa");
   assert.match(v[0].icon, /^mdi:/);
   assert.ok(v[0].help.what.length > 0);
   assert.ok(v[0].rows[0].help);
@@ -177,18 +180,14 @@ test("riepilogo: blocco spento o non disponibile", () => {
   const spento = buildSettingsView({ "input_boolean.caldaia_assenza_attiva": st("off"), "input_number.caldaia_assenza_minuti": st("60", { min: 10, max: 240, step: 5 }) });
   assert.equal(spento[0].summary, "Disattivato: la caldaia non si spegne da sola");
   assert.deepEqual(spento[0].notes, []);
-  const nd = buildSettingsView({ "input_boolean.caldaia_salvaguardia_attiva": st("unavailable") });
+  const nd = buildSettingsView({ "input_boolean.caldaia_assenza_attiva": st("unavailable") });
   assert.equal(nd[0].summary, "Non disponibile");
 });
 
-test("riepilogo: caldaia e puffer, pompa di integrazione, modello del collettore", () => {
+test("riepilogo: caldaia e puffer, modello del collettore", () => {
   const v = buildSettingsView({
     "climate.casale_acqua": st("heat", { temperature: 65, min_temp: 50, max_temp: 75, target_temp_step: 1 }),
     "number.casale_setpoint_boiler": st("50", { min: 45, max: 70, step: 1, unit_of_measurement: "°C" }),
-    "input_boolean.caldaia_integrazione_blocco_attivo": st("on"),
-    "input_boolean.caldaia_integrazione_forzatura_attiva": st("on"),
-    "input_number.caldaia_integrazione_temp_max": st("60", { min: 40, max: 70, step: 1, unit_of_measurement: "°C" }),
-    "input_number.caldaia_integrazione_isteresi_max": st("2", { min: 0.5, max: 10, step: 0.5, unit_of_measurement: "°C" }),
     "input_number.solare_termico_k": st("0.078", { min: 0.01, max: 0.3, step: 0.001, unit_of_measurement: "K·m²/W" }),
     "input_number.solare_termico_tau": st("120", { min: 1, max: 360, step: 5, unit_of_measurement: "min" }),
     "input_number.solare_termico_inclinazione": st("22", { min: 0, max: 90, step: 1, unit_of_measurement: "°" }),
@@ -196,92 +195,20 @@ test("riepilogo: caldaia e puffer, pompa di integrazione, modello del collettore
   });
   const by = (id: string) => v.find((x) => x.id === id)!;
   assert.equal(by("caldaia").summary, "Acqua 65 °C · puffer 50 °C");
-  assert.equal(by("integrazione").summary, "Blocco attivo · forzatura attiva · testa boiler max 60 °C");
-  assert.equal(by("integrazione").notes[0], "La pompa smette di scaldare quando la testa del boiler arriva a 60 °C e riparte sotto 58 °C.");
   assert.equal(by("solare").summary, "k 0,078 · inerzia 120 min · 22° verso 270°");
   assert.equal(by("solare").group, "taratura");
   assert.equal(by("solare").advanced, true);
 });
 
-const bloccoRows = (b: number, s: number) =>
-  buildSettingsView({
-    "input_number.caldaia_integrazione_delta_blocco": st(String(b), { min: 0, max: 15, step: 0.5, unit_of_measurement: "°C" }),
-    "input_number.caldaia_integrazione_delta_sblocco": st(String(s), { min: 1, max: 20, step: 0.5, unit_of_measurement: "°C" }),
-  })[0].rows;
-
-test("barra delle soglie: zone e segnaposto", () => {
-  const rows = bloccoRows(4, 7);
-  const zona = (p: number, b: number) => integrazioneBar(rows, { puffer: p, boiler: b })!;
-  assert.equal(zona(55, 56).zone, "ferma"); // puffer piu' freddo del boiler
-  assert.equal(zona(59, 55).zone, "attesa"); // +4: ne' sotto ne' sopra le soglie
-  assert.equal(zona(62.5, 55).zone, "gira"); // +7,5: sopra la soglia di sblocco
-  assert.equal(zona(55, 56).markerPct, 0); // la differenza negativa resta sul bordo
-  const b = zona(61, 55);
-  assert.equal(b.delta, 6);
-  assert.equal(b.zone, "attesa");
-  assert.ok(b.blockPct < b.markerPct! && b.markerPct! < b.unblockPct);
-  assert.match(b.text, /6 °C più caldo del boiler/);
-  assert.match(b.text, /resta com'è/);
-  assert.match(zona(50, 54).text, /4 °C più freddo del boiler: la pompa resta ferma/);
-});
-
-test("barra delle soglie: senza temperature non c'è segnaposto, senza soglie non c'è barra", () => {
-  const rows = bloccoRows(4, 7);
-  const senza = integrazioneBar(rows, { puffer: null, boiler: 50 })!;
-  assert.equal(senza.markerPct, null);
-  assert.equal(senza.text, "");
-  assert.equal(integrazioneBar([], undefined), undefined);
-  assert.ok(senza.max >= 10 && senza.max >= 7 * 1.6);
-});
-
-test("attesa di conferma: il riepilogo e la barra seguono il valore appena scelto", () => {
+test("attesa di conferma: il riepilogo e le frasi seguono il valore appena scelto", () => {
   const v = buildSettingsView({
-    "input_boolean.caldaia_integrazione_blocco_attivo": st("on"),
-    "input_number.caldaia_integrazione_temp_max": st("55", { min: 40, max: 70, step: 1, unit_of_measurement: "°C" }),
-    "input_number.caldaia_integrazione_isteresi_max": st("2", { min: 0.5, max: 10, step: 0.5, unit_of_measurement: "°C" }),
+    "input_boolean.caldaia_assenza_attiva": st("on"),
+    "input_number.caldaia_assenza_minuti": MIN("60"),
   });
-  assert.match(v[0].summary, /testa boiler max 55 °C/);
-  const r = applyPending(v, { "input_number.caldaia_integrazione_temp_max": { value: 60, until: 1000 } }, 0);
-  assert.match(r.sections[0].summary, /testa boiler max 60 °C/);
-  assert.match(r.sections[0].notes[0], /arriva a 60 °C e riparte sotto 58 °C/);
-});
-
-test("salvaguardia: riepilogo e frase con le docce da garantire, il puffer solo per la riaccensione", () => {
-  const v = buildSettingsView({
-    "input_boolean.caldaia_salvaguardia_attiva": st("on"),
-    "input_number.caldaia_salvaguardia_docce_min": st("3", { min: 1, max: 8, step: 1, unit_of_measurement: "docce" }),
-    "input_number.caldaia_salvaguardia_t_puffer": st("50", { min: 30, max: 70, step: 1, unit_of_measurement: "°C" }),
-  });
-  const sec = v.find((x) => x.id === "partenze")!;
-  assert.equal(sec.summary, "Attiva: annulla la partenza se il boiler ha già 3 docce");
-  assert.deepEqual(sec.rows.map((r) => r.entity), ["input_number.caldaia_salvaguardia_docce_min", "input_number.caldaia_salvaguardia_t_puffer"]);
-  assert.match(sec.notes[0], /almeno 3 docce/);
-  assert.match(sec.notes[0], /termostato non chiede calore/);
-  assert.match(sec.notes[0], /puffer sotto 50 °C/);
-  const off = buildSettingsView({ "input_boolean.caldaia_salvaguardia_attiva": st("off"), "input_number.caldaia_salvaguardia_docce_min": st("3", { min: 1, max: 8, step: 1 }) }).find((x) => x.id === "partenze")!;
-  assert.equal(off.summary, "Disattivata: la caldaia parte sempre con il programma");
-  assert.deepEqual(off.notes, []);
-});
-
-test("richiesta di acqua calda: riepilogo e frase con le soglie scelte", () => {
-  const v = buildSettingsView({
-    "input_number.caldaia_acs_t_accendi": st("42", { min: 30, max: 60, step: 1, unit_of_measurement: "°C" }),
-    "input_number.caldaia_acs_t_spegni": st("55", { min: 35, max: 70, step: 1, unit_of_measurement: "°C" }),
-    "input_number.caldaia_acs_t_emergenza": st("36", { min: 25, max: 55, step: 1, unit_of_measurement: "°C" }),
-    "input_number.caldaia_acs_potenza_solare_min": st("1", { min: 0, max: 5, step: 0.1, unit_of_measurement: "kW" }),
-  });
-  const acs = v.find((x) => x.id === "acs")!;
-  assert.equal(acs.group, "riscaldamento");
-  assert.equal(acs.title, "Richiesta di acqua calda");
-  assert.equal(acs.summary, "Richiesta sotto 42 °C · fine sopra 55 °C");
-  assert.match(acs.notes[0], /sotto 42 °C parte la richiesta di acqua calda e resta finché arriva a 55 °C/);
-  assert.match(acs.notes[0], /almeno 1,0 kW la richiesta aspetta, ma sotto 36 °C parte lo stesso/);
-  assert.deepEqual(acs.rows.map((r) => r.entity), [
-    "input_number.caldaia_acs_t_accendi",
-    "input_number.caldaia_acs_t_spegni",
-    "input_number.caldaia_acs_t_emergenza",
-    "input_number.caldaia_acs_potenza_solare_min",
-  ]);
+  assert.match(v[0].summary, /dopo 60 min/);
+  const r = applyPending(v, { "input_number.caldaia_assenza_minuti": { value: 90, until: 1000 } }, 0);
+  assert.match(r.sections[0].summary, /dopo 90 min/);
+  assert.match(r.sections[0].notes[0], /da 90 minuti/);
 });
 
 test("preferenze: blocco Accumulo CLESS con l'interruttore generale, la correzione delle sonde e l'avviso", () => {
@@ -315,20 +242,6 @@ const ACC = {
   "input_number.caldaia_accumulo_t_spegni": NUM("55"),
   "input_number.caldaia_accumulo_t_accendi": NUM("53"),
 };
-const VECCHI = {
-  "input_boolean.caldaia_salvaguardia_attiva": st("on"),
-  "input_number.caldaia_salvaguardia_docce_min": NUM("3", { min: 1, max: 8 }),
-  "input_number.caldaia_acs_t_accendi": NUM("55"),
-  "input_boolean.caldaia_integrazione_blocco_attivo": st("on"),
-  "input_number.caldaia_integrazione_temp_max": NUM("55"),
-};
-
-test("CLESS acceso: salvaguardia, richiesta di acqua calda e pompa di integrazione spariscono", () => {
-  const ids = (states: Record<string, ReturnType<typeof st>>) => buildSettingsView(states).map((x) => x.id);
-  assert.deepEqual(ids({ ...VECCHI }).sort(), ["acs", "integrazione", "partenze"]);
-  assert.deepEqual(ids({ ...VECCHI, ...CLESS_ON }), ["cless"]); // resta solo il blocco del modo CLESS
-});
-
 test("gestione dall'accumulo: compare solo col CLESS acceso, con interruttore e due soglie", () => {
   assert.deepEqual(buildSettingsView({ ...ACC }).map((x) => x.id), []);
   const v = buildSettingsView({ ...ACC, ...CLESS_ON }).find((x) => x.id === "accumulo")!;

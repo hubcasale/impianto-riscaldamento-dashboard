@@ -790,133 +790,6 @@ var SETTINGS_SECTIONS = [
     ]
   },
   {
-    id: "partenze",
-    group: "riscaldamento",
-    hideInCless: true,
-    master: "input_boolean.caldaia_salvaguardia_attiva",
-    icon: "mdi:shield-check",
-    title: "Salvaguardia accensioni",
-    help: H2(
-      "Evita che la caldaia parta quando non serve: il boiler ha gi\xE0 abbastanza acqua calda e il termostato non chiede riscaldamento.",
-      "Per non sprecare pellet nelle accensioni dei programmi quando l'acqua \xE8 gi\xE0 calda."
-    ),
-    fields: [
-      {
-        kind: "toggle",
-        entity: "input_boolean.caldaia_salvaguardia_attiva",
-        label: "Evita partenze inutili",
-        hint: "Annulla l'avvio della caldaia quando il boiler ha gi\xE0 abbastanza docce e il termostato non chiede calore.",
-        help: H2("Annulla la partenza di un programma se il boiler ha gi\xE0 le docce che vuoi garantire e il termostato non chiede calore. Il puffer non conta: serve solo ai termosifoni e a integrare l'acqua sanitaria.", "Lascialo acceso: se serve, la caldaia riparte da sola quando il termostato chiede calore o l'acqua sanitaria si raffredda.", "Acceso.")
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_salvaguardia_docce_min",
-        label: "Docce da garantire prima di annullare",
-        hint: "Quante docce deve avere gi\xE0 il boiler (come le conta la scheda, 40 L a 38 \xB0C) perch\xE9 la partenza di un programma venga annullata.",
-        help: H2("Il numero minimo di docce disponibili nel boiler per annullare la partenza di un programma. Conta sia la sonda alta sia la bassa: con la testa calda ma il fondo freddo le docce sono poche.", "Alzalo se la sera ti serve pi\xF9 acqua calda; abbassalo per far partire la caldaia meno spesso.", "3 docce.")
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_salvaguardia_t_puffer",
-        label: "Riparti per l'acqua calda se il puffer \xE8 sotto",
-        hint: "Dopo un'annullamento, se l'acqua sanitaria chiede calore e il puffer \xE8 sotto questa temperatura la caldaia riparte; sopra, ci pensa la pompa di integrazione.",
-        help: H2("La temperatura del puffer sotto la quale, dopo una partenza annullata, la caldaia riparte quando l'acqua sanitaria chiede calore.", "Alzala se vuoi che riparta prima; abbassala per lasciare lavorare pi\xF9 a lungo la pompa di integrazione.")
-      }
-    ]
-  },
-  {
-    id: "acs",
-    group: "riscaldamento",
-    hideInCless: true,
-    icon: "mdi:water-boiler",
-    title: "Richiesta di acqua calda",
-    help: H2(
-      "Le temperature alte del boiler con cui Home Assistant decide che l'acqua calda sta finendo e chiede la caldaia. La richiesta riaccende il Polygon quando un programma \xE8 attivo.",
-      "Per far partire la caldaia prima (soglia pi\xF9 alta) o pi\xF9 tardi (soglia pi\xF9 bassa) quando il boiler si raffredda."
-    ),
-    fields: [
-      {
-        kind: "number",
-        entity: "input_number.caldaia_acs_t_accendi",
-        label: "Chiedi la caldaia sotto",
-        hint: "Temperatura alta del boiler (la stessa di \xABAlto S3\xBB) sotto la quale parte la richiesta di acqua calda.",
-        help: H2("Quando la temperatura alta del boiler scende sotto questo valore parte la richiesta di acqua calda, a meno che il sole stia scaldando il boiler.", "Alzala se vuoi che la caldaia parta prima e l'acqua non scenda; abbassala per consumare meno pellet e lasciare pi\xF9 spazio al solare.", "40 \xB0C.")
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_acs_t_spegni",
-        label: "La richiesta finisce sopra",
-        hint: "Una volta partita, la richiesta resta finch\xE9 la temperatura alta del boiler arriva a questo valore.",
-        help: H2("La temperatura alta alla quale la richiesta di acqua calda finisce. Pi\xF9 \xE8 alta, pi\xF9 a lungo lavora la caldaia a ogni accensione.", "Abbassala se la caldaia scalda pi\xF9 di quanto serve; alzala se preferisci accensioni pi\xF9 rare e pi\xF9 lunghe.", "55 \xB0C.")
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_acs_t_emergenza",
-        label: "Chiedi anche col sole sotto",
-        hint: "Se il sole sta scaldando il boiler la richiesta aspetta, ma sotto questa temperatura parte comunque.",
-        help: H2("Con il sole che d\xE0 abbastanza potenza la richiesta di acqua calda aspetta. Sotto questa temperatura alta parte comunque.", "Alzala se non vuoi restare con l'acqua tiepida nelle giornate di sole incerto.", "36 \xB0C.")
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_acs_potenza_solare_min",
-        label: "Potenza solare che fa attendere",
-        hint: "Con almeno questa potenza dal collettore la richiesta aspetta il sole.",
-        help: H2("La potenza del solare termico (in kW) sopra la quale la richiesta di acqua calda aspetta, perch\xE9 il sole sta gi\xE0 scaldando il boiler.", "Abbassala se vuoi che la caldaia aspetti il sole anche con poca potenza.", "1 kW.")
-      }
-    ]
-  },
-  {
-    id: "integrazione",
-    group: "pompe",
-    hideInCless: true,
-    icon: "mdi:pump",
-    title: "Pompa di integrazione",
-    help: H2(
-      "La pompa che porta il calore del puffer alla serpentina del boiler. Qui si decide quando fermarla e quando forzarla.",
-      "Per far lavorare bene insieme solare e caldaia, senza raffreddare il boiler con acqua meno calda."
-    ),
-    fields: [
-      {
-        kind: "toggle",
-        entity: "input_boolean.caldaia_integrazione_blocco_attivo",
-        label: "Blocco automatico",
-        hint: "Tiene ferma la pompa quando il puffer non \xE8 abbastanza pi\xF9 caldo del boiler.",
-        help: H2("Tiene ferma la pompa quando il puffer non \xE8 abbastanza pi\xF9 caldo del boiler.", "Evita di portare al boiler acqua meno calda di quella che ha gi\xE0.", "Acceso.")
-      },
-      {
-        kind: "toggle",
-        entity: "input_boolean.caldaia_integrazione_forzatura_attiva",
-        label: "Accensione forzata",
-        hint: "Accende la pompa anche quando l'Elios non la chiama, finch\xE9 il puffer ha calore da cedere.",
-        help: H2("Accende la pompa anche quando l'Elios non la chiama, finch\xE9 il puffer ha calore da cedere.", "Per sfruttare il puffer caldo e fare meno ore di caldaia.")
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_delta_blocco",
-        label: "Blocca se il puffer supera il boiler di meno di",
-        help: H2("Se il puffer supera il boiler di meno di questi gradi la pompa si ferma.", "Alzalo se la pompa parte per differenze troppo piccole.")
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_delta_sblocco",
-        label: "Sblocca quando il puffer supera il boiler di",
-        help: H2("La differenza di temperatura oltre la quale la pompa pu\xF2 ripartire.", "Deve essere pi\xF9 alta della soglia di blocco, cos\xEC la pompa non parte e si ferma di continuo.")
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_temp_max",
-        label: "Non scaldare la testa del boiler oltre",
-        help: H2("La temperatura massima della sonda alta del boiler: oltre questo valore la pompa non lo scalda pi\xF9.", "Protegge dalle scottature e lascia spazio al solare.", "60 \xB0C.")
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_isteresi_max",
-        label: "Isteresi su questa temperatura",
-        help: H2("Di quanti gradi deve scendere la testa del boiler sotto il massimo prima che la pompa possa ripartire.", "Evita accensioni e spegnimenti ravvicinati intorno al limite.")
-      }
-    ]
-  },
-  {
     id: "assenza",
     group: "casa",
     master: "input_boolean.caldaia_assenza_attiva",
@@ -1093,20 +966,11 @@ function num(v2, fallback) {
   const n5 = typeof v2 === "number" ? v2 : Number(v2);
   return Number.isFinite(n5) ? n5 : fallback;
 }
-var LIVE_PUFFER = ["sensor.puffer_temperatura_effettiva", "sensor.casale_temperatura_boiler"];
-var LIVE_BOILER = ["sensor.boiler_solare_alto_stimato"];
-function firstNumber(states, ids) {
-  for (const id of ids) {
-    const st = states[id];
-    if (st && st.state !== "unavailable" && st.state !== "unknown" && Number.isFinite(Number(st.state))) return Number(st.state);
-  }
-  return null;
-}
 function buildSettingsView(states, sections = SETTINGS_SECTIONS) {
   const out = [];
   const cless = states[CLESS_MODE_ENTITY]?.state === "on";
   for (const sec of sections) {
-    if (cless ? sec.hideInCless : sec.onlyCless) continue;
+    if (!cless && sec.onlyCless) continue;
     const all = [];
     for (const f3 of sec.fields) {
       const st = states[f3.entity];
@@ -1150,7 +1014,6 @@ function buildSettingsView(states, sections = SETTINGS_SECTIONS) {
       summary: "",
       notes: []
     };
-    if (sec.id === "integrazione") view.live = { puffer: firstNumber(states, LIVE_PUFFER), boiler: firstNumber(states, LIVE_BOILER) };
     out.push(describeSection(view));
   }
   return out;
@@ -1216,16 +1079,6 @@ function sectionSummaryText(sec, rows) {
       return sec.master?.on ? `Attiva: non riparte da ${italianValue(g2("input_number.caldaia_accumulo_t_spegni"))}, riaccende sotto ${italianValue(g2("input_number.caldaia_accumulo_t_accendi"))}` : "Disattivata: la caldaia riparte quando decide lei";
     case "cless":
       return sec.master?.on ? "Acceso: accumulo CLESS, senza puffer n\xE9 integrazione" : "Spento: boiler solare da 200 L e puffer";
-    case "partenze":
-      return sec.master?.on ? `Attiva: annulla la partenza se il boiler ha gi\xE0 ${bare(g2("input_number.caldaia_salvaguardia_docce_min"))} docce` : "Disattivata: la caldaia parte sempre con il programma";
-    case "acs":
-      return `Richiesta sotto ${italianValue(g2("input_number.caldaia_acs_t_accendi"))} \xB7 fine sopra ${italianValue(g2("input_number.caldaia_acs_t_spegni"))}`;
-    case "integrazione": {
-      const blocco = g2("input_boolean.caldaia_integrazione_blocco_attivo");
-      const forza = g2("input_boolean.caldaia_integrazione_forzatura_attiva");
-      const parts = [blocco ? blocco.on ? "Blocco attivo" : "Blocco spento" : null, forza?.on ? "forzatura attiva" : null, `testa boiler max ${italianValue(g2("input_number.caldaia_integrazione_temp_max"))}`];
-      return parts.filter(Boolean).join(" \xB7 ");
-    }
     case "assenza": {
       if (!sec.master?.on) return "Disattivato: la caldaia non si spegne da sola";
       const ospiti = g2("input_boolean.caldaia_assenza_ospiti");
@@ -1245,13 +1098,6 @@ function sectionSummaryText(sec, rows) {
 }
 function sectionNotes(sec, rows) {
   const g2 = (e5) => byEntity(rows, e5);
-  if (sec.id === "integrazione") {
-    const max = g2("input_number.caldaia_integrazione_temp_max");
-    const ist = g2("input_number.caldaia_integrazione_isteresi_max");
-    if (max?.value == null) return [];
-    const riparte = ist?.value != null ? ` e riparte sotto ${bare({ ...max, value: max.value - ist.value })} \xB0C` : "";
-    return [`La pompa smette di scaldare quando la testa del boiler arriva a ${bare(max)} \xB0C${riparte}.`];
-  }
   if (sec.id === "cless") {
     return [
       sec.master?.on ? "La scheda mostra l'accumulo CLESS. La salvaguardia delle partenze, il blocco della pompa di integrazione e il tempo per l'acqua pronta sono fermi e nascosti da queste preferenze: le ripartenze della caldaia le decide il blocco \xABGestione dall'accumulo\xBB, oppure la caldaia da sola." : "Sono attive le regole del boiler solare e del puffer da 50 litri."
@@ -1274,49 +1120,14 @@ function sectionNotes(sec, rows) {
     const freddo = t3?.value != null ? ` Con meno di ${bare(t3)} \xB0C fuori non la spegne, per non far raffreddare la casa.` : "";
     return [`Se nessuno \xE8 in casa da ${bare(min)} minuti (iPhone e Wi-Fi) la caldaia si spegne; al rientro riparte solo se c'\xE8 un programma attivo.${freddo}`];
   }
-  if (sec.id === "acs") {
-    const on2 = g2("input_number.caldaia_acs_t_accendi");
-    const off2 = g2("input_number.caldaia_acs_t_spegni");
-    const em = g2("input_number.caldaia_acs_t_emergenza");
-    const sole = g2("input_number.caldaia_acs_potenza_solare_min");
-    if (on2?.value == null) return [];
-    const fine = off2?.value != null ? ` e resta finch\xE9 arriva a ${bare(off2)} \xB0C` : "";
-    const sunNote = sole?.value != null ? ` Se il solare d\xE0 almeno ${bare(sole)} kW la richiesta aspetta${em?.value != null ? `, ma sotto ${bare(em)} \xB0C parte lo stesso` : ""}.` : "";
-    return [`Quando la temperatura alta del boiler scende sotto ${bare(on2)} \xB0C parte la richiesta di acqua calda${fine}. Con un programma attivo e il puffer sotto la soglia della salvaguardia, la richiesta riaccende il Polygon.${sunNote}`];
-  }
-  if (sec.id === "partenze") {
-    const docce = g2("input_number.caldaia_salvaguardia_docce_min");
-    const t3 = g2("input_number.caldaia_salvaguardia_t_puffer");
-    if (!sec.master?.on || docce?.value == null) return [];
-    const riparte = t3?.value != null ? ` Riparte quando il termostato chiede calore, o quando l'acqua sanitaria chiede calore con il puffer sotto ${bare(t3)} \xB0C.` : " Riparte quando il termostato chiede calore o l'acqua sanitaria si raffredda.";
-    return [`All'ora di un programma, se il boiler ha gi\xE0 almeno ${bare(docce)} docce (conta anche la sonda bassa) e il termostato non chiede calore, la partenza viene annullata: si risparmia pellet.${riparte}`];
-  }
   return [];
-}
-function integrazioneBar(rows, live) {
-  const block = byEntity(rows, "input_number.caldaia_integrazione_delta_blocco")?.value;
-  const unblock = byEntity(rows, "input_number.caldaia_integrazione_delta_sblocco")?.value;
-  if (block == null || unblock == null) return void 0;
-  const max = Math.max(Math.ceil(Math.max(block, unblock) * 1.6 / 2) * 2, 10);
-  const delta = live && live.puffer !== null && live.boiler !== null ? Number((live.puffer - live.boiler).toFixed(1)) : null;
-  const zone = delta === null ? null : delta < block ? "ferma" : delta > unblock ? "gira" : "attesa";
-  const pct = (v2) => Math.min(100, Math.max(0, v2 / max * 100));
-  const fmtD = (v2) => String(v2).replace(".", ",");
-  let text = "";
-  if (delta !== null && zone) {
-    const quanto = delta >= 0 ? `${fmtD(delta)} \xB0C pi\xF9 caldo del boiler` : `${fmtD(-delta)} \xB0C pi\xF9 freddo del boiler`;
-    const effetto = zone === "ferma" ? "la pompa resta ferma: il puffer non scalderebbe il boiler abbastanza." : zone === "gira" ? "la pompa pu\xF2 girare." : "zona di attesa: la pompa resta com'\xE8 (se gira continua, se \xE8 ferma resta ferma).";
-    text = `Adesso il puffer \xE8 ${quanto}: ${effetto}`;
-  }
-  return { max, block, unblock, delta, zone, markerPct: delta === null ? null : pct(delta), blockPct: pct(block), unblockPct: pct(unblock), text };
 }
 function describeSection(view) {
   const all = view.master ? [view.master, ...view.rows] : view.rows;
   return {
     ...view,
     summary: sectionSummaryText(view, all),
-    notes: sectionNotes(view, all),
-    bar: view.id === "integrazione" ? integrazioneBar(all, view.live) : void 0
+    notes: sectionNotes(view, all)
   };
 }
 
@@ -1453,27 +1264,6 @@ var ImpiantoSettingsDialog = class extends i4 {
       </div>
     `;
   }
-  /** Le due soglie della pompa su una barra: ferma, attesa, può girare; il segno è la differenza di adesso. */
-  _renderBar(b3) {
-    const f3 = (v2) => `+${String(v2).replace(".", ",")} \xB0C`;
-    return b2`
-      <div class="gauge" aria-label="Soglie della pompa di integrazione">
-        <div class="gcap">Quanto il puffer è più caldo del boiler</div>
-        <div class="mk">${b3.markerPct !== null ? b2`<span style="left:${b3.markerPct}%">adesso ▼</span>` : A}</div>
-        <div class="track">
-          <div class="seg stop" style="width:${b3.blockPct}%"><span>ferma</span></div>
-          <div class="seg wait" style="width:${b3.unblockPct - b3.blockPct}%"><span>attesa</span></div>
-          <div class="seg go" style="width:${100 - b3.unblockPct}%"><span>gira</span></div>
-        </div>
-        <div class="ticks">
-          <span style="left:0%">0</span>
-          <span style="left:${b3.blockPct}%">${f3(b3.block)}</span>
-          <span style="left:${b3.unblockPct}%">${f3(b3.unblock)}</span>
-        </div>
-        ${b3.text ? b2`<div class="now ${b3.zone ?? ""}">${b3.text}</div>` : A}
-      </div>
-    `;
-  }
   _renderBlock(sec) {
     const open = this._open === sec.id;
     const m2 = sec.master;
@@ -1503,7 +1293,6 @@ var ImpiantoSettingsDialog = class extends i4 {
         </div>
         ${open ? b2`<div class="bb">
               <p class="intro">${m2?.hint ?? sec.help.what} ${this._helpBtn(sec.title, sec.help)}</p>
-              ${sec.bar ? this._renderBar(sec.bar) : A}
               ${sec.notes.map((n5) => b2`<p class="note">${n5}</p>`)}
               ${sec.rows.map((r6) => this._renderRow(r6))}
             </div>` : A}
@@ -1754,75 +1543,6 @@ var ImpiantoSettingsDialog = class extends i4 {
       background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
       font-size: 13px;
       line-height: 1.4;
-    }
-    .gauge {
-      margin: 12px 0 6px;
-      padding: 0 14px;
-    }
-    .gcap {
-      font-size: 12px;
-      color: var(--secondary-text-color, #727272);
-      margin-bottom: 6px;
-    }
-    .track {
-      position: relative;
-      display: flex;
-      height: 26px;
-      border-radius: 13px;
-      overflow: hidden;
-    }
-    .seg {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 0;
-      font-size: 11.5px;
-      font-weight: 600;
-      color: #fff;
-      white-space: nowrap;
-      overflow: hidden;
-    }
-    .seg.stop {
-      background: var(--error-color, #db4437);
-    }
-    .seg.wait {
-      background: var(--warning-color, #ffa600);
-    }
-    .seg.go {
-      background: var(--success-color, #43a047);
-    }
-    .mk {
-      position: relative;
-      height: 16px;
-      font-size: 11.5px;
-      font-weight: 600;
-    }
-    .mk span {
-      position: absolute;
-      bottom: 0;
-      transform: translateX(-50%);
-      white-space: nowrap;
-    }
-    .ticks {
-      position: relative;
-      height: 18px;
-      margin-top: 3px;
-      font-size: 11.5px;
-      color: var(--secondary-text-color, #727272);
-    }
-    .ticks span {
-      position: absolute;
-      transform: translateX(-50%);
-      white-space: nowrap;
-    }
-    .ticks span:first-child {
-      transform: none;
-    }
-    .now {
-      margin-top: 6px;
-      font-size: 13px;
-      line-height: 1.4;
-      font-weight: 500;
     }
     .sw {
       flex: none;
@@ -9153,7 +8873,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.1";
+var VERSION = "0.5.2";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

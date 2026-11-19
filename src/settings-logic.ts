@@ -44,8 +44,6 @@ export interface SectionDef {
   /** spiegazione del blocco intero */
   help: HelpDef;
   fields: FieldDef[];
-  /** blocco che col modo CLESS acceso non fa niente: non si mostra */
-  hideInCless?: boolean;
   /** blocco che esiste solo col modo CLESS acceso */
   onlyCless?: boolean;
   /** titolo e spiegazione diversi col modo CLESS acceso */
@@ -198,133 +196,6 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
           "Alzala se l'acqua calda finisce presto, abbassala per accendere meno. L'acqua calda sanitaria vuole almeno 50–55 °C in cima (S3, circa 6 K sopra S. BOILER).",
           "53 °C.",
         ),
-      },
-    ],
-  },
-  {
-    id: "partenze",
-    group: "riscaldamento",
-    hideInCless: true,
-    master: "input_boolean.caldaia_salvaguardia_attiva",
-    icon: "mdi:shield-check",
-    title: "Salvaguardia accensioni",
-    help: H(
-      "Evita che la caldaia parta quando non serve: il boiler ha già abbastanza acqua calda e il termostato non chiede riscaldamento.",
-      "Per non sprecare pellet nelle accensioni dei programmi quando l'acqua è già calda.",
-    ),
-    fields: [
-      {
-        kind: "toggle",
-        entity: "input_boolean.caldaia_salvaguardia_attiva",
-        label: "Evita partenze inutili",
-        hint: "Annulla l'avvio della caldaia quando il boiler ha già abbastanza docce e il termostato non chiede calore.",
-        help: H("Annulla la partenza di un programma se il boiler ha già le docce che vuoi garantire e il termostato non chiede calore. Il puffer non conta: serve solo ai termosifoni e a integrare l'acqua sanitaria.", "Lascialo acceso: se serve, la caldaia riparte da sola quando il termostato chiede calore o l'acqua sanitaria si raffredda.", "Acceso."),
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_salvaguardia_docce_min",
-        label: "Docce da garantire prima di annullare",
-        hint: "Quante docce deve avere già il boiler (come le conta la scheda, 40 L a 38 °C) perché la partenza di un programma venga annullata.",
-        help: H("Il numero minimo di docce disponibili nel boiler per annullare la partenza di un programma. Conta sia la sonda alta sia la bassa: con la testa calda ma il fondo freddo le docce sono poche.", "Alzalo se la sera ti serve più acqua calda; abbassalo per far partire la caldaia meno spesso.", "3 docce."),
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_salvaguardia_t_puffer",
-        label: "Riparti per l'acqua calda se il puffer è sotto",
-        hint: "Dopo un'annullamento, se l'acqua sanitaria chiede calore e il puffer è sotto questa temperatura la caldaia riparte; sopra, ci pensa la pompa di integrazione.",
-        help: H("La temperatura del puffer sotto la quale, dopo una partenza annullata, la caldaia riparte quando l'acqua sanitaria chiede calore.", "Alzala se vuoi che riparta prima; abbassala per lasciare lavorare più a lungo la pompa di integrazione."),
-      },
-    ],
-  },
-  {
-    id: "acs",
-    group: "riscaldamento",
-    hideInCless: true,
-    icon: "mdi:water-boiler",
-    title: "Richiesta di acqua calda",
-    help: H(
-      "Le temperature alte del boiler con cui Home Assistant decide che l'acqua calda sta finendo e chiede la caldaia. La richiesta riaccende il Polygon quando un programma è attivo.",
-      "Per far partire la caldaia prima (soglia più alta) o più tardi (soglia più bassa) quando il boiler si raffredda.",
-    ),
-    fields: [
-      {
-        kind: "number",
-        entity: "input_number.caldaia_acs_t_accendi",
-        label: "Chiedi la caldaia sotto",
-        hint: "Temperatura alta del boiler (la stessa di «Alto S3») sotto la quale parte la richiesta di acqua calda.",
-        help: H("Quando la temperatura alta del boiler scende sotto questo valore parte la richiesta di acqua calda, a meno che il sole stia scaldando il boiler.", "Alzala se vuoi che la caldaia parta prima e l'acqua non scenda; abbassala per consumare meno pellet e lasciare più spazio al solare.", "40 °C."),
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_acs_t_spegni",
-        label: "La richiesta finisce sopra",
-        hint: "Una volta partita, la richiesta resta finché la temperatura alta del boiler arriva a questo valore.",
-        help: H("La temperatura alta alla quale la richiesta di acqua calda finisce. Più è alta, più a lungo lavora la caldaia a ogni accensione.", "Abbassala se la caldaia scalda più di quanto serve; alzala se preferisci accensioni più rare e più lunghe.", "55 °C."),
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_acs_t_emergenza",
-        label: "Chiedi anche col sole sotto",
-        hint: "Se il sole sta scaldando il boiler la richiesta aspetta, ma sotto questa temperatura parte comunque.",
-        help: H("Con il sole che dà abbastanza potenza la richiesta di acqua calda aspetta. Sotto questa temperatura alta parte comunque.", "Alzala se non vuoi restare con l'acqua tiepida nelle giornate di sole incerto.", "36 °C."),
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_acs_potenza_solare_min",
-        label: "Potenza solare che fa attendere",
-        hint: "Con almeno questa potenza dal collettore la richiesta aspetta il sole.",
-        help: H("La potenza del solare termico (in kW) sopra la quale la richiesta di acqua calda aspetta, perché il sole sta già scaldando il boiler.", "Abbassala se vuoi che la caldaia aspetti il sole anche con poca potenza.", "1 kW."),
-      },
-    ],
-  },
-  {
-    id: "integrazione",
-    group: "pompe",
-    hideInCless: true,
-    icon: "mdi:pump",
-    title: "Pompa di integrazione",
-    help: H(
-      "La pompa che porta il calore del puffer alla serpentina del boiler. Qui si decide quando fermarla e quando forzarla.",
-      "Per far lavorare bene insieme solare e caldaia, senza raffreddare il boiler con acqua meno calda.",
-    ),
-    fields: [
-      {
-        kind: "toggle",
-        entity: "input_boolean.caldaia_integrazione_blocco_attivo",
-        label: "Blocco automatico",
-        hint: "Tiene ferma la pompa quando il puffer non è abbastanza più caldo del boiler.",
-        help: H("Tiene ferma la pompa quando il puffer non è abbastanza più caldo del boiler.", "Evita di portare al boiler acqua meno calda di quella che ha già.", "Acceso."),
-      },
-      {
-        kind: "toggle",
-        entity: "input_boolean.caldaia_integrazione_forzatura_attiva",
-        label: "Accensione forzata",
-        hint: "Accende la pompa anche quando l'Elios non la chiama, finché il puffer ha calore da cedere.",
-        help: H("Accende la pompa anche quando l'Elios non la chiama, finché il puffer ha calore da cedere.", "Per sfruttare il puffer caldo e fare meno ore di caldaia."),
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_delta_blocco",
-        label: "Blocca se il puffer supera il boiler di meno di",
-        help: H("Se il puffer supera il boiler di meno di questi gradi la pompa si ferma.", "Alzalo se la pompa parte per differenze troppo piccole."),
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_delta_sblocco",
-        label: "Sblocca quando il puffer supera il boiler di",
-        help: H("La differenza di temperatura oltre la quale la pompa può ripartire.", "Deve essere più alta della soglia di blocco, così la pompa non parte e si ferma di continuo."),
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_temp_max",
-        label: "Non scaldare la testa del boiler oltre",
-        help: H("La temperatura massima della sonda alta del boiler: oltre questo valore la pompa non lo scalda più.", "Protegge dalle scottature e lascia spazio al solare.", "60 °C."),
-      },
-      {
-        kind: "number",
-        entity: "input_number.caldaia_integrazione_isteresi_max",
-        label: "Isteresi su questa temperatura",
-        help: H("Di quanti gradi deve scendere la testa del boiler sotto il massimo prima che la pompa possa ripartire.", "Evita accensioni e spegnimenti ravvicinati intorno al limite."),
       },
     ],
   },
@@ -546,27 +417,11 @@ export interface SectionView {
   summary: string;
   /** frasi che spiegano che cosa succede con i valori scelti */
   notes: string[];
-  /** barra delle soglie della pompa di integrazione */
-  bar?: ThresholdBar;
-  /** temperature di adesso di puffer e boiler (solo per il blocco della pompa di integrazione) */
-  live?: { puffer: number | null; boiler: number | null };
 }
 
 function num(v: unknown, fallback: number): number {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : fallback;
-}
-
-/** Sensori per la differenza di temperatura "ora" mostrata nel blocco della pompa di integrazione. */
-const LIVE_PUFFER = ["sensor.puffer_temperatura_effettiva", "sensor.casale_temperatura_boiler"];
-const LIVE_BOILER = ["sensor.boiler_solare_alto_stimato"];
-
-function firstNumber(states: Record<string, StateLike | undefined>, ids: string[]): number | null {
-  for (const id of ids) {
-    const st = states[id];
-    if (st && st.state !== "unavailable" && st.state !== "unknown" && Number.isFinite(Number(st.state))) return Number(st.state);
-  }
-  return null;
 }
 
 /**
@@ -577,8 +432,8 @@ export function buildSettingsView(states: Record<string, StateLike | undefined>,
   const out: SectionView[] = [];
   const cless = states[CLESS_MODE_ENTITY]?.state === "on";
   for (const sec of sections) {
-    // col modo CLESS acceso alcuni blocchi non fanno niente (spariscono) e uno esiste solo allora
-    if (cless ? sec.hideInCless : sec.onlyCless) continue;
+    // il blocco della gestione dall'accumulo esiste solo col modo CLESS acceso
+    if (!cless && sec.onlyCless) continue;
     const all: RowView[] = [];
     for (const f of sec.fields) {
       const st = states[f.entity];
@@ -622,7 +477,6 @@ export function buildSettingsView(states: Record<string, StateLike | undefined>,
       summary: "",
       notes: [],
     };
-    if (sec.id === "integrazione") view.live = { puffer: firstNumber(states, LIVE_PUFFER), boiler: firstNumber(states, LIVE_BOILER) };
     out.push(describeSection(view));
   }
   return out;
@@ -721,18 +575,6 @@ export function sectionSummaryText(sec: Pick<SectionView, "id" | "master" | "cle
         : "Disattivata: la caldaia riparte quando decide lei";
     case "cless":
       return sec.master?.on ? "Acceso: accumulo CLESS, senza puffer né integrazione" : "Spento: boiler solare da 200 L e puffer";
-    case "partenze":
-      return sec.master?.on
-        ? `Attiva: annulla la partenza se il boiler ha già ${bare(g("input_number.caldaia_salvaguardia_docce_min"))} docce`
-        : "Disattivata: la caldaia parte sempre con il programma";
-    case "acs":
-      return `Richiesta sotto ${italianValue(g("input_number.caldaia_acs_t_accendi"))} · fine sopra ${italianValue(g("input_number.caldaia_acs_t_spegni"))}`;
-    case "integrazione": {
-      const blocco = g("input_boolean.caldaia_integrazione_blocco_attivo");
-      const forza = g("input_boolean.caldaia_integrazione_forzatura_attiva");
-      const parts = [blocco ? (blocco.on ? "Blocco attivo" : "Blocco spento") : null, forza?.on ? "forzatura attiva" : null, `testa boiler max ${italianValue(g("input_number.caldaia_integrazione_temp_max"))}`];
-      return parts.filter(Boolean).join(" · ");
-    }
     case "assenza": {
       if (!sec.master?.on) return "Disattivato: la caldaia non si spegne da sola";
       const ospiti = g("input_boolean.caldaia_assenza_ospiti");
@@ -754,13 +596,6 @@ export function sectionSummaryText(sec: Pick<SectionView, "id" | "master" | "cle
 /** Frasi che dicono che cosa succede con i valori scelti (sotto la spiegazione del blocco). */
 export function sectionNotes(sec: Pick<SectionView, "id" | "master" | "cless">, rows: RowView[]): string[] {
   const g = (e: string) => byEntity(rows, e);
-  if (sec.id === "integrazione") {
-    const max = g("input_number.caldaia_integrazione_temp_max");
-    const ist = g("input_number.caldaia_integrazione_isteresi_max");
-    if (max?.value == null) return [];
-    const riparte = ist?.value != null ? ` e riparte sotto ${bare({ ...max, value: max.value - ist.value } as RowView)} °C` : "";
-    return [`La pompa smette di scaldare quando la testa del boiler arriva a ${bare(max)} °C${riparte}.`];
-  }
   if (sec.id === "cless") {
     return [
       sec.master?.on
@@ -785,77 +620,18 @@ export function sectionNotes(sec: Pick<SectionView, "id" | "master" | "cless">, 
     const freddo = t?.value != null ? ` Con meno di ${bare(t)} °C fuori non la spegne, per non far raffreddare la casa.` : "";
     return [`Se nessuno è in casa da ${bare(min)} minuti (iPhone e Wi-Fi) la caldaia si spegne; al rientro riparte solo se c'è un programma attivo.${freddo}`];
   }
-  if (sec.id === "acs") {
-    const on = g("input_number.caldaia_acs_t_accendi");
-    const off = g("input_number.caldaia_acs_t_spegni");
-    const em = g("input_number.caldaia_acs_t_emergenza");
-    const sole = g("input_number.caldaia_acs_potenza_solare_min");
-    if (on?.value == null) return [];
-    const fine = off?.value != null ? ` e resta finché arriva a ${bare(off)} °C` : "";
-    const sunNote = sole?.value != null ? ` Se il solare dà almeno ${bare(sole)} kW la richiesta aspetta${em?.value != null ? `, ma sotto ${bare(em)} °C parte lo stesso` : ""}.` : "";
-    return [`Quando la temperatura alta del boiler scende sotto ${bare(on)} °C parte la richiesta di acqua calda${fine}. Con un programma attivo e il puffer sotto la soglia della salvaguardia, la richiesta riaccende il Polygon.${sunNote}`];
-  }
-  if (sec.id === "partenze") {
-    const docce = g("input_number.caldaia_salvaguardia_docce_min");
-    const t = g("input_number.caldaia_salvaguardia_t_puffer");
-    if (!sec.master?.on || docce?.value == null) return [];
-    const riparte = t?.value != null ? ` Riparte quando il termostato chiede calore, o quando l'acqua sanitaria chiede calore con il puffer sotto ${bare(t)} °C.` : " Riparte quando il termostato chiede calore o l'acqua sanitaria si raffredda.";
-    return [`All'ora di un programma, se il boiler ha già almeno ${bare(docce)} docce (conta anche la sonda bassa) e il termostato non chiede calore, la partenza viene annullata: si risparmia pellet.${riparte}`];
-  }
   return [];
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Barra delle soglie della pompa di integrazione
+// Riepilogo e frasi di un blocco
 
-export interface ThresholdBar {
-  /** scala della barra: differenza puffer meno boiler da 0 a max, in gradi */
-  max: number;
-  block: number;
-  unblock: number;
-  /** differenza attuale puffer - boiler (null se non si conosce) */
-  delta: number | null;
-  /** in quale zona cade la differenza attuale */
-  zone: "ferma" | "attesa" | "gira" | null;
-  /** posizione del segnaposto, in percentuale della barra */
-  markerPct: number | null;
-  blockPct: number;
-  unblockPct: number;
-  text: string;
-}
-
-/**
- * Le due soglie del blocco: sotto la prima la pompa si ferma, sopra la seconda può ripartire, in mezzo resta com'è
- * (isteresi). Il segnaposto è la differenza di temperatura di adesso tra puffer e boiler.
- */
-export function integrazioneBar(rows: RowView[], live?: { puffer: number | null; boiler: number | null }): ThresholdBar | undefined {
-  const block = byEntity(rows, "input_number.caldaia_integrazione_delta_blocco")?.value;
-  const unblock = byEntity(rows, "input_number.caldaia_integrazione_delta_sblocco")?.value;
-  if (block == null || unblock == null) return undefined;
-  const max = Math.max(Math.ceil((Math.max(block, unblock) * 1.6) / 2) * 2, 10);
-  const delta = live && live.puffer !== null && live.boiler !== null ? Number((live.puffer - live.boiler).toFixed(1)) : null;
-  const zone = delta === null ? null : delta < block ? "ferma" : delta > unblock ? "gira" : "attesa";
-  const pct = (v: number) => Math.min(100, Math.max(0, (v / max) * 100));
-  const fmtD = (v: number) => String(v).replace(".", ",");
-  let text = "";
-  if (delta !== null && zone) {
-    const quanto = delta >= 0 ? `${fmtD(delta)} °C più caldo del boiler` : `${fmtD(-delta)} °C più freddo del boiler`;
-    const effetto =
-      zone === "ferma" ? "la pompa resta ferma: il puffer non scalderebbe il boiler abbastanza."
-      : zone === "gira" ? "la pompa può girare."
-      : "zona di attesa: la pompa resta com'è (se gira continua, se è ferma resta ferma).";
-    text = `Adesso il puffer è ${quanto}: ${effetto}`;
-  }
-  return { max, block, unblock, delta, zone, markerPct: delta === null ? null : pct(delta), blockPct: pct(block), unblockPct: pct(unblock), text };
-}
-
-/** Riepilogo, frasi e barra del blocco, calcolati dai valori che le righe mostrano adesso (anche quelli in attesa di conferma). */
+/** Riepilogo e frasi del blocco, calcolati dai valori che le righe mostrano adesso (anche quelli in attesa di conferma). */
 export function describeSection(view: SectionView): SectionView {
   const all = view.master ? [view.master, ...view.rows] : view.rows;
   return {
     ...view,
     summary: sectionSummaryText(view, all),
     notes: sectionNotes(view, all),
-    bar: view.id === "integrazione" ? integrazioneBar(all, view.live) : undefined,
   };
 }

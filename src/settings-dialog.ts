@@ -2,7 +2,7 @@ import { LitElement, html, css, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
 import { SECTION_INFO, sectionsSummary, visibleKeys, type SectionKey, type Sections } from "./sections-logic";
-import { PENDING_MS, SETTINGS_GROUPS, applyPending, buildSettingsView, clampValue, stepValue, writeService, type HelpDef, type PendingMap, type RowView, type SectionView, type ThresholdBar } from "./settings-logic";
+import { PENDING_MS, SETTINGS_GROUPS, applyPending, buildSettingsView, clampValue, stepValue, writeService, type HelpDef, type PendingMap, type RowView, type SectionView } from "./settings-logic";
 
 const TAG = "impianto-settings-dialog";
 
@@ -152,28 +152,6 @@ export class ImpiantoSettingsDialog extends LitElement {
     `;
   }
 
-  /** Le due soglie della pompa su una barra: ferma, attesa, può girare; il segno è la differenza di adesso. */
-  private _renderBar(b: ThresholdBar) {
-    const f = (v: number) => `+${String(v).replace(".", ",")} °C`;
-    return html`
-      <div class="gauge" aria-label="Soglie della pompa di integrazione">
-        <div class="gcap">Quanto il puffer è più caldo del boiler</div>
-        <div class="mk">${b.markerPct !== null ? html`<span style="left:${b.markerPct}%">adesso ▼</span>` : nothing}</div>
-        <div class="track">
-          <div class="seg stop" style="width:${b.blockPct}%"><span>ferma</span></div>
-          <div class="seg wait" style="width:${b.unblockPct - b.blockPct}%"><span>attesa</span></div>
-          <div class="seg go" style="width:${100 - b.unblockPct}%"><span>gira</span></div>
-        </div>
-        <div class="ticks">
-          <span style="left:0%">0</span>
-          <span style="left:${b.blockPct}%">${f(b.block)}</span>
-          <span style="left:${b.unblockPct}%">${f(b.unblock)}</span>
-        </div>
-        ${b.text ? html`<div class="now ${b.zone ?? ""}">${b.text}</div>` : nothing}
-      </div>
-    `;
-  }
-
   private _renderBlock(sec: SectionView) {
     const open = this._open === sec.id;
     const m = sec.master;
@@ -198,7 +176,6 @@ export class ImpiantoSettingsDialog extends LitElement {
         ${open
           ? html`<div class="bb">
               <p class="intro">${m?.hint ?? sec.help.what} ${this._helpBtn(sec.title, sec.help)}</p>
-              ${sec.bar ? this._renderBar(sec.bar) : nothing}
               ${sec.notes.map((n) => html`<p class="note">${n}</p>`)}
               ${sec.rows.map((r) => this._renderRow(r))}
             </div>`
@@ -457,75 +434,6 @@ export class ImpiantoSettingsDialog extends LitElement {
       background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
       font-size: 13px;
       line-height: 1.4;
-    }
-    .gauge {
-      margin: 12px 0 6px;
-      padding: 0 14px;
-    }
-    .gcap {
-      font-size: 12px;
-      color: var(--secondary-text-color, #727272);
-      margin-bottom: 6px;
-    }
-    .track {
-      position: relative;
-      display: flex;
-      height: 26px;
-      border-radius: 13px;
-      overflow: hidden;
-    }
-    .seg {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 0;
-      font-size: 11.5px;
-      font-weight: 600;
-      color: #fff;
-      white-space: nowrap;
-      overflow: hidden;
-    }
-    .seg.stop {
-      background: var(--error-color, #db4437);
-    }
-    .seg.wait {
-      background: var(--warning-color, #ffa600);
-    }
-    .seg.go {
-      background: var(--success-color, #43a047);
-    }
-    .mk {
-      position: relative;
-      height: 16px;
-      font-size: 11.5px;
-      font-weight: 600;
-    }
-    .mk span {
-      position: absolute;
-      bottom: 0;
-      transform: translateX(-50%);
-      white-space: nowrap;
-    }
-    .ticks {
-      position: relative;
-      height: 18px;
-      margin-top: 3px;
-      font-size: 11.5px;
-      color: var(--secondary-text-color, #727272);
-    }
-    .ticks span {
-      position: absolute;
-      transform: translateX(-50%);
-      white-space: nowrap;
-    }
-    .ticks span:first-child {
-      transform: none;
-    }
-    .now {
-      margin-top: 6px;
-      font-size: 13px;
-      line-height: 1.4;
-      font-weight: 500;
     }
     .sw {
       flex: none;
