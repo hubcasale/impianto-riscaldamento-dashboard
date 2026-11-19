@@ -3243,9 +3243,9 @@ var ImpiantoRoomsCard = class extends i4 {
         <div class="head">
           <h3>${this._config.title ?? "Stanze"}</h3>
           <div class="sum">
-          ${sum.warmest ? b2`<div class="chip">Più calda: <b style="color:${TEMP_COLOR.warm}">${sum.warmest.room.name} ${fmtNum(sum.warmest.t)} °C</b></div>` : A}
-          ${sum.coolest && sum.coolest !== sum.warmest ? b2`<div class="chip">Più fredda: <b style="color:${TEMP_COLOR.cool}">${sum.coolest.room.name} ${fmtNum(sum.coolest.t)} °C</b></div>` : A}
-          ${sum.humid.map((h3) => b2`<div class="chip bad">Umidità alta: <b>${h3.room.name} ${Math.round(h3.h)} %</b></div>`)}
+          ${sum.warmest ? b2`<div class="chip">Più calda: <b style="color:${TEMP_COLOR.warm}">${shortName(sum.warmest.room)} ${fmtNum(sum.warmest.t)} °C</b></div>` : A}
+          ${sum.coolest && sum.coolest !== sum.warmest ? b2`<div class="chip">Più fredda: <b style="color:${TEMP_COLOR.cool}">${shortName(sum.coolest.room)} ${fmtNum(sum.coolest.t)} °C</b></div>` : A}
+          ${sum.humid.map((h3) => b2`<div class="chip bad">Umidità alta: <b>${shortName(h3.room)} ${Math.round(h3.h)} %</b></div>`)}
           </div>
         </div>
         <div class="area" style="--n:${values.length}">
@@ -3318,8 +3318,8 @@ var ImpiantoRoomsCard = class extends i4 {
       grid-template-columns: repeat(var(--n), minmax(0, 1fr));
       gap: 6px;
       flex: 1;
-      min-height: 150px;
-      margin-top: 14px;
+      min-height: 112px;
+      margin-top: 12px;
     }
     .col {
       display: grid;
@@ -3341,7 +3341,7 @@ var ImpiantoRoomsCard = class extends i4 {
     .plot {
       width: 100%;
       height: 100%;
-      min-height: 96px;
+      min-height: 70px;
       display: flex;
       align-items: flex-end;
       justify-content: center;
@@ -3358,6 +3358,8 @@ var ImpiantoRoomsCard = class extends i4 {
       font-weight: 700;
       font-size: 13px;
       min-height: 10px;
+      position: relative;
+      z-index: 1;
     }
     .hum {
       margin-top: 6px;
@@ -3383,7 +3385,7 @@ var ImpiantoRoomsCard = class extends i4 {
       border-top: 2px dashed var(--secondary-text-color);
       opacity: 0.8;
       pointer-events: none;
-      z-index: 1;
+      z-index: 0;
     }
     .tline span {
       position: absolute;
@@ -8876,7 +8878,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.3";
+var VERSION = "0.5.4";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

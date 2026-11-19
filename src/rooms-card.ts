@@ -121,11 +121,11 @@ export class ImpiantoRoomsCard extends LitElement {
         <div class="head">
           <h3>${this._config.title ?? "Stanze"}</h3>
           <div class="sum">
-          ${sum.warmest ? html`<div class="chip">Più calda: <b style="color:${TEMP_COLOR.warm}">${sum.warmest.room.name} ${fmtNum(sum.warmest.t)} °C</b></div>` : nothing}
+          ${sum.warmest ? html`<div class="chip">Più calda: <b style="color:${TEMP_COLOR.warm}">${shortName(sum.warmest.room)} ${fmtNum(sum.warmest.t)} °C</b></div>` : nothing}
           ${sum.coolest && sum.coolest !== sum.warmest
-            ? html`<div class="chip">Più fredda: <b style="color:${TEMP_COLOR.cool}">${sum.coolest.room.name} ${fmtNum(sum.coolest.t)} °C</b></div>`
+            ? html`<div class="chip">Più fredda: <b style="color:${TEMP_COLOR.cool}">${shortName(sum.coolest.room)} ${fmtNum(sum.coolest.t)} °C</b></div>`
             : nothing}
-          ${sum.humid.map((h) => html`<div class="chip bad">Umidità alta: <b>${h.room.name} ${Math.round(h.h as number)} %</b></div>`)}
+          ${sum.humid.map((h) => html`<div class="chip bad">Umidità alta: <b>${shortName(h.room)} ${Math.round(h.h as number)} %</b></div>`)}
           </div>
         </div>
         <div class="area" style="--n:${values.length}">
@@ -200,8 +200,8 @@ export class ImpiantoRoomsCard extends LitElement {
       grid-template-columns: repeat(var(--n), minmax(0, 1fr));
       gap: 6px;
       flex: 1;
-      min-height: 150px;
-      margin-top: 14px;
+      min-height: 112px;
+      margin-top: 12px;
     }
     .col {
       display: grid;
@@ -223,7 +223,7 @@ export class ImpiantoRoomsCard extends LitElement {
     .plot {
       width: 100%;
       height: 100%;
-      min-height: 96px;
+      min-height: 70px;
       display: flex;
       align-items: flex-end;
       justify-content: center;
@@ -240,6 +240,8 @@ export class ImpiantoRoomsCard extends LitElement {
       font-weight: 700;
       font-size: 13px;
       min-height: 10px;
+      position: relative;
+      z-index: 1;
     }
     .hum {
       margin-top: 6px;
@@ -265,7 +267,7 @@ export class ImpiantoRoomsCard extends LitElement {
       border-top: 2px dashed var(--secondary-text-color);
       opacity: 0.8;
       pointer-events: none;
-      z-index: 1;
+      z-index: 0;
     }
     .tline span {
       position: absolute;
