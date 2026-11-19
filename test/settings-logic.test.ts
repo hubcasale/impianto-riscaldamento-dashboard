@@ -306,3 +306,63 @@ test("preferenze: blocco Accumulo CLESS con l'interruttore generale, la correzio
   // senza il pacchetto il blocco non compare
   assert.equal(buildSettingsView({}).some((s) => s.id === "cless"), false);
 });
+
+// ---------------------------------------------------------------- modo CLESS: blocchi nascosti, testi diversi, gestione dall'accumulo
+const CLESS_ON = { "input_boolean.impianto_modo_cless": st("on") };
+const NUM = (v: string, extra: Record<string, unknown> = {}) => st(v, { min: 30, max: 75, step: 1, unit_of_measurement: "°C", ...extra });
+const ACC = {
+  "input_boolean.caldaia_accumulo_attivo": st("on"),
+  "input_number.caldaia_accumulo_t_spegni": NUM("55"),
+  "input_number.caldaia_accumulo_t_accendi": NUM("53"),
+};
+const VECCHI = {
+  "input_boolean.caldaia_salvaguardia_attiva": st("on"),
+  "input_number.caldaia_salvaguardia_docce_min": NUM("3", { min: 1, max: 8 }),
+  "input_number.caldaia_acs_t_accendi": NUM("55"),
+  "input_boolean.caldaia_integrazione_blocco_attivo": st("on"),
+  "input_number.caldaia_integrazione_temp_max": NUM("55"),
+};
+
+test("CLESS acceso: salvaguardia, richiesta di acqua calda e pompa di integrazione spariscono", () => {
+  const ids = (states: Record<string, ReturnType<typeof st>>) => buildSettingsView(states).map((x) => x.id);
+  assert.deepEqual(ids({ ...VECCHI }).sort(), ["acs", "integrazione", "partenze"]);
+  assert.deepEqual(ids({ ...VECCHI, ...CLESS_ON }), ["cless"]); // resta solo il blocco del modo CLESS
+});
+
+test("gestione dall'accumulo: compare solo col CLESS acceso, con interruttore e due soglie", () => {
+  assert.deepEqual(buildSettingsView({ ...ACC }).map((x) => x.id), []);
+  const v = buildSettingsView({ ...ACC, ...CLESS_ON }).find((x) => x.id === "accumulo")!;
+  assert.equal(v.title, "Gestione dall'accumulo");
+  assert.equal(v.group, "riscaldamento");
+  assert.equal(v.master?.entity, "input_boolean.caldaia_accumulo_attivo");
+  assert.deepEqual(v.rows.map((r) => r.entity), ["input_number.caldaia_accumulo_t_spegni", "input_number.caldaia_accumulo_t_accendi"]);
+  assert.match(v.summary, /non riparte da 55 °C, riaccende sotto 53 °C/);
+  assert.match(v.notes[0], /si annulla/);
+  assert.equal(v.notes.length, 1);
+});
+
+test("gestione dall'accumulo: spenta dice che decide la caldaia, soglie invertite avvisano", () => {
+  const off = buildSettingsView({ ...ACC, "input_boolean.caldaia_accumulo_attivo": st("off"), ...CLESS_ON }).find((x) => x.id === "accumulo")!;
+  assert.match(off.summary, /Disattivata/);
+  assert.deepEqual(off.notes, []);
+  const inv = buildSettingsView({ ...ACC, "input_number.caldaia_accumulo_t_accendi": NUM("56"), ...CLESS_ON }).find((x) => x.id === "accumulo")!;
+  assert.equal(inv.notes.length, 2);
+  assert.match(inv.notes[1], /più bassa/);
+});
+
+test("caldaia: col CLESS il set boiler è «Set boiler (sonda S. BOILER)» e l'acqua ha la nota sull'isteresi", () => {
+  const base = {
+    "climate.casale_acqua": st("heat", { temperature: 60, min_temp: 50, max_temp: 75, target_temp_step: 1 }),
+    "number.casale_setpoint_boiler": st("45", { min: 45, max: 70, step: 1, unit_of_measurement: "°C" }),
+  };
+  const vecchio = buildSettingsView(base)[0];
+  assert.equal(vecchio.rows[1].label, "Setpoint del puffer da 50 litri");
+  assert.match(vecchio.summary, /puffer 45 °C/);
+  const cless = buildSettingsView({ ...base, ...CLESS_ON })[0];
+  assert.equal(cless.cless, true);
+  assert.equal(cless.rows[1].label, "Set boiler (sonda S. BOILER)");
+  assert.match(cless.summary, /Acqua 60 °C · set boiler 45 °C/);
+  assert.match(cless.rows[0].hint ?? "", /isteresi/);
+  assert.match(cless.help.what, /S\. BOILER/);
+  assert.doesNotMatch(cless.rows[1].help?.what ?? "", /50 litri/);
+});

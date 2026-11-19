@@ -643,6 +643,7 @@ var SETTINGS_GROUPS = [
   { id: "casa", title: "Quando esci di casa" },
   { id: "taratura", title: "Taratura", note: "Valori che si cambiano di rado: con quelli giusti non serve toccarli." }
 ];
+var CLESS_MODE_ENTITY = "input_boolean.impianto_modo_cless";
 var H2 = (what, when, suggested) => ({ what, when, ...suggested ? { suggested } : {} });
 var SETTINGS_SECTIONS = [
   {
@@ -654,20 +655,43 @@ var SETTINGS_SECTIONS = [
       "Le temperature che la Polygon deve raggiungere: l'acqua di riscaldamento e il puffer da 50 litri che serve l'acqua calda.",
       "Cambiale solo se vuoi una casa pi\xF9 calda o pi\xF9 acqua calda; i programmi della scheda di programmazione hanno i loro valori."
     ),
+    cless: {
+      help: H2(
+        "Le temperature che la Polygon deve raggiungere: il target dell'acqua della caldaia e la soglia della sonda S. BOILER dell'accumulo.",
+        "Cambiale solo se vuoi pi\xF9 calore a ogni accensione o pi\xF9 acqua calda; i programmi della scheda di programmazione hanno i loro valori."
+      )
+    },
     fields: [
       {
         kind: "climate",
         entity: "climate.casale_acqua",
         label: "Temperatura dell'acqua della caldaia",
         hint: "Setpoint dell'acqua di riscaldamento. I programmi della scheda di programmazione hanno i loro valori.",
-        help: H2("Il setpoint dell'acqua di riscaldamento della Polygon.", "Quando la casa \xE8 troppo fredda o troppo calda con i termosifoni.", "Quello che usi di solito nei programmi.")
+        help: H2("Il setpoint dell'acqua di riscaldamento della Polygon.", "Quando la casa \xE8 troppo fredda o troppo calda con i termosifoni.", "Quello che usi di solito nei programmi."),
+        cless: {
+          hint: "Target dell'acqua della caldaia: si ferma in ECO STOP a target + 5 \xB0C e riparte da sola a target \u2212 isteresi (l'isteresi si imposta sulla caldaia).",
+          help: H2(
+            "Il target dell'acqua della Polygon. In ECO STOP la caldaia si ferma quando l'acqua arriva a circa 5 \xB0C sopra il target e riparte da sola quando scende a target meno l'isteresi, che si imposta sulla caldaia.",
+            "Per scaldare di pi\xF9 l'accumulo a ogni accensione (target pi\xF9 alto) o per accendere meno spesso. Le ripartenze con l'accumulo caldo le governa il blocco \xABGestione dall'accumulo\xBB.",
+            "60 \xB0C con isteresi 20 \xB0C: riparte da sola a circa 40 \xB0C."
+          )
+        }
       },
       {
         kind: "number",
         entity: "number.casale_setpoint_boiler",
         label: "Setpoint del puffer da 50 litri",
         hint: "Setpoint boiler della Polygon (consenso per l'acqua calda sanitaria).",
-        help: H2("Il setpoint boiler della Polygon: sotto questa temperatura il puffer chiede calore per l'acqua calda sanitaria.", "Alzalo se l'acqua calda finisce presto, abbassalo per consumare meno pellet.")
+        help: H2("Il setpoint boiler della Polygon: sotto questa temperatura il puffer chiede calore per l'acqua calda sanitaria.", "Alzalo se l'acqua calda finisce presto, abbassalo per consumare meno pellet."),
+        cless: {
+          label: "Set boiler (sonda S. BOILER)",
+          hint: "Soglia della sonda S. BOILER sull'accumulo, impostata sulla caldaia. La gestione dall'accumulo ha le sue soglie.",
+          help: H2(
+            "Il \xABsetpoint boiler\xBB della Polygon: la soglia della sonda S. BOILER, quella dell'acqua calda sanitaria nell'accumulo. Non \xE8 la soglia con cui la gestione dall'accumulo ferma o riaccende la caldaia.",
+            "Come rete di sicurezza: sotto questa temperatura (meno un margine) la caldaia chiede calore da sola.",
+            "45\u201350 \xB0C."
+          )
+        }
       }
     ]
   },
@@ -724,8 +748,51 @@ var SETTINGS_SECTIONS = [
     ]
   },
   {
+    id: "accumulo",
+    group: "riscaldamento",
+    master: "input_boolean.caldaia_accumulo_attivo",
+    icon: "mdi:water-boiler-auto",
+    title: "Gestione dall'accumulo",
+    onlyCless: true,
+    help: H2(
+      "Decide le ripartenze della caldaia dalla sonda S. BOILER dell'accumulo e non dall'acqua della caldaia: se la caldaia riparte da sola con l'accumulo ancora caldo la partenza si annulla; spenta cos\xEC, si riaccende quando l'accumulo si raffredda.",
+      "Per far accendere la caldaia meno spesso, solo quando l'accumulo ha davvero bisogno di calore. Disattivalo per lasciare le ripartenze alla caldaia.",
+      "Non lasciar ripartire da 55 \xB0C, riaccendi sotto 53 \xB0C."
+    ),
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_accumulo_attivo",
+        label: "Gestione dall'accumulo",
+        hint: "Acceso: la caldaia riparte solo quando S. BOILER lo chiede. Spento: decide la caldaia.",
+        help: H2("Interruttore generale della gestione delle ripartenze dall'accumulo.", "Spegnilo se vuoi che la caldaia riparta da sola come prima.")
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_accumulo_t_spegni",
+        label: "Non farla ripartire se S. BOILER \xE8 almeno",
+        help: H2(
+          "Se la caldaia prova a ripartire da sola e la sonda S. BOILER \xE8 gi\xE0 a questa temperatura o pi\xF9, la partenza si annulla.",
+          "Alzala se vuoi che l'accumulo si scaldi di pi\xF9 prima di una ripartenza, abbassala per accendere pi\xF9 spesso. Deve restare sopra la soglia di riaccensione.",
+          "55 \xB0C."
+        )
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_accumulo_t_accendi",
+        label: "Riaccendila se S. BOILER scende sotto",
+        help: H2(
+          "Con la caldaia spenta dalla gestione, si riaccende quando S. BOILER scende sotto questa temperatura.",
+          "Alzala se l'acqua calda finisce presto, abbassala per accendere meno. L'acqua calda sanitaria vuole almeno 50\u201355 \xB0C in cima (S3, circa 6 K sopra S. BOILER).",
+          "53 \xB0C."
+        )
+      }
+    ]
+  },
+  {
     id: "partenze",
     group: "riscaldamento",
+    hideInCless: true,
     master: "input_boolean.caldaia_salvaguardia_attiva",
     icon: "mdi:shield-check",
     title: "Salvaguardia accensioni",
@@ -760,6 +827,7 @@ var SETTINGS_SECTIONS = [
   {
     id: "acs",
     group: "riscaldamento",
+    hideInCless: true,
     icon: "mdi:water-boiler",
     title: "Richiesta di acqua calda",
     help: H2(
@@ -800,6 +868,7 @@ var SETTINGS_SECTIONS = [
   {
     id: "integrazione",
     group: "pompe",
+    hideInCless: true,
     icon: "mdi:pump",
     title: "Pompa di integrazione",
     help: H2(
@@ -1035,7 +1104,9 @@ function firstNumber(states, ids) {
 }
 function buildSettingsView(states, sections = SETTINGS_SECTIONS) {
   const out = [];
+  const cless = states[CLESS_MODE_ENTITY]?.state === "on";
   for (const sec of sections) {
+    if (cless ? sec.hideInCless : sec.onlyCless) continue;
     const all = [];
     for (const f3 of sec.fields) {
       const st = states[f3.entity];
@@ -1051,9 +1122,9 @@ function buildSettingsView(states, sections = SETTINGS_SECTIONS) {
         kind: f3.kind,
         entity: f3.entity,
         domain: f3.entity.split(".")[0],
-        label: f3.label,
-        hint: f3.hint,
-        help: f3.help,
+        label: cless && f3.cless?.label || f3.label,
+        hint: cless && f3.cless?.hint !== void 0 ? f3.cless.hint : f3.hint,
+        help: cless && f3.cless?.help || f3.help,
         on: st.state === "on",
         value,
         unit: isClimate ? "\xB0C" : String(st.attributes.unit_of_measurement ?? ""),
@@ -1070,9 +1141,10 @@ function buildSettingsView(states, sections = SETTINGS_SECTIONS) {
       id: sec.id,
       group: sec.group,
       icon: sec.icon,
-      title: sec.title,
+      title: cless && sec.cless?.title || sec.title,
       advanced: !!sec.advanced,
-      help: sec.help,
+      help: cless && sec.cless?.help || sec.help,
+      cless,
       master,
       rows,
       summary: "",
@@ -1139,7 +1211,9 @@ function sectionSummaryText(sec, rows) {
   if (sec.master?.unavailable) return "Non disponibile";
   switch (sec.id) {
     case "caldaia":
-      return `Acqua ${italianValue(g2("climate.casale_acqua"))} \xB7 puffer ${italianValue(g2("number.casale_setpoint_boiler"))}`;
+      return `Acqua ${italianValue(g2("climate.casale_acqua"))} \xB7 ${sec.cless ? "set boiler" : "puffer"} ${italianValue(g2("number.casale_setpoint_boiler"))}`;
+    case "accumulo":
+      return sec.master?.on ? `Attiva: non riparte da ${italianValue(g2("input_number.caldaia_accumulo_t_spegni"))}, riaccende sotto ${italianValue(g2("input_number.caldaia_accumulo_t_accendi"))}` : "Disattivata: la caldaia riparte quando decide lei";
     case "cless":
       return sec.master?.on ? "Acceso: accumulo CLESS, senza puffer n\xE9 integrazione" : "Spento: boiler solare da 200 L e puffer";
     case "partenze":
@@ -1180,8 +1254,18 @@ function sectionNotes(sec, rows) {
   }
   if (sec.id === "cless") {
     return [
-      sec.master?.on ? "La scheda mostra l'accumulo CLESS. La salvaguardia delle partenze, il blocco della pompa di integrazione e il tempo per l'acqua pronta sono fermi: la caldaia resta accesa per l'acqua calda." : "Sono attive le regole del boiler solare e del puffer da 50 litri."
+      sec.master?.on ? "La scheda mostra l'accumulo CLESS. La salvaguardia delle partenze, il blocco della pompa di integrazione e il tempo per l'acqua pronta sono fermi e nascosti da queste preferenze: le ripartenze della caldaia le decide il blocco \xABGestione dall'accumulo\xBB, oppure la caldaia da sola." : "Sono attive le regole del boiler solare e del puffer da 50 litri."
     ];
+  }
+  if (sec.id === "accumulo") {
+    const spegni = g2("input_number.caldaia_accumulo_t_spegni");
+    const accendi = g2("input_number.caldaia_accumulo_t_accendi");
+    if (!sec.master?.on || spegni?.value == null || accendi?.value == null) return [];
+    const out = [
+      `Se la caldaia riparte da sola con S. BOILER a ${bare(spegni)} \xB0C o pi\xF9 la partenza si annulla; spenta cos\xEC, si riaccende sotto ${bare(accendi)} \xB0C, o se serve riscaldamento con S. BOILER sotto ${bare(spegni)} \xB0C.`
+    ];
+    if (accendi.value >= spegni.value) out.push("Attenzione: la soglia di riaccensione dovrebbe essere pi\xF9 bassa di quella di non-ripartenza.");
+    return out;
   }
   if (sec.id === "assenza") {
     const min = g2("input_number.caldaia_assenza_minuti");
@@ -9069,7 +9153,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.0";
+var VERSION = "0.5.1";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

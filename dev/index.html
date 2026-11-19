@@ -109,6 +109,10 @@ set("input_number.boiler_solare_delta_basso", 0, { min: -20, max: 20, step: 0.1,
 set("input_number.boiler_solare_t_minima_zona", q.get("cless") ? 47 : 38, { min: 30, max: 60, step: 1, unit_of_measurement: "°C" });
 set("input_boolean.impianto_cless_avviso_spenta", "on");
 set("input_number.impianto_cless_spenta_minuti", 20, { min: 5, max: 240, step: 5, unit_of_measurement: "min" });
+// gestione dall'accumulo (ha-packages/caldaia_accumulo.yaml)
+set("input_boolean.caldaia_accumulo_attivo", q.get("accumulo") === "off" ? "off" : "on");
+set("input_number.caldaia_accumulo_t_spegni", 55, { min: 40, max: 75, step: 1, unit_of_measurement: "°C" });
+set("input_number.caldaia_accumulo_t_accendi", 53, { min: 35, max: 70, step: 1, unit_of_measurement: "°C" });
 set("sensor.casale_allarme", "____");
 set("number.casale_setpoint_boiler", 45, { min: 45, max: 70, step: 1, unit_of_measurement: "°C" });
 set("climate.casale_acqua", "heat", { temperature: 65, min_temp: 50, max_temp: 75, target_temp_step: 1 });
@@ -431,6 +435,8 @@ for (const [tag, cfg] of [
 }
 push();
 if (q.get("impostazioni")) setTimeout(() => cards[0]._openSettings(), 200);
+// ?apri_blocco=testo: apre nelle preferenze il blocco il cui titolo contiene il testo
+if (q.get("apri_blocco")) setTimeout(() => { const d = document.querySelector("impianto-settings-dialog"); const h = [...d.shadowRoot.querySelectorAll(".bh")].find((e) => e.textContent.includes(q.get("apri_blocco"))); h && h.click(); }, 900);
 if (q.get("blocco")) setTimeout(() => { document.querySelector("impianto-settings-dialog")._open = q.get("blocco"); }, 500);
 if (q.get("scroll")) setTimeout(() => { const b = document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".body"); b.scrollTop = b.scrollHeight; }, 1000);
 if (q.get("aiuto")) setTimeout(() => { document.querySelector("impianto-settings-dialog").shadowRoot.querySelector(".block.open .bb .i, .block.open .bh .i").click(); }, 900);

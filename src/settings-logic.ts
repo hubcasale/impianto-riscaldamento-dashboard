@@ -17,6 +17,8 @@ export interface FieldDef {
   label: string;
   hint?: string;
   help?: HelpDef;
+  /** testi diversi col modo CLESS acceso (quelli non indicati restano gli stessi) */
+  cless?: { label?: string; hint?: string; help?: HelpDef };
 }
 
 /** Gruppi in cui la finestra raccoglie i blocchi, nell'ordine in cui compaiono. */
@@ -42,7 +44,16 @@ export interface SectionDef {
   /** spiegazione del blocco intero */
   help: HelpDef;
   fields: FieldDef[];
+  /** blocco che col modo CLESS acceso non fa niente: non si mostra */
+  hideInCless?: boolean;
+  /** blocco che esiste solo col modo CLESS acceso */
+  onlyCless?: boolean;
+  /** titolo e spiegazione diversi col modo CLESS acceso */
+  cless?: { title?: string; help?: HelpDef };
 }
+
+/** Interruttore del modo CLESS: da lui dipende quali blocchi e quali testi compaiono. */
+export const CLESS_MODE_ENTITY = "input_boolean.impianto_modo_cless";
 
 const H = (what: string, when: string, suggested?: string): HelpDef => ({ what, when, ...(suggested ? { suggested } : {}) });
 
@@ -56,6 +67,12 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
       "Le temperature che la Polygon deve raggiungere: l'acqua di riscaldamento e il puffer da 50 litri che serve l'acqua calda.",
       "Cambiale solo se vuoi una casa più calda o più acqua calda; i programmi della scheda di programmazione hanno i loro valori.",
     ),
+    cless: {
+      help: H(
+        "Le temperature che la Polygon deve raggiungere: il target dell'acqua della caldaia e la soglia della sonda S. BOILER dell'accumulo.",
+        "Cambiale solo se vuoi più calore a ogni accensione o più acqua calda; i programmi della scheda di programmazione hanno i loro valori.",
+      ),
+    },
     fields: [
       {
         kind: "climate",
@@ -63,6 +80,14 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
         label: "Temperatura dell'acqua della caldaia",
         hint: "Setpoint dell'acqua di riscaldamento. I programmi della scheda di programmazione hanno i loro valori.",
         help: H("Il setpoint dell'acqua di riscaldamento della Polygon.", "Quando la casa è troppo fredda o troppo calda con i termosifoni.", "Quello che usi di solito nei programmi."),
+        cless: {
+          hint: "Target dell'acqua della caldaia: si ferma in ECO STOP a target + 5 °C e riparte da sola a target − isteresi (l'isteresi si imposta sulla caldaia).",
+          help: H(
+            "Il target dell'acqua della Polygon. In ECO STOP la caldaia si ferma quando l'acqua arriva a circa 5 °C sopra il target e riparte da sola quando scende a target meno l'isteresi, che si imposta sulla caldaia.",
+            "Per scaldare di più l'accumulo a ogni accensione (target più alto) o per accendere meno spesso. Le ripartenze con l'accumulo caldo le governa il blocco «Gestione dall'accumulo».",
+            "60 °C con isteresi 20 °C: riparte da sola a circa 40 °C.",
+          ),
+        },
       },
       {
         kind: "number",
@@ -70,6 +95,15 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
         label: "Setpoint del puffer da 50 litri",
         hint: "Setpoint boiler della Polygon (consenso per l'acqua calda sanitaria).",
         help: H("Il setpoint boiler della Polygon: sotto questa temperatura il puffer chiede calore per l'acqua calda sanitaria.", "Alzalo se l'acqua calda finisce presto, abbassalo per consumare meno pellet."),
+        cless: {
+          label: "Set boiler (sonda S. BOILER)",
+          hint: "Soglia della sonda S. BOILER sull'accumulo, impostata sulla caldaia. La gestione dall'accumulo ha le sue soglie.",
+          help: H(
+            "Il «setpoint boiler» della Polygon: la soglia della sonda S. BOILER, quella dell'acqua calda sanitaria nell'accumulo. Non è la soglia con cui la gestione dall'accumulo ferma o riaccende la caldaia.",
+            "Come rete di sicurezza: sotto questa temperatura (meno un margine) la caldaia chiede calore da sola.",
+            "45–50 °C.",
+          ),
+        },
       },
     ],
   },
@@ -126,8 +160,51 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
     ],
   },
   {
+    id: "accumulo",
+    group: "riscaldamento",
+    master: "input_boolean.caldaia_accumulo_attivo",
+    icon: "mdi:water-boiler-auto",
+    title: "Gestione dall'accumulo",
+    onlyCless: true,
+    help: H(
+      "Decide le ripartenze della caldaia dalla sonda S. BOILER dell'accumulo e non dall'acqua della caldaia: se la caldaia riparte da sola con l'accumulo ancora caldo la partenza si annulla; spenta così, si riaccende quando l'accumulo si raffredda.",
+      "Per far accendere la caldaia meno spesso, solo quando l'accumulo ha davvero bisogno di calore. Disattivalo per lasciare le ripartenze alla caldaia.",
+      "Non lasciar ripartire da 55 °C, riaccendi sotto 53 °C.",
+    ),
+    fields: [
+      {
+        kind: "toggle",
+        entity: "input_boolean.caldaia_accumulo_attivo",
+        label: "Gestione dall'accumulo",
+        hint: "Acceso: la caldaia riparte solo quando S. BOILER lo chiede. Spento: decide la caldaia.",
+        help: H("Interruttore generale della gestione delle ripartenze dall'accumulo.", "Spegnilo se vuoi che la caldaia riparta da sola come prima."),
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_accumulo_t_spegni",
+        label: "Non farla ripartire se S. BOILER è almeno",
+        help: H(
+          "Se la caldaia prova a ripartire da sola e la sonda S. BOILER è già a questa temperatura o più, la partenza si annulla.",
+          "Alzala se vuoi che l'accumulo si scaldi di più prima di una ripartenza, abbassala per accendere più spesso. Deve restare sopra la soglia di riaccensione.",
+          "55 °C.",
+        ),
+      },
+      {
+        kind: "number",
+        entity: "input_number.caldaia_accumulo_t_accendi",
+        label: "Riaccendila se S. BOILER scende sotto",
+        help: H(
+          "Con la caldaia spenta dalla gestione, si riaccende quando S. BOILER scende sotto questa temperatura.",
+          "Alzala se l'acqua calda finisce presto, abbassala per accendere meno. L'acqua calda sanitaria vuole almeno 50–55 °C in cima (S3, circa 6 K sopra S. BOILER).",
+          "53 °C.",
+        ),
+      },
+    ],
+  },
+  {
     id: "partenze",
     group: "riscaldamento",
+    hideInCless: true,
     master: "input_boolean.caldaia_salvaguardia_attiva",
     icon: "mdi:shield-check",
     title: "Salvaguardia accensioni",
@@ -162,6 +239,7 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
   {
     id: "acs",
     group: "riscaldamento",
+    hideInCless: true,
     icon: "mdi:water-boiler",
     title: "Richiesta di acqua calda",
     help: H(
@@ -202,6 +280,7 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
   {
     id: "integrazione",
     group: "pompe",
+    hideInCless: true,
     icon: "mdi:pump",
     title: "Pompa di integrazione",
     help: H(
@@ -452,6 +531,8 @@ export interface RowView {
 
 export interface SectionView {
   id: string;
+  /** modo CLESS acceso (cambia i testi di alcuni blocchi) */
+  cless?: boolean;
   group: string;
   icon: string;
   title: string;
@@ -494,7 +575,10 @@ function firstNumber(states: Record<string, StateLike | undefined>, ids: string[
  */
 export function buildSettingsView(states: Record<string, StateLike | undefined>, sections: SectionDef[] = SETTINGS_SECTIONS): SectionView[] {
   const out: SectionView[] = [];
+  const cless = states[CLESS_MODE_ENTITY]?.state === "on";
   for (const sec of sections) {
+    // col modo CLESS acceso alcuni blocchi non fanno niente (spariscono) e uno esiste solo allora
+    if (cless ? sec.hideInCless : sec.onlyCless) continue;
     const all: RowView[] = [];
     for (const f of sec.fields) {
       const st = states[f.entity];
@@ -510,9 +594,9 @@ export function buildSettingsView(states: Record<string, StateLike | undefined>,
         kind: f.kind,
         entity: f.entity,
         domain: f.entity.split(".")[0],
-        label: f.label,
-        hint: f.hint,
-        help: f.help,
+        label: (cless && f.cless?.label) || f.label,
+        hint: cless && f.cless?.hint !== undefined ? f.cless.hint : f.hint,
+        help: (cless && f.cless?.help) || f.help,
         on: st.state === "on",
         value,
         unit: isClimate ? "°C" : String(st.attributes.unit_of_measurement ?? ""),
@@ -529,9 +613,10 @@ export function buildSettingsView(states: Record<string, StateLike | undefined>,
       id: sec.id,
       group: sec.group,
       icon: sec.icon,
-      title: sec.title,
+      title: (cless && sec.cless?.title) || sec.title,
       advanced: !!sec.advanced,
-      help: sec.help,
+      help: (cless && sec.cless?.help) || sec.help,
+      cless,
       master,
       rows,
       summary: "",
@@ -624,12 +709,16 @@ function bare(row: RowView | undefined): string {
 }
 
 /** Riga di riepilogo sotto il titolo di un blocco: i valori scelti, a parole. */
-export function sectionSummaryText(sec: Pick<SectionView, "id" | "master">, rows: RowView[]): string {
+export function sectionSummaryText(sec: Pick<SectionView, "id" | "master" | "cless">, rows: RowView[]): string {
   const g = (e: string) => byEntity(rows, e);
   if (sec.master?.unavailable) return "Non disponibile";
   switch (sec.id) {
     case "caldaia":
-      return `Acqua ${italianValue(g("climate.casale_acqua"))} · puffer ${italianValue(g("number.casale_setpoint_boiler"))}`;
+      return `Acqua ${italianValue(g("climate.casale_acqua"))} · ${sec.cless ? "set boiler" : "puffer"} ${italianValue(g("number.casale_setpoint_boiler"))}`;
+    case "accumulo":
+      return sec.master?.on
+        ? `Attiva: non riparte da ${italianValue(g("input_number.caldaia_accumulo_t_spegni"))}, riaccende sotto ${italianValue(g("input_number.caldaia_accumulo_t_accendi"))}`
+        : "Disattivata: la caldaia riparte quando decide lei";
     case "cless":
       return sec.master?.on ? "Acceso: accumulo CLESS, senza puffer né integrazione" : "Spento: boiler solare da 200 L e puffer";
     case "partenze":
@@ -663,7 +752,7 @@ export function sectionSummaryText(sec: Pick<SectionView, "id" | "master">, rows
 }
 
 /** Frasi che dicono che cosa succede con i valori scelti (sotto la spiegazione del blocco). */
-export function sectionNotes(sec: Pick<SectionView, "id" | "master">, rows: RowView[]): string[] {
+export function sectionNotes(sec: Pick<SectionView, "id" | "master" | "cless">, rows: RowView[]): string[] {
   const g = (e: string) => byEntity(rows, e);
   if (sec.id === "integrazione") {
     const max = g("input_number.caldaia_integrazione_temp_max");
@@ -675,9 +764,19 @@ export function sectionNotes(sec: Pick<SectionView, "id" | "master">, rows: RowV
   if (sec.id === "cless") {
     return [
       sec.master?.on
-        ? "La scheda mostra l'accumulo CLESS. La salvaguardia delle partenze, il blocco della pompa di integrazione e il tempo per l'acqua pronta sono fermi: la caldaia resta accesa per l'acqua calda."
+        ? "La scheda mostra l'accumulo CLESS. La salvaguardia delle partenze, il blocco della pompa di integrazione e il tempo per l'acqua pronta sono fermi e nascosti da queste preferenze: le ripartenze della caldaia le decide il blocco «Gestione dall'accumulo», oppure la caldaia da sola."
         : "Sono attive le regole del boiler solare e del puffer da 50 litri.",
     ];
+  }
+  if (sec.id === "accumulo") {
+    const spegni = g("input_number.caldaia_accumulo_t_spegni");
+    const accendi = g("input_number.caldaia_accumulo_t_accendi");
+    if (!sec.master?.on || spegni?.value == null || accendi?.value == null) return [];
+    const out = [
+      `Se la caldaia riparte da sola con S. BOILER a ${bare(spegni)} °C o più la partenza si annulla; spenta così, si riaccende sotto ${bare(accendi)} °C, o se serve riscaldamento con S. BOILER sotto ${bare(spegni)} °C.`,
+    ];
+    if (accendi.value >= spegni.value) out.push("Attenzione: la soglia di riaccensione dovrebbe essere più bassa di quella di non-ripartenza.");
+    return out;
   }
   if (sec.id === "assenza") {
     const min = g("input_number.caldaia_assenza_minuti");
