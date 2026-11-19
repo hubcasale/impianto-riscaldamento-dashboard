@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SETTINGS_GROUPS, SETTINGS_SECTIONS, applyPending, buildSettingsView, clampValue, stepValue, valueText, writeService } from "../src/settings-logic";
+import { SETTINGS_GROUPS, SETTINGS_SECTIONS, applyPending, buildSettingsView, choiceLabel, clampValue, selectService, stepValue, valueText, writeService } from "../src/settings-logic";
+import { seasonKey } from "../src/plant-logic";
 
 const st = (state: string, attributes: Record<string, unknown> = {}) => ({ state, attributes });
 
@@ -278,4 +279,32 @@ test("caldaia: col CLESS il set boiler è «Set boiler (sonda S. BOILER)» e l'a
   assert.match(cless.rows[0].hint ?? "", /isteresi/);
   assert.match(cless.help.what, /S\. BOILER/);
   assert.doesNotMatch(cless.rows[1].help?.what ?? "", /50 litri/);
+});
+
+test("stagione: voci tradotte, voce attuale e servizio di scrittura", () => {
+  const v = buildSettingsView({
+    "select.garage_casale_stagione": { state: "summer", attributes: { options: ["summer", "winter"] } },
+    "climate.casale_acqua": { state: "heat", attributes: { temperature: 65 } },
+  });
+  const sec = v.find((s) => s.id === "caldaia")!;
+  const row = sec.rows.find((r) => r.entity === "select.garage_casale_stagione")!;
+  assert.deepEqual(row.choices, [
+    { value: "summer", label: "Estate" },
+    { value: "winter", label: "Inverno" },
+  ]);
+  assert.equal(row.choice, "summer");
+  assert.equal(choiceLabel(row), "Estate");
+  assert.match(sec.summary, /· Estate$/);
+  assert.deepEqual(selectService(row, "winter"), { domain: "select", service: "select_option", data: { entity_id: "select.garage_casale_stagione", option: "winter" } });
+});
+
+test("stagione: stati in inglese con la maiuscola e stato non disponibile", () => {
+  const v = buildSettingsView({ "select.garage_casale_stagione": { state: "unavailable", attributes: { options: ["Summer", "Winter"] } } });
+  const row = v[0].rows[0];
+  assert.equal(row.choice, null);
+  assert.equal(row.unavailable, true);
+  assert.deepEqual(row.choices?.map((c) => c.label), ["Estate", "Inverno"]);
+  assert.equal(seasonKey("Winter"), "winter");
+  assert.equal(seasonKey("Estate"), "summer");
+  assert.equal(seasonKey("unknown"), null);
 });

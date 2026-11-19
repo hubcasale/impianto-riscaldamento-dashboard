@@ -1,8 +1,10 @@
 // Logica pura della finestra delle preferenze: quali impostazioni mostrare e come cambiarle.
 // Nessuna dipendenza da Lit o da Home Assistant, così si prova con node:test.
 
-/** number: input_number o number; climate: temperatura obiettivo di un termostato (climate.set_temperature) */
-export type FieldKind = "toggle" | "number" | "climate";
+import { SEASON_LABEL, seasonKey } from "./plant-logic";
+
+/** number: input_number o number; climate: temperatura obiettivo di un termostato (climate.set_temperature); select: scelta tra poche voci (select.select_option) */
+export type FieldKind = "toggle" | "number" | "climate" | "select";
 
 /** Spiegazione che si apre toccando la "i": cosa fa, quando serve, valore consigliato (se c'è). */
 export interface HelpDef {
@@ -102,6 +104,16 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
             "45–50 °C.",
           ),
         },
+      },
+      {
+        kind: "select",
+        entity: "select.garage_casale_stagione",
+        label: "Stagione della caldaia",
+        hint: "Come sul display della caldaia: in Estate la valvola a tre vie resta sull'acqua calda sanitaria, in Inverno serve anche il riscaldamento.",
+        help: H(
+          "La stagione impostata sulla Polygon, la stessa del display. In Estate la valvola a tre vie resta sull'accumulo dell'acqua calda e la caldaia si ferma in ECO STOP quando la sonda S. BOILER raggiunge il Set boiler; in Inverno alterna acqua calda e riscaldamento.",
+          "A inizio e a fine stagione di riscaldamento. Ogni cambio scrive nella memoria della caldaia (EEPROM), che ha un limite di scritture: non serve cambiarla spesso.",
+        ),
       },
     ],
   },
@@ -398,6 +410,9 @@ export interface RowView {
   unavailable: boolean;
   /** il valore mostrato è quello appena scelto, la caldaia non l'ha ancora confermato */
   saving?: boolean;
+  /** select: le voci (value = testo da inviare a select.select_option) e quella attuale */
+  choices?: { value: string; label: string }[];
+  choice?: string | null;
 }
 
 export interface SectionView {
@@ -445,9 +460,12 @@ export function buildSettingsView(states: Record<string, StateLike | undefined>,
       if (isClimate && !unavailable && st.attributes.temperature !== null && st.attributes.temperature !== undefined && Number.isFinite(Number(st.attributes.temperature))) {
         value = Number(st.attributes.temperature);
       }
+      const options = f.kind === "select" && Array.isArray(st.attributes.options) ? (st.attributes.options as unknown[]).map(String) : [];
+      const choices = f.kind === "select" ? options.map((o) => ({ value: o, label: seasonKey(o) ? SEASON_LABEL[seasonKey(o)!] : o })) : undefined;
       all.push({
         kind: f.kind,
         entity: f.entity,
+        ...(choices ? { choices, choice: unavailable ? null : options.includes(st.state) ? st.state : null } : {}),
         domain: f.entity.split(".")[0],
         label: (cless && f.cless?.label) || f.label,
         hint: cless && f.cless?.hint !== undefined ? f.cless.hint : f.hint,
@@ -515,6 +533,16 @@ export function writeService(row: Pick<RowView, "domain" | "entity">, value: num
   return { domain: "input_number", service: "set_value", data: { entity_id: row.entity, value } };
 }
 
+/** Servizio che sceglie una voce di un select (la stagione della caldaia). */
+export function selectService(row: Pick<RowView, "entity">, option: string): { domain: string; service: string; data: Record<string, unknown> } {
+  return { domain: "select", service: "select_option", data: { entity_id: row.entity, option } };
+}
+
+/** Voce attuale di un select a parole («Estate»), o «–». */
+export function choiceLabel(row: RowView | undefined): string {
+  return row?.choices?.find((c) => c.value === row.choice)?.label ?? "–";
+}
+
 /** Valori appena scelti e non ancora confermati dall'impianto (la caldaia risponde via cloud dopo parecchi secondi). */
 export type PendingMap = Record<string, { value: number; until: number }>;
 
@@ -532,7 +560,7 @@ export function applyPending(sections: SectionView[], pending: PendingMap, now: 
     let touched = false;
     const rows = sec.rows.map((row) => {
       const p = pending[row.entity];
-      if (!p || row.kind === "toggle") return row;
+      if (!p || row.kind === "toggle" || row.kind === "select") return row;
       if (now >= p.until || row.value === p.value) {
         settled.push(row.entity);
         return row;
@@ -568,7 +596,7 @@ export function sectionSummaryText(sec: Pick<SectionView, "id" | "master" | "cle
   if (sec.master?.unavailable) return "Non disponibile";
   switch (sec.id) {
     case "caldaia":
-      return `Acqua ${italianValue(g("climate.casale_acqua"))} · ${sec.cless ? "set boiler" : "puffer"} ${italianValue(g("number.casale_setpoint_boiler"))}`;
+      return `Acqua ${italianValue(g("climate.casale_acqua"))} · ${sec.cless ? "set boiler" : "puffer"} ${italianValue(g("number.casale_setpoint_boiler"))}${g("select.garage_casale_stagione")?.choice ? ` · ${choiceLabel(g("select.garage_casale_stagione"))}` : ""}`;
     case "accumulo":
       return sec.master?.on
         ? `Attiva: non riparte da ${italianValue(g("input_number.caldaia_accumulo_t_spegni"))}, riaccende sotto ${italianValue(g("input_number.caldaia_accumulo_t_accendi"))}`

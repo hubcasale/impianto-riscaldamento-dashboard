@@ -24,7 +24,7 @@ import "./confirm-dialog";
 import { SECTIONS_USER_KEY, SECTION_KEYS, defaultSections, normalizeSections, sectionsToStore, toggleSection, visibleKeys, type SectionKey, type Sections } from "./sections-logic";
 import { summarize, type SummaryLine } from "./summary-logic";
 import { CLESS_MASK, CLESS_RENDER } from "./cless-render";
-import { DEFAULT_MODEL, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, sinceText, stoveLook, stovePumpRunning, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
+import { DEFAULT_MODEL, SEASON_LABEL, seasonKey, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, sinceText, stoveLook, stovePumpRunning, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
 const CARD_TAG = "impianto-overview-card";
 
@@ -47,6 +47,8 @@ export interface PlantEntities {
   collector_temp: string;
   puffer: string;
   stove_state: string;
+  /** stagione impostata sulla caldaia (Estate/Inverno), facoltativa */
+  season?: string;
   stove_water: string;
   smoke: string;
   flame: string;
@@ -155,6 +157,7 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   collector_temp: "sensor.solare_termico_t_collettore_stimata",
   puffer: "sensor.casale_temperatura_boiler",
   stove_state: "sensor.casale_stato",
+  season: "sensor.garage_casale_stagione",
   stove_water: "sensor.casale_temperatura_acqua",
   smoke: "sensor.casale_temperatura_fumi",
   flame: "sensor.casale_temperatura_fiamma",
@@ -1043,6 +1046,14 @@ export class ImpiantoOverviewCard extends LitElement {
     return html`<div class="chip ${v ? "yes" : ""}"><span>${label}</span><b>${v === null ? "–" : v ? "SÌ" : "NO"}</b></div>`;
   }
 
+  /** Stagione impostata sulla caldaia («Estate»/«Inverno»); non compare se il sensore non c'è. */
+  private _seasonChip() {
+    const id = this._e.season;
+    if (!id || !this.hass.states[id]) return nothing;
+    const key = seasonKey(this._s(id));
+    return html`<div class="chip season ${key ?? ""}"><span>Stagione</span><b>${key ? SEASON_LABEL[key] : "–"}</b></div>`;
+  }
+
   private _renderStove() {
     const e = this._e;
     const stateRaw = this._s(e.stove_state);
@@ -1105,6 +1116,7 @@ export class ImpiantoOverviewCard extends LitElement {
         <div class="chips">
           ${this._chip("Richiesta ACS", this._yes(e.request_acs))} ${this._chip("Riscaldamento", this._yes(e.request_heating))}
           ${this._chip("Consenso suggerito", this._yes(e.consent))}
+          ${this._seasonChip()}
         </div>
         <p class="look">${LOOK_LABEL[look]}</p>
       </section>

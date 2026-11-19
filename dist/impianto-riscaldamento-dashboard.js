@@ -636,6 +636,326 @@ function sectionsToStore(s4) {
   return { version: 1, sections: { ...s4 } };
 }
 
+// src/confirm-dialog.ts
+var TAG = "impianto-confirm-dialog";
+var ImpiantoConfirmDialog = class extends i4 {
+  constructor() {
+    super(...arguments);
+    this.heading = "";
+    this.lines = [];
+    this.confirmLabel = "Conferma";
+    this.cancelLabel = "Annulla";
+    this.danger = false;
+    this._onKey = (e5) => {
+      if (e5.key === "Escape") this._close();
+    };
+  }
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener("keydown", this._onKey);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    window.removeEventListener("keydown", this._onKey);
+  }
+  firstUpdated() {
+    this.renderRoot.querySelector("button.cancel")?.focus();
+  }
+  _close() {
+    this.dispatchEvent(new CustomEvent("closed"));
+    this.remove();
+  }
+  _confirm() {
+    this.dispatchEvent(new CustomEvent("confirmed"));
+    this._close();
+  }
+  render() {
+    return b2`
+      <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
+        <div class="panel" role="alertdialog" aria-modal="true" aria-label=${this.heading}>
+          <div class="title">${this.heading}</div>
+          ${this.lines.map((l3) => b2`<p>${l3}</p>`)}
+          <div class="row">
+            <button class="cancel" @click=${() => this._close()}>${this.cancelLabel}</button>
+            <button class=${this.danger ? "ok danger" : "ok"} @click=${() => this._confirm()}>${this.confirmLabel}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  static {
+    this.styles = i`
+    :host {
+      position: fixed;
+      inset: 0;
+      z-index: 10001;
+      color: var(--primary-text-color, #212121);
+      font-family: var(--paper-font-body1_-_font-family, Roboto, Helvetica, Arial, sans-serif);
+    }
+    .backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .panel {
+      width: 100%;
+      max-width: 420px;
+      background: var(--card-background-color, #fff);
+      border-radius: 16px;
+      padding: 20px 20px 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      box-sizing: border-box;
+    }
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    p {
+      margin: 8px 0 0;
+      font-size: 15px;
+      line-height: 1.4;
+      color: var(--secondary-text-color, #727272);
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    button {
+      flex: 1;
+      min-height: 52px;
+      border-radius: 14px;
+      font: inherit;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+    }
+    .cancel {
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.15));
+      color: inherit;
+    }
+    .ok {
+      background: var(--primary-color, #03a9f4);
+      border-color: transparent;
+      color: var(--text-primary-color, #fff);
+    }
+    .ok.danger {
+      background: #ef4444;
+    }
+    button:focus-visible {
+      outline: 3px solid var(--primary-text-color, #212121);
+      outline-offset: 2px;
+    }
+  `;
+  }
+};
+__decorateClass([
+  n4()
+], ImpiantoConfirmDialog.prototype, "heading", 2);
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoConfirmDialog.prototype, "lines", 2);
+__decorateClass([
+  n4()
+], ImpiantoConfirmDialog.prototype, "confirmLabel", 2);
+__decorateClass([
+  n4()
+], ImpiantoConfirmDialog.prototype, "cancelLabel", 2);
+__decorateClass([
+  n4({ type: Boolean })
+], ImpiantoConfirmDialog.prototype, "danger", 2);
+if (!customElements.get(TAG)) customElements.define(TAG, ImpiantoConfirmDialog);
+
+// src/plant-logic.ts
+var DEFAULT_MODEL = {
+  volume: 190,
+  topShare: 0.5,
+  mainsTemp: 15,
+  showerVolume: 40,
+  showerTemp: 38
+};
+function showersEstimate(top, bottom, m2) {
+  if (top === null) return null;
+  const span = m2.showerTemp - m2.mainsTemp;
+  if (span <= 0 || m2.showerVolume <= 0) return null;
+  const zones = [
+    [m2.volume * m2.topShare, top],
+    [m2.volume * (1 - m2.topShare), bottom ?? top]
+  ];
+  const floor = m2.coilMin ?? null;
+  let liters = 0;
+  for (const [v2, t3] of zones) {
+    if (t3 === null) continue;
+    if (floor !== null) {
+      if (t3 >= Math.max(floor, m2.showerTemp)) liters += v2 * (t3 - floor) / span;
+    } else if (t3 >= m2.showerTemp) liters += v2 * (t3 - m2.mainsTemp) / span;
+  }
+  return Math.floor(liters / m2.showerVolume);
+}
+function stoveLook(state) {
+  const s4 = (state ?? "").trim().toUpperCase();
+  if (["WORK", "LAVORO", "WORKING"].includes(s4)) return "work";
+  if (["START", "AVVIO", "ACCENSIONE", "IGNITION"].includes(s4)) return "start";
+  if (["WAIT", "ATTESA", "PRE-START"].includes(s4)) return "wait";
+  if (["STAND BY", "STANDBY", "STAND-BY"].includes(s4)) return "standby";
+  if (["STOP", "SPEGNIMENTO", "CLEANING", "PULIZIA"].includes(s4)) return "stopping";
+  return "off";
+}
+var COLOR_STOPS = [
+  [15, [59, 130, 246]],
+  // blu
+  [30, [147, 197, 253]],
+  // azzurro chiaro
+  [42, [252, 211, 77]],
+  // giallo
+  [55, [249, 115, 22]],
+  // arancione
+  [65, [239, 68, 68]]
+  // rosso
+];
+function tempColor(t3) {
+  if (t3 === null || Number.isNaN(t3)) return "#94a3b8";
+  const first = COLOR_STOPS[0];
+  const last = COLOR_STOPS[COLOR_STOPS.length - 1];
+  let rgb = t3 <= first[0] ? first[1] : last[1];
+  if (t3 > first[0] && t3 < last[0]) {
+    for (let i5 = 1; i5 < COLOR_STOPS.length; i5++) {
+      const [t1, c1] = COLOR_STOPS[i5];
+      if (t3 <= t1) {
+        const [t0, c0] = COLOR_STOPS[i5 - 1];
+        const k2 = (t3 - t0) / (t1 - t0);
+        rgb = [0, 1, 2].map((j) => Math.round(c0[j] + (c1[j] - c0[j]) * k2));
+        break;
+      }
+    }
+  }
+  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
+function fmt(n5, decimals2 = 0) {
+  if (n5 === null || n5 === void 0 || Number.isNaN(n5)) return "\u2013";
+  return n5.toLocaleString("it-IT", { minimumFractionDigits: decimals2, maximumFractionDigits: decimals2 });
+}
+function toNumber(state) {
+  if (state === void 0 || state === null || state === "" || state === "unknown" || state === "unavailable") return null;
+  const n5 = Number(state);
+  return Number.isFinite(n5) ? n5 : null;
+}
+var BOOST_LABEL = {
+  pronta: ["Avvia caldaia", ""],
+  attiva: ["Annulla", "accensione in corso"],
+  non_serve: ["Non serve", "acqua gi\xE0 calda"],
+  puffer_caldo: ["Puffer caldo", "il calore c'\xE8 gi\xE0"],
+  accesa: ["Gi\xE0 accesa", "in accensione o al lavoro"],
+  in_attesa: ["In attesa", "ECO STOP: riparte da sola"],
+  in_arresto: ["In spegnimento", "riprova tra poco"],
+  allarme: ["Allarme", "caldaia bloccata"],
+  limite: ["Limite di oggi", "accensioni rapide"],
+  non_disponibile: ["Non disponibile", "mancano dati"]
+};
+function boostButton(state, armed) {
+  const key = state && state in BOOST_LABEL ? state : "non_disponibile";
+  const [label, sub] = BOOST_LABEL[key];
+  if (key === "pronta") return armed ? { label: "Conferma?", sub: "tocca ancora", action: "go" } : { label, sub, action: "go" };
+  if (key === "attiva") return armed ? { label: "Conferma?", sub: "annulla e spegni", action: "cancel" } : { label, sub, action: "cancel" };
+  return { label, sub, action: "none" };
+}
+function etaText(minutes) {
+  if (minutes === null) return "\u2013";
+  return `${Math.round(minutes)} min`;
+}
+function pelletStatus(reserve, empty, open) {
+  if (empty) return { key: "vuoto", label: "Vuoto" };
+  if (reserve) return { key: "riserva", label: "In riserva" };
+  if (open) return { key: "aperto", label: "Aperto" };
+  if (reserve === null && empty === null && open === null) return { key: "nd", label: "\u2013" };
+  return { key: "ok", label: "OK" };
+}
+var MIN_SHOWN_W = 5;
+function pumpWatts(w2) {
+  return w2 !== null && w2 >= MIN_SHOWN_W ? ` \xB7 ${Math.round(w2)} W` : "";
+}
+function integrationPumpPill(running, called, blockEnabled, blockWanted, watts) {
+  if (blockEnabled === true && blockWanted === true && called === true) return { key: "blocked", label: "integrazione bloccata" };
+  if (running === true) return { key: "running", label: `integrazione${pumpWatts(watts)}` };
+  return { key: "idle", label: "integrazione" };
+}
+function stovePumpRunning(state) {
+  if (state === void 0 || state === null) return null;
+  const s4 = state.trim();
+  if (s4 === "" || s4 === "unknown" || s4 === "unavailable") return null;
+  return s4.toUpperCase() !== "OFF";
+}
+function collectorPumpPill(running, watts) {
+  if (running === true) return { key: "running", label: `collettore${pumpWatts(watts)}` };
+  return { key: "idle", label: "collettore" };
+}
+function panelModel(pumpOn, measured, estimated, maxPredicted, maxToday) {
+  let value = null;
+  let source = "nd";
+  if (estimated !== null) {
+    value = estimated;
+    source = "stimata";
+  } else if (pumpOn === true && measured !== null) {
+    value = measured;
+    source = "misurata";
+  }
+  const caption = source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? pumpOn === true ? "stimata \xB7 in marcia" : pumpOn === false ? "stimata \xB7 pompa ferma" : "stimata" : "non disponibile";
+  const pred = maxPredicted !== null && maxToday !== null ? Math.max(maxPredicted, maxToday) : maxPredicted;
+  return { value, source, caption, maxPredicted: pred, maxToday };
+}
+function panelColor(t3) {
+  if (t3 === null || Number.isNaN(t3)) return "#94a3b8";
+  if (t3 <= 65) return tempColor(t3);
+  const k2 = Math.min(1, (t3 - 65) / 35);
+  const rgb = [239, 68, 68].map((c4, i5) => Math.round(c4 + ([127, 29, 29][i5] - c4) * k2));
+  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
+var STUFA_LABEL = {
+  spenta: "Spenta",
+  accensione: "Accensione",
+  accesa: "In funzione",
+  spegnimento: "Spegnimento",
+  non_disponibile: "Non disponibile"
+};
+var STUFA_MODE_LABEL = {
+  programma: "Programma attivo",
+  manuale: "Manuale",
+  fuori_programma: "Fuori programma",
+  timer: "Timer"
+};
+function stufaKey(raw) {
+  return raw === "spenta" || raw === "accensione" || raw === "accesa" || raw === "spegnimento" ? raw : "non_disponibile";
+}
+function stufaButton(switchOn, armed) {
+  if (switchOn === null) return { label: "Interruttore non disponibile", sub: "", action: "none" };
+  if (switchOn) return armed ? { label: "Conferma?", sub: "tocca ancora per spegnere", action: "off" } : { label: "Spegni la stufa", sub: "interruttore acceso", action: "off" };
+  return armed ? { label: "Conferma?", sub: "tocca ancora per accendere", action: "on" } : { label: "Accendi la stufa", sub: "interruttore spento", action: "on" };
+}
+function sinceText(ms) {
+  if (ms === null || !Number.isFinite(ms) || ms < 0) return "";
+  const min = Math.floor(ms / 6e4);
+  if (min < 1) return "da meno di 1 min";
+  if (min < 60) return `da ${min} min`;
+  const h3 = Math.floor(min / 60);
+  if (h3 < 24) return `da ${h3} h ${String(min % 60).padStart(2, "0")} min`;
+  const d3 = Math.floor(h3 / 24);
+  return `da ${d3} ${d3 === 1 ? "giorno" : "giorni"}`;
+}
+var SEASON_LABEL = { summer: "Estate", winter: "Inverno" };
+function seasonKey(state) {
+  const s4 = (state ?? "").trim().toLowerCase();
+  if (s4 === "summer" || s4 === "estate") return "summer";
+  if (s4 === "winter" || s4 === "inverno") return "winter";
+  return null;
+}
+
 // src/settings-logic.ts
 var SETTINGS_GROUPS = [
   { id: "riscaldamento", title: "Caldaia e acqua calda" },
@@ -692,6 +1012,16 @@ var SETTINGS_SECTIONS = [
             "45\u201350 \xB0C."
           )
         }
+      },
+      {
+        kind: "select",
+        entity: "select.garage_casale_stagione",
+        label: "Stagione della caldaia",
+        hint: "Come sul display della caldaia: in Estate la valvola a tre vie resta sull'acqua calda sanitaria, in Inverno serve anche il riscaldamento.",
+        help: H2(
+          "La stagione impostata sulla Polygon, la stessa del display. In Estate la valvola a tre vie resta sull'accumulo dell'acqua calda e la caldaia si ferma in ECO STOP quando la sonda S. BOILER raggiunge il Set boiler; in Inverno alterna acqua calda e riscaldamento.",
+          "A inizio e a fine stagione di riscaldamento. Ogni cambio scrive nella memoria della caldaia (EEPROM), che ha un limite di scritture: non serve cambiarla spesso."
+        )
       }
     ]
   },
@@ -982,9 +1312,12 @@ function buildSettingsView(states, sections = SETTINGS_SECTIONS) {
       if (isClimate && !unavailable && st.attributes.temperature !== null && st.attributes.temperature !== void 0 && Number.isFinite(Number(st.attributes.temperature))) {
         value = Number(st.attributes.temperature);
       }
+      const options = f3.kind === "select" && Array.isArray(st.attributes.options) ? st.attributes.options.map(String) : [];
+      const choices = f3.kind === "select" ? options.map((o6) => ({ value: o6, label: seasonKey(o6) ? SEASON_LABEL[seasonKey(o6)] : o6 })) : void 0;
       all.push({
         kind: f3.kind,
         entity: f3.entity,
+        ...choices ? { choices, choice: unavailable ? null : options.includes(st.state) ? st.state : null } : {},
         domain: f3.entity.split(".")[0],
         label: cless && f3.cless?.label || f3.label,
         hint: cless && f3.cless?.hint !== void 0 ? f3.cless.hint : f3.hint,
@@ -1042,6 +1375,12 @@ function writeService(row, value) {
   if (row.domain === "number") return { domain: "number", service: "set_value", data: { entity_id: row.entity, value } };
   return { domain: "input_number", service: "set_value", data: { entity_id: row.entity, value } };
 }
+function selectService(row, option) {
+  return { domain: "select", service: "select_option", data: { entity_id: row.entity, option } };
+}
+function choiceLabel(row) {
+  return row?.choices?.find((c4) => c4.value === row.choice)?.label ?? "\u2013";
+}
 var PENDING_MS = 3e4;
 function applyPending(sections, pending, now) {
   const settled = [];
@@ -1049,7 +1388,7 @@ function applyPending(sections, pending, now) {
     let touched = false;
     const rows = sec.rows.map((row) => {
       const p3 = pending[row.entity];
-      if (!p3 || row.kind === "toggle") return row;
+      if (!p3 || row.kind === "toggle" || row.kind === "select") return row;
       if (now >= p3.until || row.value === p3.value) {
         settled.push(row.entity);
         return row;
@@ -1074,7 +1413,7 @@ function sectionSummaryText(sec, rows) {
   if (sec.master?.unavailable) return "Non disponibile";
   switch (sec.id) {
     case "caldaia":
-      return `Acqua ${italianValue(g2("climate.casale_acqua"))} \xB7 ${sec.cless ? "set boiler" : "puffer"} ${italianValue(g2("number.casale_setpoint_boiler"))}`;
+      return `Acqua ${italianValue(g2("climate.casale_acqua"))} \xB7 ${sec.cless ? "set boiler" : "puffer"} ${italianValue(g2("number.casale_setpoint_boiler"))}${g2("select.garage_casale_stagione")?.choice ? ` \xB7 ${choiceLabel(g2("select.garage_casale_stagione"))}` : ""}`;
     case "accumulo":
       return sec.master?.on ? `Attiva: non riparte da ${italianValue(g2("input_number.caldaia_accumulo_t_spegni"))}, riaccende sotto ${italianValue(g2("input_number.caldaia_accumulo_t_accendi"))}` : "Disattivata: la caldaia riparte quando decide lei";
     case "cless":
@@ -1132,7 +1471,7 @@ function describeSection(view) {
 }
 
 // src/settings-dialog.ts
-var TAG = "impianto-settings-dialog";
+var TAG2 = "impianto-settings-dialog";
 var ImpiantoSettingsDialog = class extends i4 {
   constructor() {
     super(...arguments);
@@ -1143,6 +1482,7 @@ var ImpiantoSettingsDialog = class extends i4 {
     this._thermoBusy = false;
     this._error = "";
     this._pending = {};
+    this._choicePending = {};
     this._timers = /* @__PURE__ */ new Map();
     this._onKey = (e5) => {
       if (e5.key !== "Escape") return;
@@ -1157,6 +1497,7 @@ var ImpiantoSettingsDialog = class extends i4 {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("keydown", this._onKey);
+    this._confirm?.remove();
     for (const t3 of this._timers.values()) window.clearTimeout(t3);
     this._timers.clear();
     if (this._expiry) window.clearTimeout(this._expiry);
@@ -1172,6 +1513,31 @@ var ImpiantoSettingsDialog = class extends i4 {
     } catch (err) {
       this._error = `Impossibile salvare: ${err instanceof Error ? err.message : String(err)}`;
     }
+  }
+  /** Scelta di una voce (stagione): chiede conferma, perché scrive nella memoria della caldaia. */
+  _choose(row, option) {
+    if (this._confirm || row.choice === option.value) return;
+    const d3 = document.createElement("impianto-confirm-dialog");
+    d3.heading = `Passare a ${option.label}?`;
+    d3.lines = [`Cambia la stagione sulla caldaia, come dal display. Il cambio viene scritto nella memoria della caldaia (EEPROM, al massimo 20 scritture al giorno).`];
+    d3.confirmLabel = "Cambia";
+    d3.addEventListener("confirmed", () => {
+      this._choicePending = { ...this._choicePending, [row.entity]: { option: option.value, until: Date.now() + PENDING_MS } };
+      if (this._expiry) window.clearTimeout(this._expiry);
+      this._expiry = window.setTimeout(() => this.requestUpdate(), PENDING_MS + 100);
+      const w2 = selectService(row, option.value);
+      void this._call(w2.domain, w2.service, w2.data).then(() => {
+        if (this._error) {
+          const { [row.entity]: _gone, ...rest } = this._choicePending;
+          this._choicePending = rest;
+        }
+      });
+    });
+    d3.addEventListener("closed", () => {
+      this._confirm = void 0;
+    });
+    document.body.appendChild(d3);
+    this._confirm = d3;
   }
   _toggle(row) {
     void this._call("input_boolean", row.on ? "turn_off" : "turn_on", { entity_id: row.entity });
@@ -1241,6 +1607,27 @@ var ImpiantoSettingsDialog = class extends i4 {
             ?disabled=${row.unavailable}
             @click=${() => this._toggle(row)}
           ><span class="knob"></span></button>
+        </div>
+      `;
+    }
+    if (row.kind === "select") {
+      const p3 = this._choicePending[row.entity];
+      const waiting = !!p3 && Date.now() < p3.until && row.choice !== p3.option;
+      const shown = waiting ? p3.option : row.choice;
+      return b2`
+        <div class="row">
+          ${text}
+          <div class="seg" role="radiogroup" aria-label=${row.label}>
+            ${(row.choices ?? []).map(
+        (c4) => b2`<button
+                class=${shown === c4.value ? "on" : ""}
+                role="radio"
+                aria-checked=${shown === c4.value ? "true" : "false"}
+                ?disabled=${row.unavailable || waiting}
+                @click=${() => this._choose(row, c4)}
+              >${c4.label}${waiting && shown === c4.value ? " \u2026" : ""}</button>`
+      )}
+          </div>
         </div>
       `;
     }
@@ -1578,6 +1965,32 @@ var ImpiantoSettingsDialog = class extends i4 {
       opacity: 0.45;
       cursor: not-allowed;
     }
+    .seg {
+      flex: none;
+      display: flex;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .seg button {
+      min-height: 44px;
+      min-width: 92px;
+      padding: 8px 16px;
+      border: 0;
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      color: inherit;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .seg button.on {
+      background: var(--primary-color, #03a9f4);
+      color: #fff;
+      font-weight: 600;
+    }
+    .seg button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
     .num {
       flex: none;
       display: flex;
@@ -1762,10 +2175,13 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoSettingsDialog.prototype, "_error", 2);
-if (!customElements.get(TAG)) customElements.define(TAG, ImpiantoSettingsDialog);
+__decorateClass([
+  r5()
+], ImpiantoSettingsDialog.prototype, "_choicePending", 2);
+if (!customElements.get(TAG2)) customElements.define(TAG2, ImpiantoSettingsDialog);
 
 // src/info-dialog.ts
-var TAG2 = "impianto-info-dialog";
+var TAG3 = "impianto-info-dialog";
 var ImpiantoInfoDialog = class extends i4 {
   constructor() {
     super(...arguments);
@@ -1901,10 +2317,10 @@ var ImpiantoInfoDialog = class extends i4 {
 __decorateClass([
   n4({ attribute: false })
 ], ImpiantoInfoDialog.prototype, "lines", 2);
-if (!customElements.get(TAG2)) customElements.define(TAG2, ImpiantoInfoDialog);
+if (!customElements.get(TAG3)) customElements.define(TAG3, ImpiantoInfoDialog);
 
 // src/details-dialog.ts
-var TAG3 = "impianto-details-dialog";
+var TAG4 = "impianto-details-dialog";
 var ImpiantoDetailsDialog = class extends i4 {
   constructor() {
     super(...arguments);
@@ -2042,7 +2458,7 @@ var ImpiantoDetailsDialog = class extends i4 {
 __decorateClass([
   n4({ attribute: false })
 ], ImpiantoDetailsDialog.prototype, "groups", 2);
-if (!customElements.get(TAG3)) customElements.define(TAG3, ImpiantoDetailsDialog);
+if (!customElements.get(TAG4)) customElements.define(TAG4, ImpiantoDetailsDialog);
 
 // src/charts-logic.ts
 function toMs(v2) {
@@ -2360,7 +2776,7 @@ function normalizeValue(v2, st) {
 }
 
 // src/charts-dialog.ts
-var TAG4 = "impianto-charts-dialog";
+var TAG5 = "impianto-charts-dialog";
 var H_MS = 36e5;
 var PLOT_H = 210;
 var MT = 10;
@@ -3088,7 +3504,7 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoChartsDialog.prototype, "_computed", 2);
-if (!customElements.get(TAG4)) customElements.define(TAG4, ImpiantoChartsDialog);
+if (!customElements.get(TAG5)) customElements.define(TAG5, ImpiantoChartsDialog);
 
 // src/rooms-logic.ts
 var DEFAULT_ROOMS = [
@@ -3587,8 +4003,8 @@ function hopperSvg(kg, label) {
 }
 
 // src/pellet-dialog.ts
-var TAG5 = "impianto-pellet-dialog";
-var fmt = (n5, d3 = 0) => n5.toFixed(d3).replace(".", ",");
+var TAG6 = "impianto-pellet-dialog";
+var fmt2 = (n5, d3 = 0) => n5.toFixed(d3).replace(".", ",");
 var _ImpiantoPelletDialog = class _ImpiantoPelletDialog extends i4 {
   constructor() {
     super(...arguments);
@@ -3620,13 +4036,13 @@ var _ImpiantoPelletDialog = class _ImpiantoPelletDialog extends i4 {
   }
   _addBags() {
     this.dispatchEvent(new CustomEvent("bags", { detail: this._bags }));
-    this._done = `Aggiunti ${fmt(this._bags, this._bags % 1 ? 1 : 0)} ${this._bags === 1 ? "sacco" : "sacchi"}.`;
+    this._done = `Aggiunti ${fmt2(this._bags, this._bags % 1 ? 1 : 0)} ${this._bags === 1 ? "sacco" : "sacchi"}.`;
   }
   _setLevel() {
     const d3 = Number(this._depth.replace(",", "."));
     if (!Number.isFinite(d3) || d3 < 0 || d3 > 94) return;
     this.dispatchEvent(new CustomEvent("level", { detail: d3 }));
-    this._done = `Livello impostato a ${fmt(d3, 1)} cm: ${fmt(kgAtDepth(d3))} kg.`;
+    this._done = `Livello impostato a ${fmt2(d3, 1)} cm: ${fmt2(kgAtDepth(d3))} kg.`;
     this._depth = "";
   }
   static _num(v2) {
@@ -3640,7 +4056,7 @@ var _ImpiantoPelletDialog = class _ImpiantoPelletDialog extends i4 {
     const after = _ImpiantoPelletDialog._num(this._cAfter);
     if (!c4 || after === null) return;
     this.dispatchEvent(new CustomEvent("level", { detail: after }));
-    this._done = `Livello impostato a ${fmt(after, 1)} cm: ${fmt(c4.afterKg)} kg (con ${this._cBags.trim()} ${_ImpiantoPelletDialog._num(this._cBags) === 1 ? "sacco" : "sacchi"} versati).`;
+    this._done = `Livello impostato a ${fmt2(after, 1)} cm: ${fmt2(c4.afterKg)} kg (con ${this._cBags.trim()} ${_ImpiantoPelletDialog._num(this._cBags) === 1 ? "sacco" : "sacchi"} versati).`;
     this._cBags = this._cBefore = this._cAfter = "";
   }
   _combined() {
@@ -3668,9 +4084,9 @@ var _ImpiantoPelletDialog = class _ImpiantoPelletDialog extends i4 {
             <div class="top">
               <div class="fig">${hopperSvg(kg, "Serbatoio del pellet")}</div>
               <div class="num">
-                <div class="big">${kg === null ? "\u2013" : fmt(kg)}<span> kg</span></div>
-                <div class="sub">${kg === null ? "quantit\xE0 non nota" : `${fmt(kg / HOPPER.capacityKg * 100)} % di ${HOPPER.capacityKg} kg (${HOPPER.capacityKg / bagKg} sacchi)`}</div>
-                <div class="sub">${days === null ? "" : `circa ${fmt(days, days < 10 ? 1 : 0)} giorni al consumo di ${fmt(perDay ?? 0, 1)} kg al giorno`}</div>
+                <div class="big">${kg === null ? "\u2013" : fmt2(kg)}<span> kg</span></div>
+                <div class="sub">${kg === null ? "quantit\xE0 non nota" : `${fmt2(kg / HOPPER.capacityKg * 100)} % di ${HOPPER.capacityKg} kg (${HOPPER.capacityKg / bagKg} sacchi)`}</div>
+                <div class="sub">${days === null ? "" : `circa ${fmt2(days, days < 10 ? 1 : 0)} giorni al consumo di ${fmt2(perDay ?? 0, 1)} kg al giorno`}</div>
               </div>
             </div>
 
@@ -3679,12 +4095,12 @@ var _ImpiantoPelletDialog = class _ImpiantoPelletDialog extends i4 {
             <div class="row">
               <div class="stepper">
                 <button class="st" aria-label="Meno" @click=${() => this._step(-1)}>−</button>
-                <div class="sv">${fmt(this._bags, this._bags % 1 ? 1 : 0)}<span> ${this._bags === 1 ? "sacco" : "sacchi"} da ${bagKg} kg</span></div>
+                <div class="sv">${fmt2(this._bags, this._bags % 1 ? 1 : 0)}<span> ${this._bags === 1 ? "sacco" : "sacchi"} da ${bagKg} kg</span></div>
                 <button class="st" aria-label="Più" @click=${() => this._step(1)}>+</button>
               </div>
               <button class="btn primary" ?disabled=${kg === null} @click=${() => this._addBags()}>Aggiungi</button>
             </div>
-            <div class="hint">${after === null ? "" : `Dopo il carico: ${fmt(after)} kg${kg !== null && kg + this._bags * bagKg > HOPPER.capacityKg ? " (il serbatoio \xE8 pieno)" : ""}.`}</div>
+            <div class="hint">${after === null ? "" : `Dopo il carico: ${fmt2(after)} kg${kg !== null && kg + this._bags * bagKg > HOPPER.capacityKg ? " (il serbatoio \xE8 pieno)" : ""}.`}</div>
 
             <div class="sec">Oppure ho misurato il livello</div>
             <div class="row">
@@ -3694,7 +4110,7 @@ var _ImpiantoPelletDialog = class _ImpiantoPelletDialog extends i4 {
               </label>
               <button class="btn primary" ?disabled=${!levelOk} @click=${() => this._setLevel()}>Imposta</button>
             </div>
-            <div class="hint">${levelOk ? `${fmt(d3, 1)} cm sono circa ${fmt(kgAtDepth(d3))} kg.` : "Misura dal bordo alto del serbatoio fino alla superficie del pellet, dopo averla livellata."}</div>
+            <div class="hint">${levelOk ? `${fmt2(d3, 1)} cm sono circa ${fmt2(kgAtDepth(d3))} kg.` : "Misura dal bordo alto del serbatoio fino alla superficie del pellet, dopo averla livellata."}</div>
 
             <div class="sec">Ho versato dei sacchi e misurato la quota</div>
             <div class="row">
@@ -3712,7 +4128,7 @@ var _ImpiantoPelletDialog = class _ImpiantoPelletDialog extends i4 {
               </label>
               <button class="btn primary" ?disabled=${!comb} @click=${() => this._setCombined()}>Imposta</button>
             </div>
-            <div class="hint">${comb ? `${this._cBefore.trim() === "" ? "Prima (stima della scheda)" : "Prima"}: ${fmt(comb.beforeKg)} kg \xB7 dopo: ${fmt(comb.afterKg)} kg \xB7 aumento ${fmt(comb.gainKg, 1)} kg, attesi ${fmt(comb.expectedKg, 1)} kg.${comb.impliedRho === null ? "" : ` Con questi dati la densit\xE0 sarebbe ${fmt(comb.impliedRho, 3)} kg/litro (ora ${fmt(HOPPER.rho, 3)}).`}` : "Misura la quota prima di versare i sacchi, versali, livella la superficie e misura di nuovo. Senza la quota di prima il confronto usa la stima della scheda."}</div>
+            <div class="hint">${comb ? `${this._cBefore.trim() === "" ? "Prima (stima della scheda)" : "Prima"}: ${fmt2(comb.beforeKg)} kg \xB7 dopo: ${fmt2(comb.afterKg)} kg \xB7 aumento ${fmt2(comb.gainKg, 1)} kg, attesi ${fmt2(comb.expectedKg, 1)} kg.${comb.impliedRho === null ? "" : ` Con questi dati la densit\xE0 sarebbe ${fmt2(comb.impliedRho, 3)} kg/litro (ora ${fmt2(HOPPER.rho, 3)}).`}` : "Misura la quota prima di versare i sacchi, versali, livella la superficie e misura di nuovo. Senza la quota di prima il confronto usa la stima della scheda."}</div>
 
             ${this._done ? b2`<div class="done">${this._done}</div>` : A}
             <div class="note">Da qui in poi i chili rimasti diminuiscono con il consumo stimato dalla scheda. Aggiorna il conteggio ogni volta che riempi il serbatoio o misuri il livello.</div>
@@ -3937,7 +4353,7 @@ __decorateClass([
   r5()
 ], _ImpiantoPelletDialog.prototype, "_cAfter", 2);
 var ImpiantoPelletDialog = _ImpiantoPelletDialog;
-if (!customElements.get(TAG5)) customElements.define(TAG5, ImpiantoPelletDialog);
+if (!customElements.get(TAG6)) customElements.define(TAG6, ImpiantoPelletDialog);
 
 // src/pellet-charts-logic.ts
 var PELLET_RANGES = [
@@ -4139,7 +4555,7 @@ function mergeSeries(stats, history) {
 }
 
 // src/pellet-charts-dialog.ts
-var TAG6 = "impianto-pellet-charts-dialog";
+var TAG7 = "impianto-pellet-charts-dialog";
 var PLOT_H2 = 230;
 var BARS_H = 150;
 var BT = 24;
@@ -4150,8 +4566,8 @@ var MB = 22;
 var CAPACITY = 120;
 var DAYS2 = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 var MESI = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
-var fmt2 = (n5, d3 = 1) => n5.toFixed(d3).replace(".", ",");
-var sign = (n5, d3 = 1) => `${n5 > 0 ? "+" : n5 < 0 ? "\u2212" : ""}${fmt2(Math.abs(n5), d3)}`;
+var fmt3 = (n5, d3 = 1) => n5.toFixed(d3).replace(".", ",");
+var sign = (n5, d3 = 1) => `${n5 > 0 ? "+" : n5 < 0 ? "\u2212" : ""}${fmt3(Math.abs(n5), d3)}`;
 var dayLabel = (t3) => {
   const d3 = new Date(t3);
   return `${DAYS2[d3.getDay()]} ${d3.getDate()} ${MESI[d3.getMonth()]}`;
@@ -4329,7 +4745,7 @@ var ImpiantoPelletChartsDialog = class extends i4 {
     return w`
       ${this._showGap ? w`<line class="evline gap" x1=${cx} x2=${cx} y1=${y3(e5.before)} y2=${y3(e5.after)} />` : A}
       <circle class="read" cx=${cx} cy=${y3(e5.after)} r="5.5" />
-      <text class="evtxt read" x=${cx > this._w - 150 ? cx - 8 : cx + 8} text-anchor=${cx > this._w - 150 ? "end" : "start"} y=${y3(e5.after) + (e5.after < 20 ? -8 : 15)}>${fmt2(e5.after, 1)} kg${this._showGap ? b2` (${sign(e5.delta)})` : ""}</text>`;
+      <text class="evtxt read" x=${cx > this._w - 150 ? cx - 8 : cx + 8} text-anchor=${cx > this._w - 150 ? "end" : "start"} y=${y3(e5.after) + (e5.after < 20 ? -8 : 15)}>${fmt3(e5.after, 1)} kg${this._showGap ? b2` (${sign(e5.delta)})` : ""}</text>`;
   }
   _pick(ev, d3, x2) {
     const svgEl = ev.currentTarget;
@@ -4349,10 +4765,10 @@ var ImpiantoPelletChartsDialog = class extends i4 {
     const style = Object.entries(left).map(([k2, val]) => `${k2}:${val}`).join(";");
     return b2`<div class="tip" style=${style}>
       <div class="tt">${formatMoment(t3)}</div>
-      <div class="tr"><i style="background:#d9922b"></i><span class="tn">Rimasti</span><b>${v2 === null ? "\u2013" : `${fmt2(v2)} kg`}</b></div>
-      ${near ? near.kind === "carico" ? b2`<div class="tr ev load"><span class="tn">Caricamento</span><b>${sign(near.delta)} kg${near.bags ? ` \xB7 ${fmt2(near.bags, near.bags % 1 ? 1 : 0)} ${near.bags === 1 ? "sacco" : "sacchi"}` : ""}</b></div>
-              <div class="note">da ${fmt2(near.before)} a ${fmt2(near.after)} kg</div>` : b2`<div class="tr ev read"><span class="tn">Lettura del livello</span><b>${fmt2(near.after)} kg</b></div>
-              <div class="note">la stima diceva ${fmt2(near.before)} kg: scarto ${sign(near.delta)} kg${near.ratio !== null ? ` \xB7 consumo reale ${fmt2(near.ratio * 100, 0)} % della stima` : ""}</div>` : A}
+      <div class="tr"><i style="background:#d9922b"></i><span class="tn">Rimasti</span><b>${v2 === null ? "\u2013" : `${fmt3(v2)} kg`}</b></div>
+      ${near ? near.kind === "carico" ? b2`<div class="tr ev load"><span class="tn">Caricamento</span><b>${sign(near.delta)} kg${near.bags ? ` \xB7 ${fmt3(near.bags, near.bags % 1 ? 1 : 0)} ${near.bags === 1 ? "sacco" : "sacchi"}` : ""}</b></div>
+              <div class="note">da ${fmt3(near.before)} a ${fmt3(near.after)} kg</div>` : b2`<div class="tr ev read"><span class="tn">Lettura del livello</span><b>${fmt3(near.after)} kg</b></div>
+              <div class="note">la stima diceva ${fmt3(near.before)} kg: scarto ${sign(near.delta)} kg${near.ratio !== null ? ` \xB7 consumo reale ${fmt3(near.ratio * 100, 0)} % della stima` : ""}</div>` : A}
     </div>`;
   }
   // ---- consumo per giorno -------------------------------------------------------
@@ -4375,7 +4791,7 @@ var ImpiantoPelletChartsDialog = class extends i4 {
     const label = (b3) => d3.bucket === "hour" ? `${String(new Date(b3.t0).getHours()).padStart(2, "0")}:00` : `${DAYS2[new Date(b3.t0).getDay()]} ${new Date(b3.t0).getDate()}`;
     return w`
       <svg width=${W} height=${H3} viewBox="0 0 ${W} ${H3}" role="img" aria-label="Consumo stimato di pellet">
-        ${axis.ticks.map((v2) => w`<line class="grid" x1=${ML} x2=${W - MR} y1=${y3(v2)} y2=${y3(v2)} /><text class="ax" x=${ML - 6} y=${y3(v2) + 4} text-anchor="end">${fmt2(v2, v2 % 1 ? 1 : 0)}</text>`)}
+        ${axis.ticks.map((v2) => w`<line class="grid" x1=${ML} x2=${W - MR} y1=${y3(v2)} y2=${y3(v2)} /><text class="ax" x=${ML - 6} y=${y3(v2) + 4} text-anchor="end">${fmt3(v2, v2 % 1 ? 1 : 0)}</text>`)}
         <text class="ax" x="4" y="9">${unit}</text>
         ${bs.map((b3, i5) => {
       const cx = ML + slot * (i5 + 0.5);
@@ -4384,11 +4800,11 @@ var ImpiantoPelletChartsDialog = class extends i4 {
       return w`<g class="bar" @pointerdown=${() => this._selBar = on2 ? null : i5}>
             <rect x=${ML + slot * i5} y=${BT} width=${slot} height=${BARS_H} fill="transparent" />
             <rect class=${`b${b3.partial ? " partial" : ""}${on2 ? " on" : ""}`} x=${cx - bw / 2} y=${top} width=${bw} height=${Math.max(0.5, y3(0) - top)} rx="3" />
-            ${labels || on2 ? w`<text class="blab" x=${cx} y=${top - 4} text-anchor="middle">${fmt2(b3.kg, 1)}</text>` : A}
+            ${labels || on2 ? w`<text class="blab" x=${cx} y=${top - 4} text-anchor="middle">${fmt3(b3.kg, 1)}</text>` : A}
             ${i5 % every === 0 ? w`<text class="ax" x=${cx} y=${BT + BARS_H + 15} text-anchor="middle">${label(b3)}</text>` : A}
           </g>`;
     })}
-        ${avg !== null ? w`<line class="avg" x1=${ML} x2=${W - MR} y1=${y3(avg)} y2=${y3(avg)} /><text class="avgt" x=${W - MR} y=${y3(avg) - 4} text-anchor="end">media ${fmt2(avg, 1)}</text>` : A}
+        ${avg !== null ? w`<line class="avg" x1=${ML} x2=${W - MR} y1=${y3(avg)} y2=${y3(avg)} /><text class="avgt" x=${W - MR} y=${y3(avg) - 4} text-anchor="end">media ${fmt3(avg, 1)}</text>` : A}
       </svg>
     `;
   }
@@ -4397,7 +4813,7 @@ var ImpiantoPelletChartsDialog = class extends i4 {
     const b3 = d3.buckets[this._selBar];
     if (!b3) return A;
     const when = d3.bucket === "hour" ? `${dayLabel(b3.t0)}, ${String(new Date(b3.t0).getHours()).padStart(2, "0")}:00` : dayLabel(b3.t0);
-    return b2`<p class="hint"><b>${when}</b>: ${fmt2(b3.kg, 2)} kg stimati${b3.partial ? " (non ancora finito)" : ""}.</p>`;
+    return b2`<p class="hint"><b>${when}</b>: ${fmt3(b3.kg, 2)} kg stimati${b3.partial ? " (non ancora finito)" : ""}.</p>`;
   }
   // ---- riepilogo, eventi, taratura -----------------------------------------------
   _tile(label, value, sub = "") {
@@ -4410,11 +4826,11 @@ var ImpiantoPelletChartsDialog = class extends i4 {
     const out = runOut(remNow, rate, d3.t1);
     const dd = out ? new Date(out.date) : null;
     return b2`<div class="tiles">
-      ${this._tile("Rimasti adesso", remNow === null ? "\u2013" : `${fmt2(remNow)} kg`, remNow === null ? "" : `${fmt2(remNow / CAPACITY * 100, 0)} % del serbatoio`)}
-      ${this._tile("Consumo medio", s4.perDay === null ? "\u2013" : `${fmt2(s4.perDay)} kg/giorno`, `stima su ${fmt2(s4.days, s4.days < 10 ? 1 : 0)} giorni`)}
-      ${this._tile("Consumati nel periodo", `${fmt2(s4.consumed)} kg`, "stima della scheda")}
-      ${this._tile("Caricati nel periodo", `${fmt2(s4.loaded, 0)} kg`, s4.bags ? `${fmt2(s4.bags, s4.bags % 1 ? 1 : 0)} ${s4.bags === 1 ? "sacco" : "sacchi"}` : "nessun caricamento")}
-      ${this._tile("Finisce", dd ? `${DAYS2[dd.getDay()]} ${dd.getDate()} ${MESI[dd.getMonth()]}` : "\u2013", out ? `tra ${fmt2(out.days, out.days < 10 ? 1 : 0)} giorni a ${fmt2(rate)} kg/giorno` : "")}
+      ${this._tile("Rimasti adesso", remNow === null ? "\u2013" : `${fmt3(remNow)} kg`, remNow === null ? "" : `${fmt3(remNow / CAPACITY * 100, 0)} % del serbatoio`)}
+      ${this._tile("Consumo medio", s4.perDay === null ? "\u2013" : `${fmt3(s4.perDay)} kg/giorno`, `stima su ${fmt3(s4.days, s4.days < 10 ? 1 : 0)} giorni`)}
+      ${this._tile("Consumati nel periodo", `${fmt3(s4.consumed)} kg`, "stima della scheda")}
+      ${this._tile("Caricati nel periodo", `${fmt3(s4.loaded, 0)} kg`, s4.bags ? `${fmt3(s4.bags, s4.bags % 1 ? 1 : 0)} ${s4.bags === 1 ? "sacco" : "sacchi"}` : "nessun caricamento")}
+      ${this._tile("Finisce", dd ? `${DAYS2[dd.getDay()]} ${dd.getDate()} ${MESI[dd.getMonth()]}` : "\u2013", out ? `tra ${fmt3(out.days, out.days < 10 ? 1 : 0)} giorni a ${fmt3(rate)} kg/giorno` : "")}
     </div>`;
   }
   _renderEvents(d3) {
@@ -4427,8 +4843,8 @@ var ImpiantoPelletChartsDialog = class extends i4 {
       (e5) => b2`<tr class=${e5.kind === "carico" ? "load" : "read"} @click=${() => this._selT = e5.t}>
             <td>${formatMoment(e5.t)}</td>
             <td>${e5.kind === "carico" ? b2`<span class="badge load">Caricamento</span>` : b2`<span class="badge read">Lettura</span>`}</td>
-            <td>${e5.kind === "carico" ? `${sign(e5.delta)}` : fmt2(e5.after)} kg</td>
-            <td class="det">${e5.kind === "carico" ? `${e5.bags ? `${fmt2(e5.bags, e5.bags % 1 ? 1 : 0)} ${e5.bags === 1 ? "sacco" : "sacchi"}, ` : ""}da ${fmt2(e5.before)} a ${fmt2(e5.after)} kg` : `stima ${fmt2(e5.before)} kg, scarto ${sign(e5.delta)} kg${e5.ratio !== null ? `, consumo reale ${fmt2(e5.ratio * 100, 0)} % della stima` : ""}`}</td>
+            <td>${e5.kind === "carico" ? `${sign(e5.delta)}` : fmt3(e5.after)} kg</td>
+            <td class="det">${e5.kind === "carico" ? `${e5.bags ? `${fmt3(e5.bags, e5.bags % 1 ? 1 : 0)} ${e5.bags === 1 ? "sacco" : "sacchi"}, ` : ""}da ${fmt3(e5.before)} a ${fmt3(e5.after)} kg` : `stima ${fmt3(e5.before)} kg, scarto ${sign(e5.delta)} kg${e5.ratio !== null ? `, consumo reale ${fmt3(e5.ratio * 100, 0)} % della stima` : ""}`}</td>
           </tr>`
     )}
       </tbody>
@@ -4442,9 +4858,9 @@ var ImpiantoPelletChartsDialog = class extends i4 {
     const same = c4.suggested !== null && cur !== null && Math.abs(c4.suggested - cur) < 0.03;
     return b2`<div class="calib">
       <b>Taratura della stima</b>
-      <p>Nelle ${c4.readings} ${c4.readings === 1 ? "lettura" : "letture"} del livello il pellet sceso davvero è stato il <b>${fmt2(c4.ratio * 100, 0)} %</b> di quello stimato
-      (${fmt2(c4.usedKg, 0)} kg stimati${c4.usedFactor !== null ? `, con il fattore di allora, in media ${fmt2(c4.usedFactor, 2)}` : ""}).
-      ${c4.suggested !== null ? same ? b2`Il fattore attuale (${fmt2(cur, 2)}) è già quello che torna con le letture.` : b2`Il fattore che avrebbe dato la stima giusta è <b>${fmt2(c4.suggested, 2)}</b>${cur !== null ? ` (adesso ${fmt2(cur, 2)}; cambialo dalle preferenze, blocco \xABPellet\xBB)` : ""}. Dopo averlo cambiato il valore resta lo stesso: le stime passate non si ricalcolano.` : A}
+      <p>Nelle ${c4.readings} ${c4.readings === 1 ? "lettura" : "letture"} del livello il pellet sceso davvero è stato il <b>${fmt3(c4.ratio * 100, 0)} %</b> di quello stimato
+      (${fmt3(c4.usedKg, 0)} kg stimati${c4.usedFactor !== null ? `, con il fattore di allora, in media ${fmt3(c4.usedFactor, 2)}` : ""}).
+      ${c4.suggested !== null ? same ? b2`Il fattore attuale (${fmt3(cur, 2)}) è già quello che torna con le letture.` : b2`Il fattore che avrebbe dato la stima giusta è <b>${fmt3(c4.suggested, 2)}</b>${cur !== null ? ` (adesso ${fmt3(cur, 2)}; cambialo dalle preferenze, blocco \xABPellet\xBB)` : ""}. Dopo averlo cambiato il valore resta lo stesso: le stime passate non si ricalcolano.` : A}
       ${c4.usedKg < 15 ? " Sono pochi chili: aspetta altre letture prima di cambiare il fattore." : ""}</p>
     </div>`;
   }
@@ -4901,10 +5317,10 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoPelletChartsDialog.prototype, "_selBar", 2);
-if (!customElements.get(TAG6)) customElements.define(TAG6, ImpiantoPelletChartsDialog);
+if (!customElements.get(TAG7)) customElements.define(TAG7, ImpiantoPelletChartsDialog);
 
 // src/card-dialog.ts
-var TAG7 = "impianto-card-dialog";
+var TAG8 = "impianto-card-dialog";
 var ImpiantoCardDialog = class extends i4 {
   constructor() {
     super(...arguments);
@@ -5021,320 +5437,7 @@ __decorateClass([
 __decorateClass([
   n4({ type: Boolean })
 ], ImpiantoCardDialog.prototype, "wide", 2);
-if (!customElements.get(TAG7)) customElements.define(TAG7, ImpiantoCardDialog);
-
-// src/confirm-dialog.ts
-var TAG8 = "impianto-confirm-dialog";
-var ImpiantoConfirmDialog = class extends i4 {
-  constructor() {
-    super(...arguments);
-    this.heading = "";
-    this.lines = [];
-    this.confirmLabel = "Conferma";
-    this.cancelLabel = "Annulla";
-    this.danger = false;
-    this._onKey = (e5) => {
-      if (e5.key === "Escape") this._close();
-    };
-  }
-  connectedCallback() {
-    super.connectedCallback();
-    window.addEventListener("keydown", this._onKey);
-  }
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    window.removeEventListener("keydown", this._onKey);
-  }
-  firstUpdated() {
-    this.renderRoot.querySelector("button.cancel")?.focus();
-  }
-  _close() {
-    this.dispatchEvent(new CustomEvent("closed"));
-    this.remove();
-  }
-  _confirm() {
-    this.dispatchEvent(new CustomEvent("confirmed"));
-    this._close();
-  }
-  render() {
-    return b2`
-      <div class="backdrop" @click=${(e5) => e5.target === e5.currentTarget && this._close()}>
-        <div class="panel" role="alertdialog" aria-modal="true" aria-label=${this.heading}>
-          <div class="title">${this.heading}</div>
-          ${this.lines.map((l3) => b2`<p>${l3}</p>`)}
-          <div class="row">
-            <button class="cancel" @click=${() => this._close()}>${this.cancelLabel}</button>
-            <button class=${this.danger ? "ok danger" : "ok"} @click=${() => this._confirm()}>${this.confirmLabel}</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-  static {
-    this.styles = i`
-    :host {
-      position: fixed;
-      inset: 0;
-      z-index: 10001;
-      color: var(--primary-text-color, #212121);
-      font-family: var(--paper-font-body1_-_font-family, Roboto, Helvetica, Arial, sans-serif);
-    }
-    .backdrop {
-      position: absolute;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 12px;
-      box-sizing: border-box;
-    }
-    .panel {
-      width: 100%;
-      max-width: 420px;
-      background: var(--card-background-color, #fff);
-      border-radius: 16px;
-      padding: 20px 20px 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-      box-sizing: border-box;
-    }
-    .title {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 6px;
-    }
-    p {
-      margin: 8px 0 0;
-      font-size: 15px;
-      line-height: 1.4;
-      color: var(--secondary-text-color, #727272);
-    }
-    .row {
-      display: flex;
-      gap: 12px;
-      margin-top: 20px;
-    }
-    button {
-      flex: 1;
-      min-height: 52px;
-      border-radius: 14px;
-      font: inherit;
-      font-size: 17px;
-      font-weight: 700;
-      cursor: pointer;
-      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
-    }
-    .cancel {
-      background: var(--secondary-background-color, rgba(127, 127, 127, 0.15));
-      color: inherit;
-    }
-    .ok {
-      background: var(--primary-color, #03a9f4);
-      border-color: transparent;
-      color: var(--text-primary-color, #fff);
-    }
-    .ok.danger {
-      background: #ef4444;
-    }
-    button:focus-visible {
-      outline: 3px solid var(--primary-text-color, #212121);
-      outline-offset: 2px;
-    }
-  `;
-  }
-};
-__decorateClass([
-  n4()
-], ImpiantoConfirmDialog.prototype, "heading", 2);
-__decorateClass([
-  n4({ attribute: false })
-], ImpiantoConfirmDialog.prototype, "lines", 2);
-__decorateClass([
-  n4()
-], ImpiantoConfirmDialog.prototype, "confirmLabel", 2);
-__decorateClass([
-  n4()
-], ImpiantoConfirmDialog.prototype, "cancelLabel", 2);
-__decorateClass([
-  n4({ type: Boolean })
-], ImpiantoConfirmDialog.prototype, "danger", 2);
-if (!customElements.get(TAG8)) customElements.define(TAG8, ImpiantoConfirmDialog);
-
-// src/plant-logic.ts
-var DEFAULT_MODEL = {
-  volume: 190,
-  topShare: 0.5,
-  mainsTemp: 15,
-  showerVolume: 40,
-  showerTemp: 38
-};
-function showersEstimate(top, bottom, m2) {
-  if (top === null) return null;
-  const span = m2.showerTemp - m2.mainsTemp;
-  if (span <= 0 || m2.showerVolume <= 0) return null;
-  const zones = [
-    [m2.volume * m2.topShare, top],
-    [m2.volume * (1 - m2.topShare), bottom ?? top]
-  ];
-  const floor = m2.coilMin ?? null;
-  let liters = 0;
-  for (const [v2, t3] of zones) {
-    if (t3 === null) continue;
-    if (floor !== null) {
-      if (t3 >= Math.max(floor, m2.showerTemp)) liters += v2 * (t3 - floor) / span;
-    } else if (t3 >= m2.showerTemp) liters += v2 * (t3 - m2.mainsTemp) / span;
-  }
-  return Math.floor(liters / m2.showerVolume);
-}
-function stoveLook(state) {
-  const s4 = (state ?? "").trim().toUpperCase();
-  if (["WORK", "LAVORO", "WORKING"].includes(s4)) return "work";
-  if (["START", "AVVIO", "ACCENSIONE", "IGNITION"].includes(s4)) return "start";
-  if (["WAIT", "ATTESA", "PRE-START"].includes(s4)) return "wait";
-  if (["STAND BY", "STANDBY", "STAND-BY"].includes(s4)) return "standby";
-  if (["STOP", "SPEGNIMENTO", "CLEANING", "PULIZIA"].includes(s4)) return "stopping";
-  return "off";
-}
-var COLOR_STOPS = [
-  [15, [59, 130, 246]],
-  // blu
-  [30, [147, 197, 253]],
-  // azzurro chiaro
-  [42, [252, 211, 77]],
-  // giallo
-  [55, [249, 115, 22]],
-  // arancione
-  [65, [239, 68, 68]]
-  // rosso
-];
-function tempColor(t3) {
-  if (t3 === null || Number.isNaN(t3)) return "#94a3b8";
-  const first = COLOR_STOPS[0];
-  const last = COLOR_STOPS[COLOR_STOPS.length - 1];
-  let rgb = t3 <= first[0] ? first[1] : last[1];
-  if (t3 > first[0] && t3 < last[0]) {
-    for (let i5 = 1; i5 < COLOR_STOPS.length; i5++) {
-      const [t1, c1] = COLOR_STOPS[i5];
-      if (t3 <= t1) {
-        const [t0, c0] = COLOR_STOPS[i5 - 1];
-        const k2 = (t3 - t0) / (t1 - t0);
-        rgb = [0, 1, 2].map((j) => Math.round(c0[j] + (c1[j] - c0[j]) * k2));
-        break;
-      }
-    }
-  }
-  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
-}
-function fmt3(n5, decimals2 = 0) {
-  if (n5 === null || n5 === void 0 || Number.isNaN(n5)) return "\u2013";
-  return n5.toLocaleString("it-IT", { minimumFractionDigits: decimals2, maximumFractionDigits: decimals2 });
-}
-function toNumber(state) {
-  if (state === void 0 || state === null || state === "" || state === "unknown" || state === "unavailable") return null;
-  const n5 = Number(state);
-  return Number.isFinite(n5) ? n5 : null;
-}
-var BOOST_LABEL = {
-  pronta: ["Avvia caldaia", ""],
-  attiva: ["Annulla", "accensione in corso"],
-  non_serve: ["Non serve", "acqua gi\xE0 calda"],
-  puffer_caldo: ["Puffer caldo", "il calore c'\xE8 gi\xE0"],
-  accesa: ["Gi\xE0 accesa", "in accensione o al lavoro"],
-  in_attesa: ["In attesa", "ECO STOP: riparte da sola"],
-  in_arresto: ["In spegnimento", "riprova tra poco"],
-  allarme: ["Allarme", "caldaia bloccata"],
-  limite: ["Limite di oggi", "accensioni rapide"],
-  non_disponibile: ["Non disponibile", "mancano dati"]
-};
-function boostButton(state, armed) {
-  const key = state && state in BOOST_LABEL ? state : "non_disponibile";
-  const [label, sub] = BOOST_LABEL[key];
-  if (key === "pronta") return armed ? { label: "Conferma?", sub: "tocca ancora", action: "go" } : { label, sub, action: "go" };
-  if (key === "attiva") return armed ? { label: "Conferma?", sub: "annulla e spegni", action: "cancel" } : { label, sub, action: "cancel" };
-  return { label, sub, action: "none" };
-}
-function etaText(minutes) {
-  if (minutes === null) return "\u2013";
-  return `${Math.round(minutes)} min`;
-}
-function pelletStatus(reserve, empty, open) {
-  if (empty) return { key: "vuoto", label: "Vuoto" };
-  if (reserve) return { key: "riserva", label: "In riserva" };
-  if (open) return { key: "aperto", label: "Aperto" };
-  if (reserve === null && empty === null && open === null) return { key: "nd", label: "\u2013" };
-  return { key: "ok", label: "OK" };
-}
-var MIN_SHOWN_W = 5;
-function pumpWatts(w2) {
-  return w2 !== null && w2 >= MIN_SHOWN_W ? ` \xB7 ${Math.round(w2)} W` : "";
-}
-function integrationPumpPill(running, called, blockEnabled, blockWanted, watts) {
-  if (blockEnabled === true && blockWanted === true && called === true) return { key: "blocked", label: "integrazione bloccata" };
-  if (running === true) return { key: "running", label: `integrazione${pumpWatts(watts)}` };
-  return { key: "idle", label: "integrazione" };
-}
-function stovePumpRunning(state) {
-  if (state === void 0 || state === null) return null;
-  const s4 = state.trim();
-  if (s4 === "" || s4 === "unknown" || s4 === "unavailable") return null;
-  return s4.toUpperCase() !== "OFF";
-}
-function collectorPumpPill(running, watts) {
-  if (running === true) return { key: "running", label: `collettore${pumpWatts(watts)}` };
-  return { key: "idle", label: "collettore" };
-}
-function panelModel(pumpOn, measured, estimated, maxPredicted, maxToday) {
-  let value = null;
-  let source = "nd";
-  if (estimated !== null) {
-    value = estimated;
-    source = "stimata";
-  } else if (pumpOn === true && measured !== null) {
-    value = measured;
-    source = "misurata";
-  }
-  const caption = source === "misurata" ? "misurata (ingresso)" : source === "stimata" ? pumpOn === true ? "stimata \xB7 in marcia" : pumpOn === false ? "stimata \xB7 pompa ferma" : "stimata" : "non disponibile";
-  const pred = maxPredicted !== null && maxToday !== null ? Math.max(maxPredicted, maxToday) : maxPredicted;
-  return { value, source, caption, maxPredicted: pred, maxToday };
-}
-function panelColor(t3) {
-  if (t3 === null || Number.isNaN(t3)) return "#94a3b8";
-  if (t3 <= 65) return tempColor(t3);
-  const k2 = Math.min(1, (t3 - 65) / 35);
-  const rgb = [239, 68, 68].map((c4, i5) => Math.round(c4 + ([127, 29, 29][i5] - c4) * k2));
-  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
-}
-var STUFA_LABEL = {
-  spenta: "Spenta",
-  accensione: "Accensione",
-  accesa: "In funzione",
-  spegnimento: "Spegnimento",
-  non_disponibile: "Non disponibile"
-};
-var STUFA_MODE_LABEL = {
-  programma: "Programma attivo",
-  manuale: "Manuale",
-  fuori_programma: "Fuori programma",
-  timer: "Timer"
-};
-function stufaKey(raw) {
-  return raw === "spenta" || raw === "accensione" || raw === "accesa" || raw === "spegnimento" ? raw : "non_disponibile";
-}
-function stufaButton(switchOn, armed) {
-  if (switchOn === null) return { label: "Interruttore non disponibile", sub: "", action: "none" };
-  if (switchOn) return armed ? { label: "Conferma?", sub: "tocca ancora per spegnere", action: "off" } : { label: "Spegni la stufa", sub: "interruttore acceso", action: "off" };
-  return armed ? { label: "Conferma?", sub: "tocca ancora per accendere", action: "on" } : { label: "Accendi la stufa", sub: "interruttore spento", action: "on" };
-}
-function sinceText(ms) {
-  if (ms === null || !Number.isFinite(ms) || ms < 0) return "";
-  const min = Math.floor(ms / 6e4);
-  if (min < 1) return "da meno di 1 min";
-  if (min < 60) return `da ${min} min`;
-  const h3 = Math.floor(min / 60);
-  if (h3 < 24) return `da ${h3} h ${String(min % 60).padStart(2, "0")} min`;
-  const d3 = Math.floor(h3 / 24);
-  return `da ${d3} ${d3 === 1 ? "giorno" : "giorni"}`;
-}
+if (!customElements.get(TAG8)) customElements.define(TAG8, ImpiantoCardDialog);
 
 // src/summary-logic.ts
 var RESTART_BELOW_SETPOINT = 4;
@@ -5350,13 +5453,13 @@ function stoveLine(i5) {
     };
   }
   if (raw === "ECO STOP") {
-    const dove = i5.setBoiler !== null ? ` Riparte quando ${i5.cless ? "la sonda S. BOILER dell'accumulo" : "il puffer"} scende a circa ${fmt3(i5.setBoiler - RESTART_BELOW_SETPOINT)} \xB0C${i5.puffer !== null ? ` (ora ${fmt3(i5.puffer)} \xB0C)` : ""}.` : "";
+    const dove = i5.setBoiler !== null ? ` Riparte quando ${i5.cless ? "la sonda S. BOILER dell'accumulo" : "il puffer"} scende a circa ${fmt(i5.setBoiler - RESTART_BELOW_SETPOINT)} \xB0C${i5.puffer !== null ? ` (ora ${fmt(i5.puffer)} \xB0C)` : ""}.` : "";
     return { icon: "mdi:pause-circle-outline", text: `Caldaia ferma in ECO STOP: l'acqua ha raggiunto la temperatura.${dove}`, tone: "info" };
   }
   if (look === "work")
     return {
       icon: "mdi:fire",
-      text: `Caldaia in lavoro${i5.power !== null ? ` al ${fmt3(i5.power)} %` : ""}${i5.setWater !== null ? `: scalda l'acqua fino a ${fmt3(i5.setWater)} \xB0C, poi va in ECO STOP` : ""}.`,
+      text: `Caldaia in lavoro${i5.power !== null ? ` al ${fmt(i5.power)} %` : ""}${i5.setWater !== null ? `: scalda l'acqua fino a ${fmt(i5.setWater)} \xB0C, poi va in ECO STOP` : ""}.`,
       tone: "ok"
     };
   if (look === "start" || look === "wait")
@@ -5385,8 +5488,8 @@ function whyOffLine(i5) {
 }
 function pumpLine(i5) {
   if (i5.cless) return null;
-  const p3 = i5.puffer !== null ? `${fmt3(i5.puffer)} \xB0C` : "\u2013";
-  const b3 = i5.boilerTop !== null ? `${fmt3(i5.boilerTop)} \xB0C` : "\u2013";
+  const p3 = i5.puffer !== null ? `${fmt(i5.puffer)} \xB0C` : "\u2013";
+  const b3 = i5.boilerTop !== null ? `${fmt(i5.boilerTop)} \xB0C` : "\u2013";
   if (i5.integrationPump === "running")
     return { icon: "mdi:pump", text: `Pompa di integrazione accesa: porta il calore del puffer (${p3}) al boiler (${b3}).`, tone: "ok" };
   if (i5.integrationPump === "blocked")
@@ -5397,20 +5500,20 @@ function solarLine(i5) {
   if (i5.collectorPumpOn === true)
     return {
       icon: "mdi:solar-power",
-      text: `Il solare sta scaldando ${i5.cless ? "l'accumulo" : "il boiler"}${i5.collector !== null ? ` (collettore a ${fmt3(i5.collector)} \xB0C)` : ""}.`,
+      text: `Il solare sta scaldando ${i5.cless ? "l'accumulo" : "il boiler"}${i5.collector !== null ? ` (collettore a ${fmt(i5.collector)} \xB0C)` : ""}.`,
       tone: "ok"
     };
   if (i5.collectorPumpOn === false && i5.collector !== null)
-    return { icon: "mdi:weather-sunny-off", text: `Il solare \xE8 fermo (collettore a ${fmt3(i5.collector)} \xB0C).`, tone: "info" };
+    return { icon: "mdi:weather-sunny-off", text: `Il solare \xE8 fermo (collettore a ${fmt(i5.collector)} \xB0C).`, tone: "info" };
   return null;
 }
 function sunLine(i5) {
   if (i5.sunElevation !== null && i5.sunElevation > 0 && i5.sunAboveHorizon === false) {
-    const h3 = i5.horizonElev !== null ? ` (da quella parte il terreno arriva a ${fmt3(i5.horizonElev)}\xB0)` : "";
+    const h3 = i5.horizonElev !== null ? ` (da quella parte il terreno arriva a ${fmt(i5.horizonElev)}\xB0)` : "";
     return { icon: "mdi:image-filter-hdr", text: `Il sole \xE8 dietro le colline${h3}: niente luce diretta sul collettore.`, tone: "info" };
   }
   if (i5.allskyOk !== true || i5.sunFree === null || i5.allskyCloud === null) return null;
-  const c4 = `${fmt3(i5.allskyCloud)} %`;
+  const c4 = `${fmt(i5.allskyCloud)} %`;
   if (i5.sunFree && i5.allskyCloud >= 50)
     return {
       icon: "mdi:weather-partly-cloudy",
@@ -5450,7 +5553,7 @@ function summarize2(i5) {
   for (const l3 of [whyOffLine(i5), pumpLine(i5), solarLine(i5), sunLine(i5), awayLine(i5)]) if (l3) lines.push(l3);
   if (i5.etaMinutes !== null) {
     lines.push(
-      i5.etaMinutes > 0 ? { icon: "mdi:water-boiler", text: `L'acqua calda sar\xE0 pronta tra circa ${fmt3(i5.etaMinutes)} min.`, tone: "info" } : { icon: "mdi:water-boiler", text: "L'acqua calda \xE8 gi\xE0 a temperatura d'uso.", tone: "ok" }
+      i5.etaMinutes > 0 ? { icon: "mdi:water-boiler", text: `L'acqua calda sar\xE0 pronta tra circa ${fmt(i5.etaMinutes)} min.`, tone: "info" } : { icon: "mdi:water-boiler", text: "L'acqua calda \xE8 gi\xE0 a temperatura d'uso.", tone: "ok" }
     );
   }
   return lines;
@@ -5470,6 +5573,7 @@ var DEFAULT_ENTITIES = {
   collector_temp: "sensor.solare_termico_t_collettore_stimata",
   puffer: "sensor.casale_temperatura_boiler",
   stove_state: "sensor.casale_stato",
+  season: "sensor.garage_casale_stagione",
   stove_water: "sensor.casale_temperatura_acqua",
   smoke: "sensor.casale_temperatura_fumi",
   flame: "sensor.casale_temperatura_fiamma",
@@ -5890,8 +5994,8 @@ var ImpiantoOverviewCard = class extends i4 {
           <path d="M440 ${short ? 236 : 268} H520 V315 H575" class="pipe warm thin" />
           <path d="M685 215 H700" class="pipe hot thin" />
           <path d="M685 300 H700" class="pipe warm thin" />
-          <text x="452" y="198" class="tv">${integIn !== null ? `${fmt3(integIn, 1)} \xB0C` : ""}</text>
-          <text x="452" y=${short ? 228 : 260} class="tv">${integOut !== null ? `${fmt3(integOut, 1)} \xB0C` : ""}</text>
+          <text x="452" y="198" class="tv">${integIn !== null ? `${fmt(integIn, 1)} \xB0C` : ""}</text>
+          <text x="452" y=${short ? 228 : 260} class="tv">${integOut !== null ? `${fmt(integOut, 1)} \xB0C` : ""}</text>
         </g>`}
 
         <!-- boiler -->
@@ -5928,7 +6032,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <!-- scheda centrale -->
         <rect x="236" y=${338 - d1} width="168" height="176" rx="22" class="pill big" />
         <text x="320" y=${372 - d1} class="t2 s14" text-anchor="middle">Uscita acqua calda</text>
-        <text x="320" y=${434 - d1} class="t1 b" font-size="50" text-anchor="middle">${fmt3(outlet, 1)}<tspan font-size="24" dy="-16"> °C</tspan></text>
+        <text x="320" y=${434 - d1} class="t1 b" font-size="50" text-anchor="middle">${fmt(outlet, 1)}<tspan font-size="24" dy="-16"> °C</tspan></text>
         <line x1="262" y1=${456 - d1} x2="378" y2=${456 - d1} class="sep" />
         <text x="320" y=${490 - d1} class="t1 b" font-size="22" text-anchor="middle">${showers === null ? "(\u2013)" : `(\u2248 ${showers} ${showers === 1 ? "doccia" : "docce"})`}</text>
         `}
@@ -5938,18 +6042,18 @@ var ImpiantoOverviewCard = class extends i4 {
         <line x1="214" y1="168" x2="150" y2="168" class="lead" />
         <rect x="14" y="132" width="136" height="72" rx="14" class="card hi" />
         <text x="82" y="154" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Alto (S3)</text>
-        <text x="82" y="190" class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt3(top, 1)} °C</text>
+        <text x="82" y="190" class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#ef4444">${fmt(top, 1)} °C</text>
 
         <circle cx="222" cy=${(cless ? 650 : 676) - d12} r="8" class="probe" />
         <line x1="214" y1=${(cless ? 650 : 676) - d12} x2="150" y2=${(cless ? 650 : 676) - d12} class="lead" />
         <rect x="14" y=${s2y} width="136" height="72" rx="14" class="card lo" />
         <text x="82" y=${s2y + 24} class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Basso (S2)</text>
-        <text x="82" y=${s2y + 58} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#3b82f6">${fmt3(bottom, 1)} °C</text>
+        <text x="82" y=${s2y + 58} class="b" font-size=${Math.round(27 * fs)} text-anchor="middle" fill="#3b82f6">${fmt(bottom, 1)} °C</text>
 
         <!-- stima e pulsante -->
         ${cless ? w`<rect x="14" y="216" width="136" height="68" rx="14" class="card eta" />
         <text x="82" y="235" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">Caldaia imposta a</text>
-        <text x="82" y="264" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e5.set_boiler) === null ? "\u2013" : `${fmt3(this._n(e5.set_boiler), 0)} \xB0C`}</text>
+        <text x="82" y="264" class="t1 b" font-size=${Math.round(28 * fs)} text-anchor="middle">${this._n(e5.set_boiler) === null ? "\u2013" : `${fmt(this._n(e5.set_boiler), 0)} \xB0C`}</text>
         <text x="82" y="278" class="t2" font-size="11" text-anchor="middle">sonda S. BOILER</text>
         ${this._config.summary === false ? A : w`<g class="btn info" role="button" tabindex="0" aria-label="Stato dell'impianto" @click=${() => this._openInfo()}
               @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._openInfo()}>
@@ -5965,7 +6069,7 @@ var ImpiantoOverviewCard = class extends i4 {
               <text x="108" y="319" class="b" font-size="11">Grafici</text>
             </g>`}` : w`        <rect x="14" y="224" width="136" height="104" rx="14" class="card eta" />
         <text x="82" y="248" class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">${cless ? "Caldaia imposta a" : "Acqua pronta in"}</text>
-        <text x="82" y="292" class="t1 b" font-size=${Math.round(34 * fs)} text-anchor="middle">${cless ? this._n(e5.set_boiler) === null ? "\u2013" : `${fmt3(this._n(e5.set_boiler), 0)} \xB0C` : etaText(eta)}</text>
+        <text x="82" y="292" class="t1 b" font-size=${Math.round(34 * fs)} text-anchor="middle">${cless ? this._n(e5.set_boiler) === null ? "\u2013" : `${fmt(this._n(e5.set_boiler), 0)} \xB0C` : etaText(eta)}</text>
         <text x="82" y="314" class="t2" font-size=${Math.round(13 * fs)} text-anchor="middle">${cless ? "sonda S. BOILER" : eta === 0 ? "gi\xE0 a temperatura" : eta === null ? "" : "stima media"}</text>
         ${cless ? A : w`<g class=${btn.action === "none" ? "btn off" : "btn"} role="button" tabindex=${btn.action === "none" ? "-1" : "0"}
           aria-label=${btn.label} @click=${() => this._press()} @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._press()}>
@@ -5990,7 +6094,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <!-- solare -->
         <rect x="14" y=${kwy} width="136" height="72" rx="14" class="card sun" />
         <text x="82" y=${kwy + 24} class="t2" font-size=${Math.round(14 * fs)} text-anchor="middle">Solare</text>
-        <text x="82" y=${kwy + 58} class="b" font-size=${Math.round(24 * fs)} text-anchor="middle" fill="#22c55e">${fmt3(solarKw, 1)} kW</text>
+        <text x="82" y=${kwy + 58} class="b" font-size=${Math.round(24 * fs)} text-anchor="middle" fill="#22c55e">${fmt(solarKw, 1)} kW</text>
 
         <text x=${cless ? 548 : 532} y=${cless ? 46 : 80} class="b s14" fill="#ef4444">Acqua calda</text>
         <text x=${cless ? 548 : 532} y=${cless ? 62 : 98} class="t2 s13">verso utenze</text>
@@ -6005,17 +6109,17 @@ var ImpiantoOverviewCard = class extends i4 {
           <path d=${panIn} class="pipe hot thin" />
           <path d=${panOut} class="pipe cold thin" />
           ${collectorOn ? w`<path d=${panIn} class="coilflow" /><path d=${panOut} class="coilflow" />` : A}
-          <text x="462" y=${short ? 504 : cless ? 540 : 548} class="tv">${solarIn !== null ? `${fmt3(solarIn, 1)} \xB0C` : ""}</text>
-          <text x="462" y=${short ? 528 : cless ? 656 : 644} class="tv">${solarOut !== null ? `${fmt3(solarOut, 1)} \xB0C` : ""}</text>
+          <text x="462" y=${short ? 504 : cless ? 540 : 548} class="tv">${solarIn !== null ? `${fmt(solarIn, 1)} \xB0C` : ""}</text>
+          <text x="462" y=${short ? 528 : cless ? 656 : 644} class="tv">${solarOut !== null ? `${fmt(solarOut, 1)} \xB0C` : ""}</text>
           <g transform=${short ? "translate(0 -60)" : "translate(0 0)"}>${this._panelShape(panel, panelFill, cless)}</g>
         </g>
       </svg>
       ${this._narrow ? w`<svg class="boiler mini" viewBox="0 0 640 330" role="img" aria-label="Puffer e pannello solare">
             ${cless ? A : w`<g transform="translate(-480 -140)">${this._pufferShape(puffer, pufferEstimated)}</g>
-            <text x="150" y="236" class="tv">${integIn !== null ? `\u2192 ${fmt3(integIn, 1)} \xB0C` : ""}</text>
-            <text x="150" y="266" class="tv">${integOut !== null ? `\u2190 ${fmt3(integOut, 1)} \xB0C` : ""}</text>`}
+            <text x="150" y="236" class="tv">${integIn !== null ? `\u2192 ${fmt(integIn, 1)} \xB0C` : ""}</text>
+            <text x="150" y="266" class="tv">${integOut !== null ? `\u2190 ${fmt(integOut, 1)} \xB0C` : ""}</text>`}
             <g transform="translate(-160 -420)">${this._panelShape(panel, panelFill)}</g>
-            <text x="470" y="318" class="tv" text-anchor="middle">${solarIn !== null ? `\u2192 ${fmt3(solarIn, 1)} \xB0C` : ""}   ${solarOut !== null ? `\u2190 ${fmt3(solarOut, 1)} \xB0C` : ""}</text>
+            <text x="470" y="318" class="tv" text-anchor="middle">${solarIn !== null ? `\u2192 ${fmt(solarIn, 1)} \xB0C` : ""}   ${solarOut !== null ? `\u2190 ${fmt(solarOut, 1)} \xB0C` : ""}</text>
           </svg>` : A}
     `;
   }
@@ -6049,7 +6153,7 @@ var ImpiantoOverviewCard = class extends i4 {
     const water = "M195 112 H477 A95 95 0 0 1 572 207 V1395 A95 95 0 0 1 477 1490 H195 A95 95 0 0 1 100 1395 V207 A95 95 0 0 1 195 112 Z";
     const silhouette = "M25 110 Q25 20 130 20 H540 Q645 20 645 110 V1470 Q645 1495 600 1502 V1640 Q600 1662 560 1662 H110 Q70 1662 70 1640 V1502 Q25 1495 25 1470 Z";
     const stubs = "M640 146 h36 v46 h-36 Z M640 372 h36 v26 h-36 Z M640 590 h36 v45 h-36 Z M640 700 h36 v200 h-36 Z";
-    const minTxt = o6.minProbe === null ? "\u2013" : `${fmt3(o6.minProbe, 1)} \xB0C`;
+    const minTxt = o6.minProbe === null ? "\u2013" : `${fmt(o6.minProbe, 1)} \xB0C`;
     const tooCold = o6.waiting || o6.threshold !== null && o6.minProbe !== null && o6.minProbe < o6.threshold;
     const tag = tooCold ? "#f59e0b" : "#22c55e";
     return w`
@@ -6093,10 +6197,10 @@ var ImpiantoOverviewCard = class extends i4 {
       <text x="506" y="274" class="b" font-size="13" fill="#fb923c">Caldaia</text>
       <rect x="506" y="282" width="136" height="90" rx="14" class="card eta" />
       <text x="574" y="304" class="t2" font-size="13" text-anchor="middle">Puffer acqua calda</text>
-      <text x="574" y="334" class="t1 b" font-size="27" text-anchor="middle">${o6.boilerProbe === null ? "\u2013" : `${fmt3(o6.boilerProbe, 1)} \xB0C`}</text>
+      <text x="574" y="334" class="t1 b" font-size="27" text-anchor="middle">${o6.boilerProbe === null ? "\u2013" : `${fmt(o6.boilerProbe, 1)} \xB0C`}</text>
       <text x="574" y="358" class="t1 b" font-size="14" text-anchor="middle">${o6.showers === null ? "(\u2013)" : `\u2248 ${o6.showers} ${o6.showers === 1 ? "doccia" : "docce"}`}</text>
-      <text x="506" y="401" class="t1 b" font-size="17">${o6.minProbe === null ? "\u2013" : `${fmt3(o6.minProbe, 1)} \xB0C`}</text>
-      <text x="506" y="431" class="t1 b" font-size="17">${o6.genProbe === null ? "\u2013" : `${fmt3(o6.genProbe, 1)} \xB0C`}</text>
+      <text x="506" y="401" class="t1 b" font-size="17">${o6.minProbe === null ? "\u2013" : `${fmt(o6.minProbe, 1)} \xB0C`}</text>
+      <text x="506" y="431" class="t1 b" font-size="17">${o6.genProbe === null ? "\u2013" : `${fmt(o6.genProbe, 1)} \xB0C`}</text>
 
       <!-- impianto di riscaldamento, a sinistra: la pompa spinge l'acqua nella mandata (esce), il ritorno entra -->
       <rect x="188" y="390" width="16" height="12" rx="2" class="stub" />
@@ -6113,7 +6217,7 @@ var ImpiantoOverviewCard = class extends i4 {
       </g>
       <text x="43" y="372" class="t2" font-size="11" text-anchor="middle">Impianto</text>
       <text x="14" y="462" class="t2" font-size="11">Minima (b): ${minTxt}</text>
-      <text x="14" y="477" class="b" font-size="12" fill=${tag}>${o6.threshold === null ? "blocco riscaldamento spento" : o6.waiting ? `attende ${fmt3(o6.threshold, 0)} \xB0C` : `parte sopra ${fmt3(o6.threshold, 0)} \xB0C`}</text>
+      <text x="14" y="477" class="b" font-size="12" fill=${tag}>${o6.threshold === null ? "blocco riscaldamento spento" : o6.waiting ? `attende ${fmt(o6.threshold, 0)} \xB0C` : `parte sopra ${fmt(o6.threshold, 0)} \xB0C`}</text>
     `;
   }
   /** Modo CLESS acceso: accumulo al posto del boiler solare e del puffer, senza pompa di integrazione ne' pulsante di accensione rapida. */
@@ -6126,7 +6230,7 @@ var ImpiantoOverviewCard = class extends i4 {
       <text x="630" y="158" class="t1 b s15" text-anchor="middle">Puffer 50 L</text>
       <rect x="575" y="170" width="110" height="170" rx="26" fill="url(#puffer)" class="outline" />
       <rect x="587" y="224" width="86" height="64" rx="14" class="pill big" />
-      <text x="630" y="${estimated ? 258 : 264}" class="t1 b val" text-anchor="middle">${fmt3(puffer, 0)} °C</text>
+      <text x="630" y="${estimated ? 258 : 264}" class="t1 b val" text-anchor="middle">${fmt(puffer, 0)} °C</text>
       ${estimated ? w`<text x="630" y="279" class="t2 s13" text-anchor="middle">stima sonda</text>` : A}`;
   }
   /** La sagoma del pannello con i suoi testi, con le coordinate del disegno largo (al centro x = 630). */
@@ -6145,10 +6249,10 @@ var ImpiantoOverviewCard = class extends i4 {
     const y3 = (normal, closer) => near ? closer : normal;
     return w`
       ${near ? w`<g transform="translate(-70 40)">${body}</g>` : body}
-      <text x=${x2} y=${y3(618, 668)} class="t1 b val" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt3(panel.value, 0)} \xB0C`}</text>
+      <text x=${x2} y=${y3(618, 668)} class="t1 b val" text-anchor="middle">${panel.value === null ? "\u2013" : `${fmt(panel.value, 0)} \xB0C`}</text>
       <text x=${x2} y=${y3(640, 690)} class="t2 s15" text-anchor="middle">${panel.caption}</text>
-      ${panel.maxPredicted !== null ? w`<text x=${x2} y=${y3(668, 716)} class="b s15" text-anchor="middle" fill="#f59e0b">max prevista ${fmt3(panel.maxPredicted, 0)} °C</text>` : A}
-      ${panel.maxToday !== null ? w`<text x=${x2} y=${y3(690, 738)} class="t2 s15" text-anchor="middle">raggiunta oggi ${fmt3(panel.maxToday, 0)} °C</text>` : A}`;
+      ${panel.maxPredicted !== null ? w`<text x=${x2} y=${y3(668, 716)} class="b s15" text-anchor="middle" fill="#f59e0b">max prevista ${fmt(panel.maxPredicted, 0)} °C</text>` : A}
+      ${panel.maxToday !== null ? w`<text x=${x2} y=${y3(690, 738)} class="t2 s15" text-anchor="middle">raggiunta oggi ${fmt(panel.maxToday, 0)} °C</text>` : A}`;
   }
   // ---- caldaia -----------------------------------------------------------
   _flame(cx, cy, k2, opacity = 1) {
@@ -6203,6 +6307,13 @@ var ImpiantoOverviewCard = class extends i4 {
   _chip(label, v2) {
     return b2`<div class="chip ${v2 ? "yes" : ""}"><span>${label}</span><b>${v2 === null ? "\u2013" : v2 ? "S\xCC" : "NO"}</b></div>`;
   }
+  /** Stagione impostata sulla caldaia («Estate»/«Inverno»); non compare se il sensore non c'è. */
+  _seasonChip() {
+    const id = this._e.season;
+    if (!id || !this.hass.states[id]) return A;
+    const key = seasonKey(this._s(id));
+    return b2`<div class="chip season ${key ?? ""}"><span>Stagione</span><b>${key ? SEASON_LABEL[key] : "\u2013"}</b></div>`;
+  }
   _renderStove() {
     const e5 = this._e;
     const stateRaw = this._s(e5.stove_state);
@@ -6231,30 +6342,31 @@ var ImpiantoOverviewCard = class extends i4 {
           ${inline ? this._renderPolygonFigure(look, pellet, { state: stateRaw ?? "\u2013", water: this._n(e5.stove_water), since, pump: stovePumpRunning(this._s(e5.pump)) }) : b2`${this._renderStoveImage(look, pellet, stovePumpRunning(this._s(e5.pump)))}
                 <div class="statecard">
                   <span class="scp"><span class="tl">Stato caldaia</span><span class="statepill ${look}">${stateRaw ?? "\u2013"}</span></span>
-                  <span class="scp"><span class="tl">Acqua caldaia</span><span class="water">${fmt3(this._n(e5.stove_water), 1)}<small> °C</small></span></span>
+                  <span class="scp"><span class="tl">Acqua caldaia</span><span class="water">${fmt(this._n(e5.stove_water), 1)}<small> °C</small></span></span>
                   <span class="scp"><span class="tl">Ultimo cambio stato</span><span class="since">${since ? `alle ${since}` : "\u2013"}</span></span>
                   <span class="scp"><span class="tl">Pellet</span><span class="pelletpill ${pellet.key}">${pellet.label}</span></span>
                 </div>`}
         </div>
         ${noAlarm ? A : b2`<div class="alarmbar" role="alert"><b>Allarme</b><span>${alarmRaw}</span></div>`}
         <div class="tiles">
-          ${this._tile(this._cless() ? "Sonda S. BOILER" : "Puffer 50 L", `${fmt3(this._n(this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer), 1)} \xB0C${this.hass.states[e5.puffer_effective]?.attributes?.fonte === "sonda pozzetto" ? " (stima)" : ""}`, "#f59e0b")}
-          ${this._tile("Set boiler", `${fmt3(this._n(e5.set_boiler), 0)} \xB0C`)}
-          ${this._tile("Set acqua", `${fmt3(this._n(e5.set_water), 0)} \xB0C`)}
-          ${this._tile("Potenza reale", `${fmt3(this._n(e5.power), 0)} %`)}
+          ${this._tile(this._cless() ? "Sonda S. BOILER" : "Puffer 50 L", `${fmt(this._n(this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer), 1)} \xB0C${this.hass.states[e5.puffer_effective]?.attributes?.fonte === "sonda pozzetto" ? " (stima)" : ""}`, "#f59e0b")}
+          ${this._tile("Set boiler", `${fmt(this._n(e5.set_boiler), 0)} \xB0C`)}
+          ${this._tile("Set acqua", `${fmt(this._n(e5.set_water), 0)} \xB0C`)}
+          ${this._tile("Potenza reale", `${fmt(this._n(e5.power), 0)} %`)}
         </div>
         <div class="counters">
           <span class="tl">Oggi</span>
           <div>
-            <b>${fmt3(this._n(e5.starts_today), 0)} accensioni</b>
-            <b>${fmt3(work, 1)} h in lavoro</b>
-            <b>${fmt3(this._n(e5.standby_today), 0)} stand-by</b>
+            <b>${fmt(this._n(e5.starts_today), 0)} accensioni</b>
+            <b>${fmt(work, 1)} h in lavoro</b>
+            <b>${fmt(this._n(e5.standby_today), 0)} stand-by</b>
           </div>
           <button class="more" @click=${() => this._openDetails()} aria-label="Altri dati della caldaia">Altri dati ▸</button>
         </div>
         <div class="chips">
           ${this._chip("Richiesta ACS", this._yes(e5.request_acs))} ${this._chip("Riscaldamento", this._yes(e5.request_heating))}
           ${this._chip("Consenso suggerito", this._yes(e5.consent))}
+          ${this._seasonChip()}
         </div>
         <p class="look">${LOOK_LABEL[look]}</p>
       </section>
@@ -6271,18 +6383,18 @@ var ImpiantoOverviewCard = class extends i4 {
       {
         title: "Combustione",
         tiles: [
-          { label: "Fumi", value: `${fmt3(this._n(e5.smoke), 0)} \xB0C` },
-          { label: "Fiamma", value: `${fmt3(this._n(e5.flame), 0)} \xB0C` },
-          { label: "Estrattore fumi", value: `${fmt3(this._n(e5.extractor), 0)} giri` },
-          { label: "Pressione braciere", value: fmt3(this._n(e5.brazier_pressure), 1) }
+          { label: "Fumi", value: `${fmt(this._n(e5.smoke), 0)} \xB0C` },
+          { label: "Fiamma", value: `${fmt(this._n(e5.flame), 0)} \xB0C` },
+          { label: "Estrattore fumi", value: `${fmt(this._n(e5.extractor), 0)} giri` },
+          { label: "Pressione braciere", value: fmt(this._n(e5.brazier_pressure), 1) }
         ]
       },
       {
         title: "Acqua e circolatore",
         tiles: [
-          { label: "Pressione acqua", value: `${fmt3(this._n(e5.water_pressure), 1)} bar` },
+          { label: "Pressione acqua", value: `${fmt(this._n(e5.water_pressure), 1)} bar` },
           { label: "Circolatore", value: pump === void 0 ? "\u2013" : pumpOn ? "ON" : "OFF", color: pumpOn ? "#22c55e" : void 0 },
-          { label: "Accensioni ieri", value: fmt3(this._n(e5.starts_yesterday), 0) },
+          { label: "Accensioni ieri", value: fmt(this._n(e5.starts_yesterday), 0) },
           { label: "Allarme", value: noAlarm ? "nessuno" : alarmRaw, color: noAlarm ? "#22c55e" : "#ef4444" }
         ]
       }
@@ -6291,9 +6403,9 @@ var ImpiantoOverviewCard = class extends i4 {
       groups.push({
         title: "Pellet (stima dal modello di consumo)",
         tiles: [
-          { label: "Oggi", value: `${fmt3(this._n(e5.pellet_today), 1)} kg` },
-          { label: "Settimana", value: `${fmt3(this._n(e5.pellet_week), 1)} kg` },
-          { label: "Mese", value: `${fmt3(this._n(e5.pellet_month), 0)} kg` }
+          { label: "Oggi", value: `${fmt(this._n(e5.pellet_today), 1)} kg` },
+          { label: "Settimana", value: `${fmt(this._n(e5.pellet_week), 1)} kg` },
+          { label: "Mese", value: `${fmt(this._n(e5.pellet_month), 0)} kg` }
         ]
       });
     }
@@ -6524,7 +6636,7 @@ var ImpiantoOverviewCard = class extends i4 {
     const kg = this._pelletKg();
     const days = daysLeft(kg, this._pelletPerDay());
     const fullDays = daysLeft(HOPPER.capacityKg, this._pelletPerDay());
-    const dayText = (n5) => `${n5 < 10 ? fmt3(n5, 1) : fmt3(n5, 0)} giorni`;
+    const dayText = (n5) => `${n5 < 10 ? fmt(n5, 1) : fmt(n5, 0)} giorni`;
     const glow = look === "work" ? 0.55 : look === "start" ? 0.3 : 0;
     const flame = look === "work" ? this._flame(272, 156, 0.82) : look === "start" ? this._flame(272, 156, 0.32) : look === "stopping" ? this._flame(272, 156, 0.18, 0.55) : A;
     const pelletFill = HOPPER_FILL[pellet.key];
@@ -6547,7 +6659,7 @@ var ImpiantoOverviewCard = class extends i4 {
         <g class="flicker">${flame}</g>
         <rect class="sp ${look}" x="206" y="188" width="62" height="28" rx="14" />
         <text class="spt ${look}" x="237" y="207" font-size=${stateFont} font-weight="700" text-anchor="middle">${d3.state}</text>
-        <text x="342" y="208" font-size="19" font-weight="700" text-anchor="end" fill="#f1f5f9">${fmt3(d3.water, 1)}<tspan font-size="11" font-weight="500" fill="#94a3b8"> °C</tspan></text>
+        <text x="342" y="208" font-size="19" font-weight="700" text-anchor="end" fill="#f1f5f9">${fmt(d3.water, 1)}<tspan font-size="11" font-weight="500" fill="#94a3b8"> °C</tspan></text>
         ${d3.pump === null ? A : w`${this._pumpIcon(215, 223, 6, d3.pump)}<text class=${d3.pump ? "pumplab on" : "pumplab"} x="225" y="226.3" font-size="9.5">circolatore</text>`}
         <!-- armadio del serbatoio (a sinistra) -->
         <g class="cabinet" role="button" tabindex="0" aria-label="Pellet nel serbatoio: aggiorna il conteggio" @click=${() => this._openPellet()} @keydown=${(ev) => (ev.key === "Enter" || ev.key === " ") && this._openPellet()}>
@@ -6572,7 +6684,7 @@ var ImpiantoOverviewCard = class extends i4 {
             <polyline points="122,86 128,79 133,83 140,75" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
             <text x="144" y="85" font-size="11" font-weight="700">Grafici</text>
           </g>
-          <text x="104" y="138" font-size="28" font-weight="700" fill="#f1f5f9">${kg === null ? "\u2013" : fmt3(kg, 0)}<tspan font-size="13" font-weight="500" fill="#94a3b8"> kg</tspan></text>
+          <text x="104" y="138" font-size="28" font-weight="700" fill="#f1f5f9">${kg === null ? "\u2013" : fmt(kg, 0)}<tspan font-size="13" font-weight="500" fill="#94a3b8"> kg</tspan></text>
           <text x="92" y="155" font-size="13" fill="#94a3b8">${days === null ? "" : dayText(days)}</text>
           <text x="76" y="171" font-size="9.5" fill="#94a3b8">${fullDays === null ? "" : `(100% pellet ${dayText(fullDays)})`}</text>
           <text x="72" y="192" font-size="10.5" fill="#94a3b8">pellet</text>
@@ -6694,7 +6806,7 @@ var ImpiantoOverviewCard = class extends i4 {
             <span class="since">${since}</span>
           </div>
           ${modeRaw && STUFA_MODE_LABEL[modeRaw] ? b2`<div class="sumrow"><span class="tl">Modo</span><b>${STUFA_MODE_LABEL[modeRaw]}</b></div>` : A}
-          <div class="sumrow"><span class="tl">Potenza</span><b>${power === null ? "\u2013" : `${fmt3(power, power % 1 ? 1 : 0)} W`}</b></div>
+          <div class="sumrow"><span class="tl">Potenza</span><b>${power === null ? "\u2013" : `${fmt(power, power % 1 ? 1 : 0)} W`}</b></div>
         </div>
         ${sw ? b2`<button class=${cls} ?disabled=${btn.action === "none"} @click=${() => this._stufaPress()}>
               <span>${btn.label}</span>${btn.sub ? b2`<small>${btn.sub}</small>` : A}
@@ -8884,7 +8996,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.5";
+var VERSION = "0.5.6";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

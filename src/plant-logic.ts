@@ -319,3 +319,16 @@ export function sinceText(ms: number | null): string {
   const d = Math.floor(h / 24);
   return `da ${d} ${d === 1 ? "giorno" : "giorni"}`;
 }
+
+/** Stagione impostata sulla caldaia (registro Estate/Inverno della Polygon). */
+export type SeasonKey = "summer" | "winter";
+
+export const SEASON_LABEL: Record<SeasonKey, string> = { summer: "Estate", winter: "Inverno" };
+
+/** Stagione da uno stato di Home Assistant: «summer»/«winter» (anche «Summer», «Estate»…); `null` se manca o non si capisce. */
+export function seasonKey(state: string | null | undefined): SeasonKey | null {
+  const s = (state ?? "").trim().toLowerCase();
+  if (s === "summer" || s === "estate") return "summer";
+  if (s === "winter" || s === "inverno") return "winter";
+  return null;
+}

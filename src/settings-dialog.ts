@@ -2,7 +2,9 @@ import { LitElement, html, css, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "./types";
 import { SECTION_INFO, sectionsSummary, visibleKeys, type SectionKey, type Sections } from "./sections-logic";
-import { PENDING_MS, SETTINGS_GROUPS, applyPending, buildSettingsView, clampValue, stepValue, writeService, type HelpDef, type PendingMap, type RowView, type SectionView } from "./settings-logic";
+import type { ImpiantoConfirmDialog } from "./confirm-dialog";
+import "./confirm-dialog";
+import { PENDING_MS, SETTINGS_GROUPS, applyPending, buildSettingsView, clampValue, selectService, stepValue, writeService, type HelpDef, type PendingMap, type RowView, type SectionView } from "./settings-logic";
 
 const TAG = "impianto-settings-dialog";
 
@@ -22,6 +24,9 @@ export class ImpiantoSettingsDialog extends LitElement {
   @state() private _thermoBusy = false;
   @state() private _error = "";
   private _pending: PendingMap = {};
+  /** voce di un select appena scelta e non ancora confermata dalla caldaia (arriva dopo parecchi secondi) */
+  @state() private _choicePending: Record<string, { option: string; until: number }> = {};
+  private _confirm?: ImpiantoConfirmDialog;
   private _timers = new Map<string, number>();
   private _expiry?: number;
   private _onKey = (e: KeyboardEvent) => {
@@ -38,6 +43,7 @@ export class ImpiantoSettingsDialog extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("keydown", this._onKey);
+    this._confirm?.remove();
     for (const t of this._timers.values()) window.clearTimeout(t);
     this._timers.clear();
     if (this._expiry) window.clearTimeout(this._expiry);
@@ -55,6 +61,32 @@ export class ImpiantoSettingsDialog extends LitElement {
     } catch (err) {
       this._error = `Impossibile salvare: ${err instanceof Error ? err.message : String(err)}`;
     }
+  }
+
+  /** Scelta di una voce (stagione): chiede conferma, perché scrive nella memoria della caldaia. */
+  private _choose(row: RowView, option: { value: string; label: string }): void {
+    if (this._confirm || row.choice === option.value) return;
+    const d = document.createElement("impianto-confirm-dialog") as ImpiantoConfirmDialog;
+    d.heading = `Passare a ${option.label}?`;
+    d.lines = [`Cambia la stagione sulla caldaia, come dal display. Il cambio viene scritto nella memoria della caldaia (EEPROM, al massimo 20 scritture al giorno).`];
+    d.confirmLabel = "Cambia";
+    d.addEventListener("confirmed", () => {
+      this._choicePending = { ...this._choicePending, [row.entity]: { option: option.value, until: Date.now() + PENDING_MS } };
+      if (this._expiry) window.clearTimeout(this._expiry);
+      this._expiry = window.setTimeout(() => this.requestUpdate(), PENDING_MS + 100);
+      const w = selectService(row, option.value);
+      void this._call(w.domain, w.service, w.data).then(() => {
+        if (this._error) {
+          const { [row.entity]: _gone, ...rest } = this._choicePending;
+          this._choicePending = rest;
+        }
+      });
+    });
+    d.addEventListener("closed", () => {
+      this._confirm = undefined;
+    });
+    document.body.appendChild(d);
+    this._confirm = d;
   }
 
   private _toggle(row: RowView): void {
@@ -128,6 +160,27 @@ export class ImpiantoSettingsDialog extends LitElement {
             ?disabled=${row.unavailable}
             @click=${() => this._toggle(row)}
           ><span class="knob"></span></button>
+        </div>
+      `;
+    }
+    if (row.kind === "select") {
+      const p = this._choicePending[row.entity];
+      const waiting = !!p && Date.now() < p.until && row.choice !== p.option;
+      const shown = waiting ? p.option : row.choice;
+      return html`
+        <div class="row">
+          ${text}
+          <div class="seg" role="radiogroup" aria-label=${row.label}>
+            ${(row.choices ?? []).map(
+              (c) => html`<button
+                class=${shown === c.value ? "on" : ""}
+                role="radio"
+                aria-checked=${shown === c.value ? "true" : "false"}
+                ?disabled=${row.unavailable || waiting}
+                @click=${() => this._choose(row, c)}
+              >${c.label}${waiting && shown === c.value ? " …" : ""}</button>`,
+            )}
+          </div>
         </div>
       `;
     }
@@ -467,6 +520,32 @@ export class ImpiantoSettingsDialog extends LitElement {
     .st:disabled,
     input:disabled {
       opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .seg {
+      flex: none;
+      display: flex;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .seg button {
+      min-height: 44px;
+      min-width: 92px;
+      padding: 8px 16px;
+      border: 0;
+      background: var(--secondary-background-color, rgba(127, 127, 127, 0.12));
+      color: inherit;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .seg button.on {
+      background: var(--primary-color, #03a9f4);
+      color: #fff;
+      font-weight: 600;
+    }
+    .seg button:disabled {
+      opacity: 0.55;
       cursor: not-allowed;
     }
     .num {
