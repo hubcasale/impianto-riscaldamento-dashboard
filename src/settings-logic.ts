@@ -152,7 +152,7 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
         kind: "number",
         entity: "input_number.boiler_solare_t_minima_zona",
         label: "Temperatura minima di una zona per contare le docce",
-        help: H("Una zona del serbatoio conta per le docce solo se è almeno a questa temperatura: l'acqua sanitaria esce dalla serpentina più fredda dell'accumulo.", "Alzala se le docce stimate sono più di quelle vere, abbassala nel caso opposto.", "47 °C"),
+        help: H("Le docce si contano su quattro zone dell'accumulo (una per sonda): di ogni zona conta il calore sopra questa temperatura, perché sotto la serpentina sanitaria non riesce più a prelevarlo.", "Alzala se le docce stimate sono più di quelle vere, abbassala nel caso opposto.", "43 °C"),
       },
       {
         kind: "toggle",

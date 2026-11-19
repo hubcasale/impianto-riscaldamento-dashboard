@@ -24,7 +24,7 @@ import "./confirm-dialog";
 import { SECTIONS_USER_KEY, SECTION_KEYS, defaultSections, normalizeSections, sectionsToStore, toggleSection, visibleKeys, type SectionKey, type Sections } from "./sections-logic";
 import { summarize, type SummaryLine } from "./summary-logic";
 import { CLESS_MASK, CLESS_RENDER } from "./cless-render";
-import { DEFAULT_MODEL, SEASON_LABEL, seasonKey, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, sinceText, stoveLook, stovePumpRunning, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
+import { DEFAULT_MODEL, SEASON_LABEL, seasonKey, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, showersFromZones, sinceText, stoveLook, stovePumpRunning, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
 const CARD_TAG = "impianto-overview-card";
 
@@ -572,7 +572,7 @@ export class ImpiantoOverviewCard extends LitElement {
       showerVolume: this._val(m.shower_volume) ?? DEFAULT_MODEL.showerVolume,
       showerTemp: this._val(m.shower_temp) ?? DEFAULT_MODEL.showerTemp,
       // col CLESS le docce si contano sopra la temperatura minima della zona (la serpentina non scende sotto)
-      coilMin: this._cless() ? this._val(undefined, DEFAULT_MODEL_ENTITIES.zone_min) ?? 47 : null,
+      coilMin: this._cless() ? this._val(undefined, DEFAULT_MODEL_ENTITIES.zone_min) ?? 43 : null,
     };
   }
 
@@ -590,7 +590,10 @@ export class ImpiantoOverviewCard extends LitElement {
     const top = this._n(e.boiler_top);
     const bottom = this._n(e.boiler_bottom);
     const outlet = this._n(e.outlet) ?? top;
-    const showers = showersEstimate(top, bottom, m);
+    // col CLESS le docce si contano su quattro zone, una per sonda: la doccia raffredda soprattutto le zone basse (b e c)
+    const showers = cless
+      ? showersFromZones([top, this._n(e.puffer), this._n(e.coil_integ_out), this._n(e.coil_integ_in)], m)
+      : showersEstimate(top, bottom, m);
     const pufferId = this.hass.states[e.puffer_effective] ? e.puffer_effective : e.puffer;
     const puffer = this._n(pufferId);
     const pufferEstimated = this.hass.states[pufferId]?.attributes?.fonte === "sonda pozzetto";

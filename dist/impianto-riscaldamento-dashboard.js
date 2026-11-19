@@ -799,6 +799,22 @@ function showersEstimate(top, bottom, m2) {
   }
   return Math.floor(liters / m2.showerVolume);
 }
+var CLESS_ZONE_MIN = 43;
+function showersFromZones(temps, m2) {
+  const known = temps.filter((t3) => t3 !== null && Number.isFinite(t3));
+  if (!known.length) return null;
+  const span = m2.showerTemp - m2.mainsTemp;
+  if (span <= 0 || m2.showerVolume <= 0) return null;
+  const mean = known.reduce((s4, t3) => s4 + t3, 0) / known.length;
+  const floor = m2.coilMin ?? CLESS_ZONE_MIN;
+  const vol = m2.volume / temps.length;
+  let liters = 0;
+  for (const t3 of temps) {
+    const v2 = t3 !== null && Number.isFinite(t3) ? t3 : mean;
+    if (v2 > floor) liters += vol * (v2 - floor) / span;
+  }
+  return Math.floor(liters / m2.showerVolume);
+}
 function stoveLook(state) {
   const s4 = (state ?? "").trim().toUpperCase();
   if (["WORK", "LAVORO", "WORKING"].includes(s4)) return "work";
@@ -1060,7 +1076,7 @@ var SETTINGS_SECTIONS = [
         kind: "number",
         entity: "input_number.boiler_solare_t_minima_zona",
         label: "Temperatura minima di una zona per contare le docce",
-        help: H2("Una zona del serbatoio conta per le docce solo se \xE8 almeno a questa temperatura: l'acqua sanitaria esce dalla serpentina pi\xF9 fredda dell'accumulo.", "Alzala se le docce stimate sono pi\xF9 di quelle vere, abbassala nel caso opposto.", "47 \xB0C")
+        help: H2("Le docce si contano su quattro zone dell'accumulo (una per sonda): di ogni zona conta il calore sopra questa temperatura, perch\xE9 sotto la serpentina sanitaria non riesce pi\xF9 a prelevarlo.", "Alzala se le docce stimate sono pi\xF9 di quelle vere, abbassala nel caso opposto.", "43 \xB0C")
       },
       {
         kind: "toggle",
@@ -5899,7 +5915,7 @@ var ImpiantoOverviewCard = class extends i4 {
       showerVolume: this._val(m2.shower_volume) ?? DEFAULT_MODEL.showerVolume,
       showerTemp: this._val(m2.shower_temp) ?? DEFAULT_MODEL.showerTemp,
       // col CLESS le docce si contano sopra la temperatura minima della zona (la serpentina non scende sotto)
-      coilMin: this._cless() ? this._val(void 0, DEFAULT_MODEL_ENTITIES.zone_min) ?? 47 : null
+      coilMin: this._cless() ? this._val(void 0, DEFAULT_MODEL_ENTITIES.zone_min) ?? 43 : null
     };
   }
   _yes(id) {
@@ -5914,7 +5930,7 @@ var ImpiantoOverviewCard = class extends i4 {
     const top = this._n(e5.boiler_top);
     const bottom = this._n(e5.boiler_bottom);
     const outlet = this._n(e5.outlet) ?? top;
-    const showers = showersEstimate(top, bottom, m2);
+    const showers = cless ? showersFromZones([top, this._n(e5.puffer), this._n(e5.coil_integ_out), this._n(e5.coil_integ_in)], m2) : showersEstimate(top, bottom, m2);
     const pufferId = this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer;
     const puffer = this._n(pufferId);
     const pufferEstimated = this.hass.states[pufferId]?.attributes?.fonte === "sonda pozzetto";
@@ -8996,7 +9012,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.6";
+var VERSION = "0.5.7";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

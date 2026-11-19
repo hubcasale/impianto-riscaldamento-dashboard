@@ -52,6 +52,31 @@ export function showersEstimate(top: number | null, bottom: number | null, m: Bo
   return Math.floor(liters / m.showerVolume);
 }
 
+/**
+ * Docce con l'accumulo CLESS: quattro zone di volume uguale, una per sonda (S3 in alto, S. BOILER, b, c in basso).
+ * Ogni zona fornisce energia sopra la temperatura minima `coilMin` (sotto, la serpentina sanitaria non riesce piu' a
+ * prelevare calore): litri a temperatura doccia = volume zona x (T - T minima) / (T doccia - T rete).
+ * Tarato il 19/11/2026 su una doccia (le sonde b e c scendono di 5-8 K, S3 e S2 quasi niente) e su una vasca da circa 55 L
+ * (S3 -1,7, S. BOILER -5,5 K): il calore si preleva dalle zone piu' calde. Una sonda mancante prende la media delle altre.
+ */
+export const CLESS_ZONE_MIN = 43;
+
+export function showersFromZones(temps: (number | null)[], m: BoilerModel): number | null {
+  const known = temps.filter((t): t is number => t !== null && Number.isFinite(t));
+  if (!known.length) return null;
+  const span = m.showerTemp - m.mainsTemp;
+  if (span <= 0 || m.showerVolume <= 0) return null;
+  const mean = known.reduce((s, t) => s + t, 0) / known.length;
+  const floor = m.coilMin ?? CLESS_ZONE_MIN;
+  const vol = m.volume / temps.length;
+  let liters = 0;
+  for (const t of temps) {
+    const v = t !== null && Number.isFinite(t) ? t : mean;
+    if (v > floor) liters += (vol * (v - floor)) / span;
+  }
+  return Math.floor(liters / m.showerVolume);
+}
+
 /** Aspetto della stufa in base allo stato letto dalla Polygon. */
 export type StoveLook = "off" | "wait" | "start" | "work" | "standby" | "stopping";
 

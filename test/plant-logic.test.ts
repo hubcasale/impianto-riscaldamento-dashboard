@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_MODEL, boostButton, collectorPumpPill, integrationPumpPill, stovePumpRunning, panelColor, panelModel, etaText, fmt, pelletStatus, showersEstimate, stoveLook, tempColor, toNumber, sinceText, stufaButton, stufaKey, STUFA_LABEL } from "../src/plant-logic";
+import { DEFAULT_MODEL, boostButton, collectorPumpPill, integrationPumpPill, stovePumpRunning, panelColor, panelModel, etaText, fmt, pelletStatus, showersEstimate, showersFromZones, stoveLook, tempColor, toNumber, sinceText, stufaButton, stufaKey, STUFA_LABEL } from "../src/plant-logic";
 
 test("docce: boiler caldo in alto, freddo in basso", () => {
   // zona alta 95 L a 55,6 °C -> 95*(40,6)/23 = 167,7 L a 38 °C -> 4 docce da 40 L
@@ -187,4 +187,23 @@ test("docce con la serpentina (CLESS): l'energia si conta sopra la temperatura m
   assert.equal(showersEstimate(46, 20, cless), 0);
   // la zona bassa scaldata dal sole sopra la minima conta anche lei
   assert.ok((showersEstimate(65, 55, cless) ?? 0) > 4);
+});
+
+test("docce CLESS: quattro zone, tarate sulla doccia e sulla vasca del 19/11/2026", () => {
+  const m = { volume: 510, topShare: 0.45, mainsTemp: 15, showerVolume: 40, showerTemp: 38, coilMin: 43 };
+  // prima e dopo la doccia delle 7:30 (sonde S3, S. BOILER, b, c)
+  assert.equal(showersFromZones([61.4, 58.5, 52.3, 55.8], m), 7);
+  assert.equal(showersFromZones([60.7, 55.5, 47.7, 48.2], m), 5);
+  // prima e dopo la vasca da circa 55 L delle 12:00
+  assert.equal(showersFromZones([58.2, 54.0, 44.6, 46.1], m), 4);
+  assert.equal(showersFromZones([56.5, 48.5, 42.9, 44.9], m), 2);
+  // la sera, con l'accumulo scarico in basso
+  assert.equal(showersFromZones([50.2, 45.0, 37.4, 38.5], m), 1);
+});
+
+test("docce CLESS: una sonda mancante prende la media delle altre, nessuna sonda = nessuna stima", () => {
+  const m = { volume: 510, topShare: 0.45, mainsTemp: 15, showerVolume: 40, showerTemp: 38, coilMin: 43 };
+  assert.equal(showersFromZones([58.2, 54.0, null, 46.1], m), showersFromZones([58.2, 54.0, 52.8, 46.1], m));
+  assert.equal(showersFromZones([null, null, null, null], m), null);
+  assert.equal(showersFromZones([40, 40, 40, 40], m), 0);
 });
