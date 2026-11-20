@@ -10,4 +10,5 @@ $CLI pcb export drill --format excellon --excellon-separate-th --drill-origin ab
 
 $PY distinta.py 2>&1 | grep -v assert
 (cd produzione/gerber && zip -q ../centralina_revD_gerber.zip *)
+$CLI pcb export pdf --layers F.Cu,F.SilkS,Edge.Cuts --black-and-white --mode-single --drill-shape-opt 2 --output produzione/stampa_1a1_prova_montaggio.pdf kicad/centralina.kicad_pcb > /dev/null
 ls produzione
