@@ -75,8 +75,11 @@ un cavo da JST XH a custodia Dupont 2x5.
 
 ## Stato del progetto KiCad (20/11/2026)
 
-- `genera_scheda.py` genera `kicad/centralina.kicad_pcb` (contorno 120 x 80 mm, parti con le impronte standard di KiCad 10, reti,
-  piani di massa su entrambi gli strati). Si lancia con il Python di KiCad (vedi l'intestazione del file).
-- Prese del DevKit: J1 (fila bassa) porta quasi tutti i segnali, J3 (fila alta) i GPIO liberi verso la fila di pin in alto.
-  Piedinatura J1/J3 presa dalla documentazione ufficiale del DevKitC-1: da verificare sul tuo esemplare.
-- Da fare: piste (autoinstradamento), regole di progetto (clearance 0,15 mm), serigrafia, DRC pulito, Gerber, BOM/CPL, revisione.
+- Scheda principale 120 x 80 mm, 2 strati, instradata e con il controllo delle regole (DRC) pulito: nessuna violazione, nessun collegamento mancante.
+- `genera_scheda.py` costruisce la scheda (parti, reti, posizioni, piano di massa sul retro). `costruisci.sh` la rigenera, la instrada
+  con Freerouting 1.9.0 (richiede Java 17; si apre una finestra per qualche secondo) e lancia il DRC. `produci.sh` esporta Gerber, fori,
+  distinta e posizioni nella cartella `produzione/`.
+- Regole: clearance 0,15 mm, piste 0,25 mm (alimentazione 0,7 mm, 3,3 V 0,4 mm), via 0,6/0,3 mm.
+- Piedinatura J1/J3 del DevKit presa dalla documentazione ufficiale del DevKitC-1; distanza tra le file 22,86 mm: DA VERIFICARE sul tuo esemplare.
+- Da fare prima dell'ordine: verifica a calibro delle impronte (DevKit, morsettiere, XH), codici LCSC nella distinta, anteprima dei Gerber nel
+  visualizzatore del produttore, controllo di rotazione e posizione dei componenti nell'anteprima dell'assemblaggio.

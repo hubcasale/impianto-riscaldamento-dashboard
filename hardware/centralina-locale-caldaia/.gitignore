@@ -1,0 +1,5 @@
+kicad/*.dsn
+kicad/*.ses
+kicad/*-backups/
+kicad/*.kicad_prl
+*.bak
