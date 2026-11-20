@@ -1,0 +1,3 @@
+Revisione C (commit 8103e90).
+Modulo W5500 Lite collegato con cavo JST XH a 8 poli, nomi dei pin sulla serigrafia (superata: ora il modulo si innesta sulla scheda).
+SOLO PER CONSULTAZIONE: non ordinare questi file.

@@ -29,6 +29,7 @@ SUGG = {
     "JST XH 8 poli": "JST XH B8B-XH-A (passo 2,50 mm, verticale)",
     "JST XH 4 poli": "JST XH B4B-XH-A (passo 2,50 mm, verticale)",
     "Presa femmina 1x22 2,54 mm": "presa femmina 1x22, 2,54 mm (per il DevKit)",
+    "Presa femmina 1x6 2,54 mm": "presa femmina 1x6, 2,54 mm (per il modulo W5500 Lite)",
     "Strip 1x4 2,54 mm": "strip maschio 1x4, 2,54 mm",
     "Strip 1x12 2,54 mm": "strip maschio 1x12, 2,54 mm",
 }

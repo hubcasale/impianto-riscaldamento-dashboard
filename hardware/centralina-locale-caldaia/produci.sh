@@ -9,5 +9,5 @@ $CLI pcb export gerbers --layers F.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mas
 $CLI pcb export drill --format excellon --excellon-separate-th --drill-origin absolute --excellon-units mm --output produzione/gerber/ kicad/centralina.kicad_pcb | tail -1
 
 $PY distinta.py 2>&1 | grep -v assert
-(cd produzione/gerber && zip -q ../centralina_revC_gerber.zip *)
+(cd produzione/gerber && zip -q ../centralina_revD_gerber.zip *)
 ls produzione

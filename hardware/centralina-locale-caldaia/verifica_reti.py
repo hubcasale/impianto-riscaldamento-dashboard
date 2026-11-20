@@ -21,9 +21,9 @@ ATTESI = {
     ("J1", 10): "ETH_RST", ("J1", 12): "I2C_SDA", ("J1", 15): "I2C_SCL", ("J1", 16): "ETH_CS", ("J1", 17): "ETH_MOSI",
     ("J1", 18): "ETH_SCLK", ("J1", 19): "ETH_MISO", ("J1", 20): "ETH_INT", ("J1", 21): "+5V_DK", ("J1", 22): "GND",
     ("J3", 1): "GND", ("J3", 21): "GND", ("J3", 22): "GND",
-    # cavo del W5500 Lite (3,3 V): XH1 +3V3, XH2 GND, XH3 SCLK, XH4 MISO, XH5 MOSI, XH6 CS, XH7 INT, XH8 RST
-    ("J20", 1): "+3V3_ETH", ("J20", 2): "GND", ("J20", 3): "ETH_SCLK", ("J20", 4): "ETH_MISO", ("J20", 5): "ETH_MOSI",
-    ("J20", 6): "ETH_CS", ("J20", 7): "ETH_INT", ("J20", 8): "ETH_RST",
+    # modulo W5500 Lite innestato (J20 colonna sinistra, J24 colonna destra; pad 1 a nord)
+    ("J20", 1): "ETH_INT", ("J20", 2): "ETH_CS", ("J20", 3): "ETH_SCLK", ("J20", 4): "ETH_MOSI", ("J20", 5): "GND", ("J20", 6): "GND",
+    ("J24", 1): "ETH_MISO", ("J24", 2): "ETH_RST", ("J24", 3): "", ("J24", 4): "+3V3_ETH", ("J24", 5): "+3V3_ETH", ("J24", 6): "GND",
     ("J21", 1): "+5V", ("J21", 2): "GND", ("J21", 3): "DISP_TX", ("J21", 4): "DISP_RX",
     ("U1", 1): "GND", ("U1", 3): "GND", ("U1", 4): "N0", ("U1", 5): "N1", ("U1", 6): "N2", ("U1", 7): "N3", ("U1", 8): "+3V3",
     ("U1", 9): "I2C_SDA", ("U1", 10): "I2C_SCL",

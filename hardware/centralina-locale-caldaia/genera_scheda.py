@@ -18,7 +18,7 @@ FP = "/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints"
 
 W, H = 120.0, 80.0          # contorno della scheda
 ROW = 22.86                  # distanza tra le due file del DevKit (da verificare sul tuo esemplare con il calibro)
-X0 = 30.0                    # x del primo pin delle prese del DevKit
+X0 = 36.0                    # x del primo pin delle prese del DevKit
 Y_J3, Y_J1 = 12.0, 12.0 + ROW
 
 
@@ -214,30 +214,57 @@ for i, (lab, n) in enumerate(zip(labels, chan)):
 
 # ---------------------------------------------------------------------------------------------------------------
 # regolatore 3,3 V per il modulo W5500 Lite (assorbe circa 130 mA, alimentato solo a 3,3 V): AP2112K-3.3 (SOT-23-5)
-place("U2", "Package_TO_SOT_SMD", "SOT-23-5", 25, 50, value="AP2112K-3.3", pads={"1": "+5V", "2": "GND", "3": "+5V", "5": "+3V3_ETH"})
-place("C40", "Capacitor_SMD", "C_0603_1608Metric", 20.5, 50, rot=90, value="10u", pads={"1": "+5V", "2": "GND"})
-place("C41", "Capacitor_SMD", "C_0603_1608Metric", 29.5, 50, rot=90, value="10u", pads={"1": "+3V3_ETH", "2": "GND"})
-text("3V3 W5500", 25, 55, 0.8)
+place("U2", "Package_TO_SOT_SMD", "SOT-23-5", 33, 54, value="AP2112K-3.3", pads={"1": "+5V", "2": "GND", "3": "+5V", "5": "+3V3_ETH"})
+place("C40", "Capacitor_SMD", "C_0603_1608Metric", 28.5, 54, rot=90, value="10u", pads={"1": "+5V", "2": "GND"})
+place("C41", "Capacitor_SMD", "C_0603_1608Metric", 37.5, 54, rot=90, value="10u", pads={"1": "+3V3_ETH", "2": "GND"})
+text("3V3 W5500", 33, 58, 0.8)
 
 # ---------------------------------------------------------------------------------------------------------------
 # connettori: W5500 (JST XH 8 poli), display (JST XH 4 poli), I2C esterno, pin liberi
-place("J20", "Connector_JST", "JST_XH_B8B-XH-A_1x08_P2.50mm_Vertical", 12, 14, rot=-90, value="JST XH 8 poli",
-      pads={"1": "+3V3_ETH", "2": "GND", "3": "ETH_SCLK", "4": "ETH_MISO", "5": "ETH_MOSI", "6": "ETH_CS", "7": "ETH_INT", "8": "ETH_RST"})
-text("W5500 Lite (3V3)", 10, 9.4, 1.0)
-pin_labels("J20", {"1": "1 3V3", "2": "2 GND", "3": "3 SCLK", "4": "4 MISO", "5": "5 MOSI", "6": "6 CS", "7": "7 INT", "8": "8 RST"}, -4.2, 0.0, 0.9, "right")
-place("J21", "Connector_JST", "JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical", 12, 40, rot=-90, value="JST XH 4 poli",
+# modulo W5500 Lite innestato sulla scheda (capovolto: i pin vanno giu' nelle prese, il corpo RJ45 sta sopra), apertura RJ45 verso il basso.
+# Misure (fornite dall'utente, da verificare con il calibro): file di pin a 20,32 mm, passo 2,54 mm, scheda 23 x 25 mm, RJ45 sporge 3,5 mm.
+# Colonna sinistra (da nord a sud): INT, CS, SCLK, MOSI, GND, GND. Colonna destra: MISO, RST, NC, 3V3, 3V3, GND.
+MOD_XC, MOD_Y0 = 14.5, 7.0
+MOD_P1 = MOD_Y0 + 12.5 - 6.35          # y del primo pin (nord)
+place("J20", "Connector_PinSocket_2.54mm", "PinSocket_1x06_P2.54mm_Vertical", MOD_XC - 10.16, MOD_P1, value="Presa femmina 1x6 2,54 mm",
+      pads={"1": "ETH_INT", "2": "ETH_CS", "3": "ETH_SCLK", "4": "ETH_MOSI", "5": "GND", "6": "GND"})
+place("J24", "Connector_PinSocket_2.54mm", "PinSocket_1x06_P2.54mm_Vertical", MOD_XC + 10.16, MOD_P1, value="Presa femmina 1x6 2,54 mm",
+      pads={"1": "ETH_MISO", "2": "ETH_RST", "4": "+3V3_ETH", "5": "+3V3_ETH", "6": "GND"})
+pin_labels("J20", {"1": "INT", "2": "CS", "3": "SCLK", "4": "MOSI", "5": "GND", "6": "GND"}, 2.2, 0.0, 0.9, "left")
+pin_labels("J24", {"1": "MISO", "2": "RST", "3": "NC", "4": "3V3", "5": "3V3", "6": "GND"}, -2.2, 0.0, 0.9, "right")
+
+
+def rect(x1, y1, x2, y2, layer, width=0.15):
+    for (a1, b1, a2, b2) in [(x1, y1, x2, y1), (x2, y1, x2, y2), (x2, y2, x1, y2), (x1, y2, x1, y1)]:
+        l = pcbnew.PCB_SHAPE(board)
+        l.SetShape(pcbnew.SHAPE_T_SEGMENT)
+        l.SetLayer(layer)
+        l.SetStart(vec(a1, b1))
+        l.SetEnd(vec(a2, b2))
+        l.SetWidth(mm(width))
+        board.Add(l)
+
+
+MOD_W, MOD_L, MOD_OVER = 23.0, 25.0, 3.5
+rect(MOD_XC - MOD_W / 2 - 1, MOD_Y0, MOD_XC + MOD_W / 2 + 1, MOD_Y0 + MOD_L + MOD_OVER, pcbnew.F_SilkS)
+text("W5500 Lite", MOD_XC, MOD_Y0 + 2.5, 1.0)
+text("(3V3)  RJ45 in basso", MOD_XC, MOD_Y0 + 22.0, 0.8)
+rect(MOD_XC - 10, MOD_Y0 + MOD_L + MOD_OVER, MOD_XC + 10, MOD_Y0 + MOD_L + MOD_OVER + 28, pcbnew.F_Fab)
+text("spazio libero per la spina RJ45 e il cavo (niente parti alte)", MOD_XC, MOD_Y0 + MOD_L + MOD_OVER + 14, 0.7, layer=pcbnew.F_Fab)
+
+place("J21", "Connector_JST", "JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical", 104, 42, rot=-90, value="JST XH 4 poli",
       pads={"1": "+5V", "2": "GND", "3": "DISP_TX", "4": "DISP_RX"})
-text("DISPLAY (5V)", 10, 35.6, 1.0)
+text("DISPLAY (5V)", 100, 38.4, 0.9)
 pin_labels("J21", {"1": "1 5V", "2": "2 GND", "3": "3 TX", "4": "4 RX"}, -4.2, 0.0, 0.9, "right")
-place("J22", "Connector_PinHeader_2.54mm", "PinHeader_1x04_P2.54mm_Vertical", 100, 42, value="Strip 1x4 2,54 mm",
+place("J22", "Connector_PinHeader_2.54mm", "PinHeader_1x04_P2.54mm_Vertical", 112, 42, value="Strip 1x4 2,54 mm",
       pads={"1": "+3V3", "2": "GND", "3": "I2C_SDA", "4": "I2C_SCL"})
 pin_labels("J22", {"1": "3V3", "2": "GND", "3": "SDA", "4": "SCL"}, 2.2, 0.0, 0.9, "left")
-text("I2C", 100, 39, 0.9)
+text("I2C", 112, 38.4, 0.9)
 hb = ["+3V3", "+5V", "GND", "GPIO1", "GPIO2", "GPIO42", "GPIO41", "GPIO40", "GPIO39", "GPIO38", "GPIO48", "GPIO47"]
-place("J23", "Connector_PinHeader_2.54mm", "PinHeader_1x12_P2.54mm_Vertical", 30, 4, rot=90, value="Strip 1x12 2,54 mm",
+place("J23", "Connector_PinHeader_2.54mm", "PinHeader_1x12_P2.54mm_Vertical", X0, 4, rot=90, value="Strip 1x12 2,54 mm",
       pads={str(i + 1): n for i, n in enumerate(hb)})
 pin_labels("J23", {"1": "3V3", "2": "5V", "3": "GND", "4": "1", "5": "2", "6": "42", "7": "41", "8": "40", "9": "39", "10": "38", "11": "48", "12": "47"}, 0.0, 3.4, 0.8, "center")
-text("GPIO liberi (numeri)", 69, 4, 0.8)
+text("GPIO liberi (numeri)", X0 + 39, 4, 0.8)
 
 # ---------------------------------------------------------------------------------------------------------------
 # GND su entrambi gli strati (zone riempite)
@@ -256,9 +283,10 @@ def zone(layer):
     board.Add(z)
 
 
-zone(pcbnew.B_Cu)   # piano di massa continuo sul retro; davanti la massa passa dai via
+zone(pcbnew.F_Cu)
+zone(pcbnew.B_Cu)   # piani di massa su entrambi gli strati, collegati da via di cucitura (vedi costruisci.sh)
 
-REV = "C"
+REV = "D"
 text(f"rev {REV} 2026-11-20", 106, 77.5, 0.8)
 tb = pcbnew.PCB_TEXT(board)
 tb.SetText(f"rev {REV}")
