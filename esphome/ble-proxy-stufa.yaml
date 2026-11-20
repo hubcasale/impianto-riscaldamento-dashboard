@@ -150,6 +150,11 @@ sensor:
     name: "Tempo di attivita"
     update_interval: 60s
     entity_category: diagnostic
+  # temperatura del chip: serve a capire se i blocchi dipendono dal caldo (il 20/11/2026 il proxy stava vicino alla scheda della stufa)
+  - platform: internal_temperature
+    name: "Temperatura chip"
+    update_interval: 60s
+    entity_category: diagnostic
   # riavvii di fila fatti dal guardiano del Bluetooth (0 = tutto bene)
   - platform: template
     name: "Riavvii del guardiano"
