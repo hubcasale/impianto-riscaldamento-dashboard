@@ -1,0 +1,3 @@
+Revisione B (commit 8e45465).
+Modulo W5500 Lite a 3,3 V con regolatore dedicato, senza i nomi dei pin sulla serigrafia (superata).
+SOLO PER CONSULTAZIONE: non ordinare questi file.

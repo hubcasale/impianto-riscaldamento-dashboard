@@ -1,0 +1,22 @@
+Comment,Designator,Footprint,LCSC Part #,Tipo,Nota
+10k 0.1%,"R30,R31,R32,R33,R34,R35",R_0603_1608Metric,,SMD,"10 kOhm 0,1 % 0603 (25 ppm o meglio)"
+10u,"C21,C40,C41",C_0603_1608Metric,,SMD,10 uF 0603/0805 X5R 10 V
+"Presa femmina 1x22 2,54 mm","J1,J3",PinSocket_1x22_P2.54mm_Vertical,,THT,"presa femmina 1x22, 2,54 mm (per il DevKit)"
+1k,"R11,R12",R_0603_1608Metric,,SMD,1 kOhm 0603 1 %
+100n,"C11,C20,C30,C31,C32,C33,C34,C35",C_0603_1608Metric,,SMD,100 nF 0603 X7R 50 V
+SS14,D2,D_SMA,,SMD,"diodo Schottky SS14 (SMA), 1 A 40 V"
+3V3,LED2,LED_0603_1608Metric,,SMD,LED 0603 (colore a scelta)
+ADS1115,U1,MSOP-10_3x3mm_P0.5mm,,SMD,"ADS1115IDGSR (TI, VSSOP-10)"
+"Morsettiera 5,08 mm 2 poli","J10,J11,J12,J13,J14,J15,J16","TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",,THT,"morsettiera a vite 5,08 mm, 2 poli, passo e ingombro come Phoenix MKDS 1,5"
+"PTC 1,5A",F1,Fuse_1812_4532Metric,,SMD,"fusibile ripristinabile 1812, 1,5 A di mantenimento, 6 V o piu'"
+5V,LED1,LED_0603_1608Metric,,SMD,LED 0603 (colore a scelta)
+SMBJ5.0A,D1,D_SMB,,SMD,TVS unidirezionale SMBJ5.0A (SMB)
+AO3401A,Q1,SOT-23,,SMD,"MOSFET canale P AO3401A (SOT-23), Vgs max 12 V"
+"Strip 1x4 2,54 mm",J22,PinHeader_1x04_P2.54mm_Vertical,,THT,"strip maschio 1x4, 2,54 mm"
+4k7,"R20,R21",R_0603_1608Metric,,SMD,"4,7 kOhm 0603 1 %"
+JST XH 4 poli,J21,JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical,,THT,"JST XH B4B-XH-A (passo 2,50 mm, verticale)"
+AP2112K-3.3,U2,SOT-23-5,,SMD,"regolatore LDO AP2112K-3.3 (SOT-23-5), 600 mA"
+JST XH 8 poli,J20,JST_XH_B8B-XH-A_1x08_P2.50mm_Vertical,,THT,"JST XH B8B-XH-A (passo 2,50 mm, verticale)"
+"Strip 1x12 2,54 mm",J23,PinHeader_1x12_P2.54mm_Vertical,,THT,"strip maschio 1x12, 2,54 mm"
+10k,R10,R_0603_1608Metric,,SMD,10 kOhm 0603 1 %
+100uF 10V,C10,CP_Elec_6.3x5.4,,SMD,"100 uF 10 V elettrolitico SMD 6,3 x 5,4 mm"

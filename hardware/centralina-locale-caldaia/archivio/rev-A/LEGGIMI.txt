@@ -1,0 +1,3 @@
+Revisione A (commit a067320).
+Modulo W5500 blu a 2x5 pin alimentato a 5 V (superata): in questa revisione il connettore XH del W5500 porta +5 V.
+SOLO PER CONSULTAZIONE: non ordinare questi file.

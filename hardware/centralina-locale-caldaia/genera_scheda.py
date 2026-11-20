@@ -79,6 +79,24 @@ def text(s, x, y, size=1.0, layer=pcbnew.F_SilkS, rot=0):
     board.Add(t)
 
 
+def pin_labels(ref, names, dx, dy, size=0.9, align="left"):
+    """Scrive sulla serigrafia il nome di ogni pin accanto al pad (`names` = {numero_pad: testo})."""
+    fp = board.FindFootprintByReference(ref)
+    for pad in fp.Pads():
+        t = names.get(pad.GetNumber())
+        if not t:
+            continue
+        x, y = pcbnew.ToMM(pad.GetPosition().x), pcbnew.ToMM(pad.GetPosition().y)
+        tx = pcbnew.PCB_TEXT(board)
+        tx.SetText(t)
+        tx.SetPosition(vec(x + dx, y + dy))
+        tx.SetLayer(pcbnew.F_SilkS)
+        tx.SetTextSize(pcbnew.VECTOR2I(mm(size), mm(size)))
+        tx.SetTextThickness(mm(0.15))
+        tx.SetHorizJustify(pcbnew.GR_TEXT_H_ALIGN_RIGHT if align == "right" else pcbnew.GR_TEXT_H_ALIGN_LEFT if align == "left" else pcbnew.GR_TEXT_H_ALIGN_CENTER)
+        board.Add(tx)
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # contorno (angoli arrotondati, 2 mm)
 def edge_line(x1, y1, x2, y2):
@@ -205,17 +223,21 @@ text("3V3 W5500", 25, 55, 0.8)
 # connettori: W5500 (JST XH 8 poli), display (JST XH 4 poli), I2C esterno, pin liberi
 place("J20", "Connector_JST", "JST_XH_B8B-XH-A_1x08_P2.50mm_Vertical", 12, 14, rot=-90, value="JST XH 8 poli",
       pads={"1": "+3V3_ETH", "2": "GND", "3": "ETH_SCLK", "4": "ETH_MISO", "5": "ETH_MOSI", "6": "ETH_CS", "7": "ETH_INT", "8": "ETH_RST"})
-text("W5500 3V3", 8, 10.5, 1.0)
+text("W5500 Lite (3V3)", 10, 9.4, 1.0)
+pin_labels("J20", {"1": "1 3V3", "2": "2 GND", "3": "3 SCLK", "4": "4 MISO", "5": "5 MOSI", "6": "6 CS", "7": "7 INT", "8": "8 RST"}, -4.2, 0.0, 0.9, "right")
 place("J21", "Connector_JST", "JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical", 12, 40, rot=-90, value="JST XH 4 poli",
       pads={"1": "+5V", "2": "GND", "3": "DISP_TX", "4": "DISP_RX"})
-text("DISPLAY", 8, 36.5, 1.0)
+text("DISPLAY (5V)", 10, 35.6, 1.0)
+pin_labels("J21", {"1": "1 5V", "2": "2 GND", "3": "3 TX", "4": "4 RX"}, -4.2, 0.0, 0.9, "right")
 place("J22", "Connector_PinHeader_2.54mm", "PinHeader_1x04_P2.54mm_Vertical", 100, 42, value="Strip 1x4 2,54 mm",
       pads={"1": "+3V3", "2": "GND", "3": "I2C_SDA", "4": "I2C_SCL"})
-text("I2C 3V3 GND SDA SCL", 98, 39, 0.8)
+pin_labels("J22", {"1": "3V3", "2": "GND", "3": "SDA", "4": "SCL"}, 2.2, 0.0, 0.9, "left")
+text("I2C", 100, 39, 0.9)
 hb = ["+3V3", "+5V", "GND", "GPIO1", "GPIO2", "GPIO42", "GPIO41", "GPIO40", "GPIO39", "GPIO38", "GPIO48", "GPIO47"]
 place("J23", "Connector_PinHeader_2.54mm", "PinHeader_1x12_P2.54mm_Vertical", 30, 4, rot=90, value="Strip 1x12 2,54 mm",
       pads={str(i + 1): n for i, n in enumerate(hb)})
-text("GPIO liberi", 69, 4, 0.8)
+pin_labels("J23", {"1": "3V3", "2": "5V", "3": "GND", "4": "1", "5": "2", "6": "42", "7": "41", "8": "40", "9": "39", "10": "38", "11": "48", "12": "47"}, 0.0, 3.4, 0.8, "center")
+text("GPIO liberi (numeri)", 69, 4, 0.8)
 
 # ---------------------------------------------------------------------------------------------------------------
 # GND su entrambi gli strati (zone riempite)
@@ -235,6 +257,16 @@ def zone(layer):
 
 
 zone(pcbnew.B_Cu)   # piano di massa continuo sul retro; davanti la massa passa dai via
+
+REV = "C"
+text(f"rev {REV} 2026-11-20", 106, 77.5, 0.8)
+tb = pcbnew.PCB_TEXT(board)
+tb.SetText(f"rev {REV}")
+tb.SetPosition(vec(60, 40))
+tb.SetLayer(pcbnew.B_SilkS)
+tb.SetMirrored(True)
+tb.SetTextSize(pcbnew.VECTOR2I(mm(2.0), mm(2.0)))
+board.Add(tb)
 
 # ---------------------------------------------------------------------------------------------------------------
 board.SetCopperLayerCount(2)
