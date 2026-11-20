@@ -57,6 +57,14 @@ with open(os.path.join(out, "distinta.csv"), "w", newline="") as fh:
     w.writerow(["Comment", "Designator", "Footprint", "LCSC Part #", "Tipo", "Nota"])
     for (val, fpn), g in groups.items():
         w.writerow([val, ",".join(sorted(g["refs"], key=natkey)), fpn, "", "THT" if g["tht"] else "SMD", SUGG.get(val, "")])
+# distinta nel formato esatto del caricamento JLCPCB (solo le 4 colonne richieste; il codice LCSC si sceglie nello strumento)
+with open(os.path.join(out, "distinta_JLC.csv"), "w", newline="") as fh:
+    w = csv.writer(fh)
+    w.writerow(["Comment", "Designator", "Footprint", "LCSC Part #"])
+    for (val, fpn), g in groups.items():
+        if g["tht"]:
+            continue   # i componenti a foro si aggiungono a parte (vedi distinta.csv)
+        w.writerow([val, ",".join(sorted(g["refs"], key=natkey)), fpn, ""])
 with open(os.path.join(out, "posizioni_JLC.csv"), "w", newline="") as fh:
     w = csv.writer(fh)
     w.writerow(["Designator", "Mid X", "Mid Y", "Layer", "Rotation"])
