@@ -88,6 +88,6 @@ un cavo da JST XH a custodia Dupont 2x5.
   con Freerouting 1.9.0 (richiede Java 17; si apre una finestra per qualche secondo) e lancia il DRC. `produci.sh` esporta Gerber, fori,
   distinta e posizioni nella cartella `produzione/`.
 - Regole: clearance 0,15 mm, piste 0,25 mm (alimentazione 0,7 mm, 3,3 V 0,4 mm), via 0,6/0,3 mm.
-- Piedinatura J1/J3 del DevKit presa dalla documentazione ufficiale del DevKitC-1; distanza tra le file 22,86 mm: DA VERIFICARE sul tuo esemplare.
-- Da fare prima dell'ordine: verifica a calibro delle impronte (DevKit, morsettiere, XH), codici LCSC nella distinta, anteprima dei Gerber nel
+- Piedinatura J1/J3 del DevKit presa dalla documentazione ufficiale del DevKitC-1 (da confrontare con la serigrafia); distanza tra le file 22,86 mm CONFERMATA dall'utente sul suo esemplare (20/11/2026); passo dei pin 2,54 mm.
+- Da fare prima dell'ordine: verifica delle impronte delle morsettiere (5,08 mm) e dei JST XH (passo 2,50 mm, spesso venduti come "XH2.54"), codici LCSC nella distinta, anteprima dei Gerber nel
   visualizzatore del produttore, controllo di rotazione e posizione dei componenti nell'anteprima dell'assemblaggio.
