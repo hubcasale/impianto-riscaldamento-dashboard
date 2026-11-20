@@ -65,6 +65,12 @@ with open(os.path.join(out, "distinta_JLC.csv"), "w", newline="") as fh:
         if g["tht"]:
             continue   # i componenti a foro si aggiungono a parte (vedi distinta.csv)
         w.writerow([val, ",".join(sorted(g["refs"], key=natkey)), fpn, ""])
+# stessa distinta con anche i componenti a foro (per chiedere al produttore di montarli, se l'opzione di assemblaggio lo prevede)
+with open(os.path.join(out, "distinta_JLC_completa.csv"), "w", newline="") as fh:
+    w = csv.writer(fh)
+    w.writerow(["Comment", "Designator", "Footprint", "LCSC Part #"])
+    for (val, fpn), g in groups.items():
+        w.writerow([val, ",".join(sorted(g["refs"], key=natkey)), fpn, ""])
 with open(os.path.join(out, "posizioni_JLC.csv"), "w", newline="") as fh:
     w = csv.writer(fh)
     w.writerow(["Designator", "Mid X", "Mid Y", "Layer", "Rotation"])
