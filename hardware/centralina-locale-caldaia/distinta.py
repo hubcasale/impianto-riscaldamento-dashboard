@@ -21,6 +21,7 @@ SUGG = {
     "PTC 1,5A": "fusibile ripristinabile 1812, 1,5 A di mantenimento, 6 V o piu'",
     "SMBJ5.0A": "TVS unidirezionale SMBJ5.0A (SMB)",
     "AO3401A": "MOSFET canale P AO3401A (SOT-23), Vgs max 12 V",
+    "AP2112K-3.3": "regolatore LDO AP2112K-3.3 (SOT-23-5), 600 mA",
     "SS14": "diodo Schottky SS14 (SMA), 1 A 40 V",
     "5V": "LED 0603 (colore a scelta)",
     "3V3": "LED 0603 (colore a scelta)",

@@ -20,6 +20,7 @@ pcbnew.ZONE_FILLER(b).Fill(b.Zones())
 pcbnew.SaveBoard(PCB,b)
 print("piste importate:", len(list(b.GetTracks())), "segmenti e via")
 PYEOF
+$PY verifica_reti.py 2>&1 | grep -v assert
 "$CLI" pcb drc --format json --severity-all --output /tmp/drc.json kicad/centralina.kicad_pcb 2>&1 | tail -1
 python3 - <<'PYEOF'
 import json,collections

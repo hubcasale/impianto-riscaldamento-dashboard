@@ -195,10 +195,17 @@ for i, (lab, n) in enumerate(zip(labels, chan)):
     text(lab, x - 1, YT + 6.5, 0.8)
 
 # ---------------------------------------------------------------------------------------------------------------
+# regolatore 3,3 V per il modulo W5500 Lite (assorbe circa 130 mA, alimentato solo a 3,3 V): AP2112K-3.3 (SOT-23-5)
+place("U2", "Package_TO_SOT_SMD", "SOT-23-5", 25, 50, value="AP2112K-3.3", pads={"1": "+5V", "2": "GND", "3": "+5V", "5": "+3V3_ETH"})
+place("C40", "Capacitor_SMD", "C_0603_1608Metric", 20.5, 50, rot=90, value="10u", pads={"1": "+5V", "2": "GND"})
+place("C41", "Capacitor_SMD", "C_0603_1608Metric", 29.5, 50, rot=90, value="10u", pads={"1": "+3V3_ETH", "2": "GND"})
+text("3V3 W5500", 25, 55, 0.8)
+
+# ---------------------------------------------------------------------------------------------------------------
 # connettori: W5500 (JST XH 8 poli), display (JST XH 4 poli), I2C esterno, pin liberi
 place("J20", "Connector_JST", "JST_XH_B8B-XH-A_1x08_P2.50mm_Vertical", 12, 14, rot=-90, value="JST XH 8 poli",
-      pads={"1": "+5V", "2": "GND", "3": "ETH_SCLK", "4": "ETH_MISO", "5": "ETH_MOSI", "6": "ETH_CS", "7": "ETH_INT", "8": "ETH_RST"})
-text("W5500", 8, 10.5, 1.0)
+      pads={"1": "+3V3_ETH", "2": "GND", "3": "ETH_SCLK", "4": "ETH_MISO", "5": "ETH_MOSI", "6": "ETH_CS", "7": "ETH_INT", "8": "ETH_RST"})
+text("W5500 3V3", 8, 10.5, 1.0)
 place("J21", "Connector_JST", "JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical", 12, 40, rot=-90, value="JST XH 4 poli",
       pads={"1": "+5V", "2": "GND", "3": "DISP_TX", "4": "DISP_RX"})
 text("DISPLAY", 8, 36.5, 1.0)

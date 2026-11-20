@@ -10,21 +10,29 @@ ESPHome cablato (Ethernet via powerline, niente Wi-Fi), con un pannello sul cope
 - Scatola di derivazione 150 x 110 x 70 mm (esterne, internamente circa 130 x 90 con i pilastrini per le viti del coperchio agli angoli); barra DIN sul fondo opzionale (non cambia la scheda). KiCad lo installa l'utente.
 - Scheda principale 120 x 80 mm, 4 fori M3 a 4 mm dagli angoli; morsettiere lungo un lato lungo (ingresso fili dai pressacavi), DevKit con USB-C e antenna verso il lato opposto.
 - ESP32-S3 DevKitC-1 (N16R8, versione con antenna esterna) su prese femmina a 2,54 mm, estraibile.
-- W5500 (modulo blu ARCELI, connettore 2x5), con un cavo da JST XH a custodia Dupont 2x5 (vedi blocco 4); il modulo sta sulla parete della scatola.
+- W5500: modulo ARCELI "W5500 Lite" (RJ45 HR961160C, 2 file di 6 pin, solo 3,3 V), separato dalla scheda, con un cavo da JST XH a contatti Dupont; si fissa nella scatola dove c'e' spazio davanti alla presa RJ45. W5500 integrato sulla scheda rimandato a una seconda versione (la spina RJ45 non ci sta nella scatola da 150 x 110).
 - Display: ELEGOO 2,8" "ESP32-32E" 240x320, touch resistivo: NON e' un modulo SPI nudo ma una scheda con un proprio ESP32-32E (come l'Elecrow
   E32R28T: ILI9341 + XPT2046, microSD, altoparlante, LED RGB, USB-C, connettori UART e SPI; piedinatura da verificare sulla scheda tecnica).
   Funziona da nodo ESPHome a parte (Wi-Fi) sul coperchio e sostituisce i 4 pulsanti con il touch. DECISIONE: fa solo il display; sonde e
   Bluetooth con la stufa restano sul nodo S3 dentro la scatola (il proxy di riserva sul display, eventualmente, solo piu' avanti dopo una prova).
 
-## Piedinatura del modulo W5500 (dallo schema del venditore, da verificare sulla serigrafia)
+## Modulo W5500: ARCELI "W5500 Lite" (RJ45 HanRun HR961160C, 2 file di 6 pin), alimentato solo a 3,3 V
 
-| Pin | Segnale | Pin | Segnale |
-|---|---|---|---|
-| 1 | non collegato | 2 | SCLK |
-| 3 | /INT | 4 | /SCS |
-| 5 | /RESET | 6 | MOSI |
-| 7 | GND | 8 | MISO |
-| 9 | 5 V (ingresso) | 10 | 3,3 V (uscita del suo regolatore: NON collegare) |
+Dallo schema dei pin dell'annuncio (le sigle sono stampate sul modulo; da verificare sul tuo esemplare):
+
+| Fila A (6 pin) | Fila B (6 pin) |
+|---|---|
+| GND | GND |
+| GND | 3V3 |
+| MOSI | 3V3 |
+| SCLK | NC |
+| CS | RST |
+| INT | MISO |
+
+Cavo: JST XH a 8 poli sulla scheda; dall'altro lato otto contatti Dupont singoli (o due custodie), uno per segnale:
+XH1 +3V3 (uno dei due pin 3V3), XH2 GND, XH3 SCLK, XH4 MISO, XH5 MOSI, XH6 CS, XH7 INT, XH8 RST. Il 3,3 V arriva da un regolatore
+dedicato sulla scheda (AP2112K-3.3, 600 mA, alimentato dai 5 V): il modulo assorbe circa 130 mA e non pesa sul DevKit.
+Il cavo Ethernet entra nella scatola da un pressacavo e si crimpa dopo; il modulo si fissa dove c'e' spazio davanti alla presa RJ45.
 
 ## Assegnazione dei pin dell'ESP32-S3
 
@@ -48,7 +56,7 @@ Su alcune versioni del DevKit un LED RGB usa GPIO38 o 48.
 2. **ADS1115** (VSSOP-10, indirizzo 0x48, ADDR a GND), VDD 3,3 V con 100 nF + 10 uF, pull-up I2C 4,7 kOhm.
 3. **6 canali sonda NTC 10k**, tutti uguali: 3,3 V -> resistenza 10 kOhm 0,1 % -> nodo -> 100 nF a GND -> morsettiera a 2 poli
    (nodo, GND). Quattro sugli ingressi A0-A3 dell'ADS1115, due sugli ingressi GPIO4 e GPIO5 dell'ESP.
-4. **Connettore del W5500**: JST XH a 8 poli (passo 2,50 mm, polarizzato). Ordine sulla scheda: 1 +5 V, 2 GND, 3 SCLK, 4 MISO, 5 MOSI, 6 CS,
+4. **Connettore del W5500**: JST XH a 8 poli (passo 2,50 mm, polarizzato). Ordine sulla scheda: 1 +3,3 V (regolatore U2), 2 GND, 3 SCLK, 4 MISO, 5 MOSI, 6 CS,
    7 INT, 8 RST. Cavo con XH da un lato e dall'altro una custodia Dupont 2x5 femmina con i fili nei pin del modulo:
    XH1 -> pin 9 (5 V), XH2 -> pin 7 (GND), XH3 -> pin 2 (SCLK), XH4 -> pin 8 (MISO), XH5 -> pin 6 (MOSI), XH6 -> pin 4 (CS),
    XH7 -> pin 3 (INT), XH8 -> pin 5 (RST); pin 1 e 10 del modulo vuoti (pin 10 e' l'uscita 3,3 V del suo regolatore).
