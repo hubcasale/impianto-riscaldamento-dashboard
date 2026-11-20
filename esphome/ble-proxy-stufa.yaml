@@ -24,6 +24,8 @@ logger:
 api:
   encryption:
     key: !secret api_encryption_key
+  # senza Home Assistant per 5 minuti la scheda si riavvia (predefinito 15): il 20/11/2026 e' rimasta 15 minuti non raggiungibile
+  reboot_timeout: 5min
 
 ota:
   - platform: esphome
@@ -32,6 +34,8 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # senza Wi-Fi per 5 minuti si riavvia (predefinito 15)
+  reboot_timeout: 5min
   # Wi-Fi e Bluetooth condividono la radio: niente risparmio energetico
   power_save_mode: none
   # molte SuperMini hanno l'antenna poco curata: con la potenza al massimo il Wi-Fi diventa instabile
@@ -74,8 +78,34 @@ bluetooth_proxy:
     - id: ble_conn_2
     - id: ble_conn_3
 
+# ---------- Guardiano del Bluetooth ----------
+# Se la scheda e' collegata ma non sente piu' il modulo della stufa, il Bluetooth e' bloccato: si riavvia.
+# Il modulo si annuncia di continuo (da giorni "Modulo stufa visibile" e' quasi sempre acceso), quindi 10 minuti di silenzio
+# sono un blocco. Si parte dopo 15 minuti dall'avvio. Dopo 3 riavvii di fila senza mai risentirlo il guardiano smette
+# (stufa spenta o fuori portata): il contatore si azzera appena il modulo torna a farsi sentire.
+interval:
+  - interval: 60s
+    then:
+      - lambda: |-
+          const uint32_t ora = millis();
+          if (ora < 15 * 60 * 1000UL) return;
+          const bool sentito = id(ble_ultimo_avviso) != 0 && (ora - id(ble_ultimo_avviso)) < 10 * 60 * 1000UL;
+          if (sentito) {
+            if (id(ble_riavvii_guardiano) != 0) id(ble_riavvii_guardiano) = 0;
+            return;
+          }
+          if (id(ble_riavvii_guardiano) >= 3) return;
+          id(ble_riavvii_guardiano) += 1;
+          ESP_LOGW("guardiano", "modulo stufa non sentito da 10 minuti: riavvio (%d)", id(ble_riavvii_guardiano));
+          App.safe_reboot();
+
 # istanti (millis) dell'ultimo avviso del modulo della stufa e dell'ultima pubblicazione dei dati
 globals:
+  # riavvii di fila del guardiano (resta salvato nella memoria della scheda)
+  - id: ble_riavvii_guardiano
+    type: int
+    restore_value: yes
+    initial_value: "0"
   - id: ble_ultimo_avviso
     type: uint32_t
     initial_value: "0"
@@ -83,7 +113,14 @@ globals:
     type: uint32_t
     initial_value: "0"
 
+# motivo dell'ultimo riavvio (alimentazione, watchdog, software...) e riavvii del guardiano
+debug:
+
 text_sensor:
+  - platform: debug
+    reset_reason:
+      name: "Motivo ultimo riavvio"
+      entity_category: diagnostic
   - platform: template
     name: "BLE modulo stufa"
     id: ble_modulo_stufa
@@ -113,6 +150,16 @@ sensor:
     name: "Tempo di attivita"
     update_interval: 60s
     entity_category: diagnostic
+  # riavvii di fila fatti dal guardiano del Bluetooth (0 = tutto bene)
+  - platform: template
+    name: "Riavvii del guardiano"
+    accuracy_decimals: 0
+    state_class: measurement
+    entity_category: diagnostic
+    icon: mdi:restart-alert
+    update_interval: 60s
+    lambda: |-
+      return id(ble_riavvii_guardiano);
   # quanti dispositivi sono collegati al proxy (su 3 slot)
   - platform: template
     name: "Dispositivi collegati al proxy"
