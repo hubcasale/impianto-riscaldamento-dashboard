@@ -22,22 +22,33 @@
 esphome:
   name: termostato
   friendly_name: Termostato
-  # Dopo una mancanza di corrente il Beca riparte da solo a 23 °C e il riscaldamento si accende.
-  # Se il riavvio dell'ESP e' dovuto alla corrente (non a OTA, Wi-Fi o riavvio da Home Assistant)
-  # si rimette l'ultimo obiettivo e l'ultimo modo ricordati prima dell'interruzione.
+  # Dopo una mancanza di corrente il Beca riparte da solo acceso a 23 °C e il riscaldamento parte.
+  # A ogni avvio dell'ESP si confronta quello che dice il Beca con l'ultimo obiettivo e l'ultimo modo ricordati:
+  # se sono diversi il Beca ha perso lo stato (e' mancata la corrente) e si rimettono quelli ricordati.
+  # Non ci si fida del motivo del riavvio: dopo la mancanza di corrente del 21/11/2026 l'ESP ha detto
+  # "External System" (il microcontrollore del Beca tiene il modulo in reset all'accensione), non "Power On",
+  # e il ripristino non era partito. Dopo OTA, riavvii software o cadute del Wi-Fi il Beca non cambia: non si fa nulla.
   on_boot:
     priority: -100
     then:
       - delay: 30s            # il microcontrollore del Beca deve aver comunicato il suo stato
       - lambda: |-
-          if (ESP.getResetInfoPtr()->reason == REASON_DEFAULT_RST) {
+          float t = id(beca).target_temperature;
+          bool acceso = id(beca).mode != climate::CLIMATE_MODE_OFF;
+          bool diverso = std::isnan(t) || fabsf(t - id(ultimo_obiettivo)) > 0.01f || acceso != id(ultimo_modo_acceso);
+          if (diverso) {
             auto call = id(beca).make_call();
             call.set_mode(id(ultimo_modo_acceso) ? climate::CLIMATE_MODE_HEAT : climate::CLIMATE_MODE_OFF);
             call.set_target_temperature(id(ultimo_obiettivo));
             call.perform();
-            ESP_LOGW("ripristino", "Mancanza di corrente: rimesso obiettivo %.1f e modo %s",
-                     id(ultimo_obiettivo), id(ultimo_modo_acceso) ? "heat" : "off");
-            id(ultimo_ripristino).publish_state("rimesso " + to_string(id(ultimo_obiettivo)) + " °C");
+            ESP_LOGW("ripristino", "Il Beca e' ripartito con %.1f %s: rimesso obiettivo %.1f e modo %s",
+                     t, acceso ? "heat" : "off", id(ultimo_obiettivo), id(ultimo_modo_acceso) ? "heat" : "off");
+            char buf[64];
+            snprintf(buf, sizeof(buf), "rimesso %.1f °C %s (era %.1f %s)", id(ultimo_obiettivo),
+                     id(ultimo_modo_acceso) ? "acceso" : "spento", t, acceso ? "acceso" : "spento");
+            id(ultimo_ripristino).publish_state(buf);
+          } else {
+            id(ultimo_ripristino).publish_state("non serviva");
           }
           id(ripristino_fatto) = true;
 
