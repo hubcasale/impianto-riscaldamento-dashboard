@@ -594,48 +594,6 @@ function r5(r6) {
   return n4({ ...r6, state: true, attribute: false });
 }
 
-// src/sections-logic.ts
-var SECTION_KEYS = ["boiler", "caldaia", "stufa", "termostato"];
-var SECTION_INFO = {
-  boiler: { label: "Boiler solare", hint: "Temperature, docce, puffer e pannello solare.", icon: "mdi:water-boiler" },
-  caldaia: { label: "Caldaia a pellet (Polygon)", hint: "Stato, serbatoio del pellet, programma e preferenze dell'impianto.", icon: "mdi:fire" },
-  stufa: { label: "Stufa a pellet", hint: "Stato, potenza, accensione e programma della stufa.", icon: "mdi:stove" },
-  termostato: { label: "Termostato ambiente", hint: "Temperatura, obiettivo, modalit\xE0 e programma.", icon: "mdi:thermostat" }
-};
-var SECTIONS_USER_KEY = "impianto_riscaldamento_sezioni";
-function defaultSections(show) {
-  const list = Array.isArray(show) ? show.filter((k2) => SECTION_KEYS.includes(k2)) : [];
-  const only = list.length > 0;
-  return { boiler: !only || list.includes("boiler"), caldaia: !only || list.includes("caldaia"), stufa: !only || list.includes("stufa"), termostato: !only || list.includes("termostato") };
-}
-function normalizeSections(stored, show) {
-  const base = defaultSections(show);
-  const raw = stored && typeof stored === "object" ? stored.sections : void 0;
-  if (raw && typeof raw === "object") {
-    for (const k2 of SECTION_KEYS) {
-      const v2 = raw[k2];
-      if (typeof v2 === "boolean") base[k2] = v2;
-    }
-  }
-  return visibleKeys(base).length === 0 ? defaultSections(show) : base;
-}
-function visibleKeys(s4) {
-  return SECTION_KEYS.filter((k2) => s4[k2]);
-}
-function toggleSection(s4, key) {
-  const next = { ...s4, [key]: !s4[key] };
-  return visibleKeys(next).length === 0 ? s4 : next;
-}
-function sectionsSummary(s4) {
-  const v2 = visibleKeys(s4);
-  if (v2.length === SECTION_KEYS.length) return "Tutte le sezioni";
-  if (v2.length === 1) return `Solo ${SECTION_INFO[v2[0]].label.toLowerCase()}`;
-  return v2.map((k2) => SECTION_INFO[k2].label.split(" (")[0].toLowerCase()).join(", ");
-}
-function sectionsToStore(s4) {
-  return { version: 1, sections: { ...s4 } };
-}
-
 // src/confirm-dialog.ts
 var TAG = "impianto-confirm-dialog";
 var ImpiantoConfirmDialog = class extends i4 {
@@ -1491,8 +1449,6 @@ var TAG2 = "impianto-settings-dialog";
 var ImpiantoSettingsDialog = class extends i4 {
   constructor() {
     super(...arguments);
-    this.sections = null;
-    this.available = [];
     this._open = null;
     this._help = null;
     this._thermoBusy = false;
@@ -1744,37 +1700,6 @@ var ImpiantoSettingsDialog = class extends i4 {
       </section>
     `;
   }
-  /** Blocco «Cosa mostrare»: un interruttore per ogni sezione della scheda; l'ultima rimasta non si spegne. */
-  _renderSections() {
-    const s4 = this.sections;
-    if (!s4 || this.available.length < 2) return A;
-    const open = this._open === "sezioni";
-    const onlyOne = visibleKeys(s4).length <= 1;
-    return b2`
-      <h3 class="grp">Pagina</h3>
-      <section class="block ${open ? "open" : ""}">
-        <div class="bh" role="button" tabindex="0" aria-expanded=${open ? "true" : "false"} @click=${() => this._toggleBlock("sezioni")} @keydown=${(e5) => {
-      if (e5.key === "Enter" || e5.key === " ") this._toggleBlock("sezioni");
-    }}>
-          <ha-icon icon="mdi:view-dashboard-outline"></ha-icon>
-          <div class="bt"><div class="bn">Cosa mostrare</div><div class="bs">${sectionsSummary(s4)}</div></div>
-          <span class="chev">${open ? "\u25BE" : "\u25B8"}</span>
-        </div>
-        ${open ? b2`<div class="bb">
-              <p class="intro">Scegli quali schede vedere in questa pagina. La scelta vale per il tuo utente e resta salvata in Home Assistant, anche su altri dispositivi.</p>
-              ${this.available.map((k2) => {
-      const on2 = s4[k2];
-      const locked = on2 && onlyOne;
-      const info = SECTION_INFO[k2];
-      return b2`<div class="row tog">
-                  <div class="txt"><div class="lab">${info.label}</div><div class="hint">${locked ? "Almeno una sezione deve restare visibile." : info.hint}</div></div>
-                  <button class=${on2 ? "sw on" : "sw"} role="switch" aria-checked=${on2 ? "true" : "false"} aria-label=${info.label} ?disabled=${locked} @click=${() => this.dispatchEvent(new CustomEvent("sections-toggle", { detail: k2 }))}><span class="knob"></span></button>
-                </div>`;
-    })}
-            </div>` : A}
-      </section>
-    `;
-  }
   _renderHelp() {
     if (!this._help) return A;
     const { title, help } = this._help;
@@ -1808,7 +1733,6 @@ var ImpiantoSettingsDialog = class extends i4 {
           <div class="body">
             ${groups.length === 0 ? b2`<div class="empty">Nessuna impostazione trovata: installa i pacchetti Home Assistant del progetto (cartella ha-packages).</div>` : b2`
                   <p class="lead">Tocca un blocco per aprirlo e cambiare i valori: ogni modifica vale subito. Gli interruttori accendono e spengono la funzione senza aprire il blocco.</p>
-                  ${this._renderSections()}
                   ${groups.map(
       ({ g: g2, secs, extra }) => b2`
                       <h3 class="grp">${g2.title}</h3>
@@ -2173,12 +2097,6 @@ var ImpiantoSettingsDialog = class extends i4 {
 __decorateClass([
   n4({ attribute: false })
 ], ImpiantoSettingsDialog.prototype, "hass", 2);
-__decorateClass([
-  n4({ attribute: false })
-], ImpiantoSettingsDialog.prototype, "sections", 2);
-__decorateClass([
-  n4({ attribute: false })
-], ImpiantoSettingsDialog.prototype, "available", 2);
 __decorateClass([
   r5()
 ], ImpiantoSettingsDialog.prototype, "_open", 2);
@@ -5455,6 +5373,461 @@ __decorateClass([
 ], ImpiantoCardDialog.prototype, "wide", 2);
 if (!customElements.get(TAG8)) customElements.define(TAG8, ImpiantoCardDialog);
 
+// src/sections-logic.ts
+var SECTION_KEYS = ["boiler", "caldaia", "stufa", "termostato"];
+function defaultSections(show) {
+  const list = Array.isArray(show) ? show.filter((k2) => SECTION_KEYS.includes(k2)) : [];
+  const only = list.length > 0;
+  return { boiler: !only || list.includes("boiler"), caldaia: !only || list.includes("caldaia"), stufa: !only || list.includes("stufa"), termostato: !only || list.includes("termostato") };
+}
+function visibleKeys(s4) {
+  return SECTION_KEYS.filter((k2) => s4[k2]);
+}
+
+// src/editor-logic.ts
+var SHOW_FIELD = {
+  boiler: "show_boiler",
+  caldaia: "show_caldaia",
+  stufa: "show_stufa",
+  termostato: "show_termostato"
+};
+function showList(config) {
+  const raw = config.show;
+  const list = Array.isArray(raw) ? raw.filter((k2) => SECTION_KEYS.includes(k2)) : [];
+  return list.length ? list : null;
+}
+function generalValues(config) {
+  const show = showList(config);
+  const inShow = (k2) => !show || show.includes(k2);
+  return {
+    title: typeof config.title === "string" ? config.title : "",
+    layout: config.layout === "split" ? "split" : "classic",
+    boiler: config.boiler === "short" ? "short" : "full",
+    show_boiler: inShow("boiler"),
+    show_caldaia: inShow("caldaia"),
+    show_stufa: !!config.stufa && inShow("stufa"),
+    show_termostato: config.thermostat !== false && inShow("termostato"),
+    show_rooms: config.rooms !== false,
+    btn_settings: config.settings !== false,
+    btn_summary: config.summary !== false,
+    btn_charts: config.charts !== false,
+    btn_schedule: config.schedule !== false
+  };
+}
+function visibleCount(v2) {
+  return [v2.show_boiler, v2.show_caldaia, v2.show_stufa, v2.show_termostato].filter(Boolean).length;
+}
+function applyGeneral(config, v2) {
+  if (visibleCount(v2) === 0) return config;
+  const next = { ...config };
+  const title = v2.title.trim();
+  if (title) next.title = title;
+  else delete next.title;
+  if (v2.layout === "split") next.layout = "split";
+  else delete next.layout;
+  if (v2.boiler === "short") next.boiler = "short";
+  else delete next.boiler;
+  if (v2.show_stufa && !next.stufa) next.stufa = true;
+  if (v2.show_termostato && next.thermostat === false) delete next.thermostat;
+  const stufaAvailable = !!next.stufa;
+  const on2 = SECTION_KEYS.filter((k2) => v2[SHOW_FIELD[k2]] === true);
+  const allOn = SECTION_KEYS.every((k2) => k2 === "stufa" && !stufaAvailable ? true : v2[SHOW_FIELD[k2]] === true);
+  if (allOn) delete next.show;
+  else next.show = on2;
+  if (!v2.show_rooms) next.rooms = false;
+  else if (next.rooms === false) delete next.rooms;
+  const flag = (key, onValue) => {
+    if (!onValue) next[key] = false;
+    else if (next[key] === false) delete next[key];
+  };
+  flag("settings", v2.btn_settings);
+  flag("summary", v2.btn_summary);
+  flag("charts", v2.btn_charts);
+  flag("schedule", v2.btn_schedule);
+  return next;
+}
+function roomsObject(config) {
+  const r6 = config.rooms;
+  return r6 && typeof r6 === "object" ? r6 : {};
+}
+var str = (x2) => typeof x2 === "string" ? x2 : "";
+function roomDrafts(config) {
+  const raw = roomsObject(config).rooms;
+  if (!Array.isArray(raw)) return DEFAULT_ROOMS.map((r6) => ({ id: r6.id, name: r6.name, short: r6.short ?? "", temperature: r6.temperature, humidity: r6.humidity }));
+  const out = [];
+  raw.forEach((r6, i5) => {
+    if (!r6 || typeof r6 !== "object") return;
+    const o6 = r6;
+    out.push({ id: str(o6.id).trim() || `stanza${i5 + 1}`, name: str(o6.name), short: str(o6.short), temperature: str(o6.temperature), humidity: str(o6.humidity) });
+  });
+  return out;
+}
+function roomComplete(r6) {
+  return !!r6.name.trim() && (!!r6.temperature.trim() || !!r6.humidity.trim());
+}
+function setRooms(config, rooms) {
+  const list = rooms.map((r6) => ({
+    id: r6.id,
+    name: r6.name.trim(),
+    ...r6.short.trim() ? { short: r6.short.trim() } : {},
+    temperature: r6.temperature.trim(),
+    humidity: r6.humidity.trim()
+  }));
+  return { ...config, rooms: { ...roomsObject(config), rooms: list } };
+}
+function newRoomId(rooms) {
+  const used = new Set(rooms.map((r6) => r6.id));
+  let n5 = rooms.length + 1;
+  while (used.has(`stanza${n5}`)) n5 += 1;
+  return `stanza${n5}`;
+}
+function addRoom(rooms) {
+  return [...rooms, { id: newRoomId(rooms), name: "", short: "", temperature: "", humidity: "" }];
+}
+function removeRoom(rooms, index) {
+  return rooms.filter((_2, i5) => i5 !== index);
+}
+function moveRoom(rooms, index, delta) {
+  const to = index + delta;
+  if (index < 0 || index >= rooms.length || to < 0 || to >= rooms.length) return rooms;
+  const next = [...rooms];
+  [next[index], next[to]] = [next[to], next[index]];
+  return next;
+}
+function updateRoom(rooms, index, patch) {
+  return rooms.map((r6, i5) => i5 === index ? { ...r6, ...patch } : r6);
+}
+function roomsOptions(config) {
+  const o6 = roomsObject(config);
+  return { title: str(o6.title), target_entity: str(o6.target_entity) };
+}
+function setRoomsOptions(config, opt) {
+  const o6 = { ...roomsObject(config) };
+  if (opt.title.trim()) o6.title = opt.title.trim();
+  else delete o6.title;
+  if (opt.target_entity.trim()) o6.target_entity = opt.target_entity.trim();
+  else delete o6.target_entity;
+  const next = { ...config };
+  if (Object.keys(o6).length) next.rooms = o6;
+  else if (next.rooms !== false) delete next.rooms;
+  return next;
+}
+
+// src/card-editor.ts
+var TAG9 = "impianto-overview-card-editor";
+var LABELS = {
+  title: "Titolo",
+  layout: "Disposizione",
+  boiler: "Disegno del boiler",
+  show_boiler: "Boiler solare / puffer",
+  show_caldaia: "Caldaia a pellet",
+  show_stufa: "Stufa a pellet",
+  show_termostato: "Termostato ambiente",
+  show_rooms: "Stanze (temperatura e umidit\xE0)",
+  btn_settings: "Pulsante \xABPreferenze\xBB (ingranaggio)",
+  btn_summary: "Pulsante \xABStato\xBB",
+  btn_charts: "Pulsante \xABGrafici\xBB",
+  btn_schedule: "Pulsante \xABProgrammazione\xBB",
+  name: "Nome",
+  short: "Nome corto (se quello intero non ci sta)",
+  temperature: "Sensore di temperatura",
+  humidity: "Sensore di umidit\xE0",
+  rooms_title: "Titolo del riquadro",
+  target_entity: "Termostato per la linea dell'obiettivo"
+};
+var HELP = {
+  layout: "Affiancata: boiler, caldaia e stufa in colonne, termostato e stanze sotto a tutta larghezza.",
+  boiler: "Il boiler corto si usa solo con la disposizione affiancata.",
+  show_stufa: "Serve l'integrazione \xABImpianto di riscaldamento\xBB con la stufa configurata.",
+  btn_settings: "Le preferenze di funzionamento (set boiler, stagione, soglie, assenza) restano l\xEC.",
+  rooms_title: "Vuoto = \xABStanze\xBB.",
+  target_entity: "Vuoto = climate.termostato."
+};
+var GENERAL_SCHEMA = [
+  { name: "title", selector: { text: {} } },
+  {
+    name: "layout",
+    selector: { select: { mode: "dropdown", options: [{ value: "classic", label: "Classica: boiler a sinistra, il resto a destra" }, { value: "split", label: "Affiancata: colonne, termostato e stanze sotto" }] } }
+  },
+  { name: "boiler", selector: { select: { mode: "dropdown", options: [{ value: "full", label: "Intero" }, { value: "short", label: "Corto" }] } } },
+  {
+    name: "cosa",
+    type: "expandable",
+    title: "Cosa mostrare",
+    flatten: true,
+    expanded: true,
+    schema: [
+      { name: "show_boiler", selector: { boolean: {} } },
+      { name: "show_caldaia", selector: { boolean: {} } },
+      { name: "show_stufa", selector: { boolean: {} } },
+      { name: "show_termostato", selector: { boolean: {} } },
+      { name: "show_rooms", selector: { boolean: {} } }
+    ]
+  },
+  {
+    name: "pulsanti",
+    type: "expandable",
+    title: "Pulsanti",
+    flatten: true,
+    schema: [
+      { name: "btn_settings", selector: { boolean: {} } },
+      { name: "btn_summary", selector: { boolean: {} } },
+      { name: "btn_charts", selector: { boolean: {} } },
+      { name: "btn_schedule", selector: { boolean: {} } }
+    ]
+  }
+];
+var ROOM_SCHEMA = [
+  { name: "name", selector: { text: {} } },
+  { name: "short", selector: { text: {} } },
+  { name: "temperature", selector: { entity: { filter: { domain: "sensor", device_class: "temperature" } } } },
+  { name: "humidity", selector: { entity: { filter: { domain: "sensor", device_class: "humidity" } } } }
+];
+var ROOMS_OPT_SCHEMA = [
+  { name: "rooms_title", selector: { text: {} } },
+  { name: "target_entity", selector: { entity: { filter: { domain: "climate" } } } }
+];
+var ImpiantoOverviewCardEditor = class extends i4 {
+  constructor() {
+    super(...arguments);
+    this._config = { type: "custom:impianto-overview-card" };
+    this._openRoom = null;
+    this._note = "";
+  }
+  setConfig(config) {
+    this._config = { ...config };
+  }
+  _emit(next) {
+    this._config = next;
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next }, bubbles: true, composed: true }));
+  }
+  _onGeneral(ev) {
+    ev.stopPropagation();
+    const cur = generalValues(this._config);
+    const v2 = { ...cur, ...ev.detail.value };
+    v2.title = typeof v2.title === "string" ? v2.title : "";
+    const next = applyGeneral(this._config, v2);
+    if (next === this._config) {
+      this._note = "Almeno una sezione deve restare visibile.";
+      this.requestUpdate();
+      return;
+    }
+    this._note = "";
+    this._emit(next);
+  }
+  _rooms() {
+    return roomDrafts(this._config);
+  }
+  _setRooms(rooms) {
+    this._emit(setRooms(this._config, rooms));
+  }
+  _onRoom(index, ev) {
+    ev.stopPropagation();
+    const v2 = ev.detail.value;
+    const s4 = (x2) => typeof x2 === "string" ? x2 : "";
+    this._setRooms(updateRoom(this._rooms(), index, { name: s4(v2.name), short: s4(v2.short), temperature: s4(v2.temperature), humidity: s4(v2.humidity) }));
+  }
+  _onRoomsOpt(ev) {
+    ev.stopPropagation();
+    const v2 = ev.detail.value;
+    const s4 = (x2) => typeof x2 === "string" ? x2 : "";
+    this._emit(setRoomsOptions(this._config, { title: s4(v2.rooms_title), target_entity: s4(v2.target_entity) }));
+  }
+  _add() {
+    const rooms = addRoom(this._rooms());
+    this._openRoom = rooms[rooms.length - 1].id;
+    this._setRooms(rooms);
+  }
+  _stateText(id, unit) {
+    const st = id ? this.hass.states[id] : void 0;
+    if (!id) return "";
+    if (!st) return "sensore non trovato";
+    const n5 = Number(st.state);
+    return Number.isFinite(n5) ? `${n5.toFixed(1).replace(".", ",")} ${unit}` : "non disponibile";
+  }
+  _renderRoom(r6, i5, count) {
+    const open = this._openRoom === r6.id;
+    const complete = roomComplete(r6);
+    const sub = complete ? [this._stateText(r6.temperature, "\xB0C"), this._stateText(r6.humidity, "%")].filter(Boolean).join(" \xB7 ") : "Manca il nome o un sensore: non compare nella scheda";
+    return b2`
+      <div class=${open ? "room open" : "room"}>
+        <div class="rh">
+          <button class="rt" aria-expanded=${open ? "true" : "false"} @click=${() => this._openRoom = open ? null : r6.id}>
+            <span class="rn">${r6.name.trim() || "Nuova stanza"}</span>
+            <span class=${complete ? "rs" : "rs warn"}>${sub}</span>
+          </button>
+          <button class="ib" title="Sposta su" aria-label="Sposta su" ?disabled=${i5 === 0} @click=${() => this._setRooms(moveRoom(this._rooms(), i5, -1))}><ha-icon icon="mdi:arrow-up"></ha-icon></button>
+          <button class="ib" title="Sposta giù" aria-label="Sposta giù" ?disabled=${i5 === count - 1} @click=${() => this._setRooms(moveRoom(this._rooms(), i5, 1))}><ha-icon icon="mdi:arrow-down"></ha-icon></button>
+          <button class="ib del" title="Togli la stanza" aria-label="Togli la stanza" @click=${() => this._setRooms(removeRoom(this._rooms(), i5))}><ha-icon icon="mdi:delete-outline"></ha-icon></button>
+        </div>
+        ${open ? b2`<div class="rb">
+              <ha-form
+                .hass=${this.hass}
+                .data=${{ name: r6.name, short: r6.short, temperature: r6.temperature, humidity: r6.humidity }}
+                .schema=${ROOM_SCHEMA}
+                .computeLabel=${(s4) => LABELS[s4.name] ?? s4.name}
+                @value-changed=${(e5) => this._onRoom(i5, e5)}
+              ></ha-form>
+            </div>` : A}
+      </div>
+    `;
+  }
+  render() {
+    if (!this.hass) return A;
+    const general = generalValues(this._config);
+    const rooms = this._rooms();
+    const opt = roomsOptions(this._config);
+    return b2`
+      <ha-form
+        .hass=${this.hass}
+        .data=${general}
+        .schema=${GENERAL_SCHEMA}
+        .computeLabel=${(s4) => s4.title ?? LABELS[s4.name] ?? s4.name}
+        .computeHelper=${(s4) => HELP[s4.name] ?? ""}
+        @value-changed=${(e5) => this._onGeneral(e5)}
+      ></ha-form>
+      ${this._note ? b2`<p class="note">${this._note}</p>` : A}
+      ${general.show_rooms ? b2`
+            <h3>Stanze</h3>
+            <p class="hint">Tocca una stanza per cambiare nome e sensori. L'ordine dell'elenco è quello delle colonne nella scheda.</p>
+            <div class="rooms">${rooms.map((r6, i5) => this._renderRoom(r6, i5, rooms.length))}</div>
+            <button class="add" @click=${() => this._add()}><ha-icon icon="mdi:plus"></ha-icon> Aggiungi una stanza</button>
+            <ha-form
+              class="ropt"
+              .hass=${this.hass}
+              .data=${{ rooms_title: opt.title, target_entity: opt.target_entity }}
+              .schema=${ROOMS_OPT_SCHEMA}
+              .computeLabel=${(s4) => LABELS[s4.name] ?? s4.name}
+              .computeHelper=${(s4) => HELP[s4.name] ?? ""}
+              @value-changed=${(e5) => this._onRoomsOpt(e5)}
+            ></ha-form>
+          ` : A}
+      <p class="hint">Set boiler, stagione, soglie, assenza e taratura si regolano dall'ingranaggio «Preferenze» della scheda: valgono per l'impianto, non per l'aspetto.</p>
+    `;
+  }
+  static {
+    this.styles = i`
+    :host {
+      display: block;
+    }
+    h3 {
+      font-size: 16px;
+      font-weight: 500;
+      margin: 24px 0 4px;
+    }
+    .hint {
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--secondary-text-color, #727272);
+      margin: 4px 0 12px;
+    }
+    .note {
+      font-size: 13px;
+      color: var(--error-color, #db4437);
+      margin: 8px 0 0;
+    }
+    .rooms {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .room {
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .room.open {
+      border-color: var(--primary-color, #03a9f4);
+    }
+    .rh {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding-right: 4px;
+    }
+    .rt {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      padding: 10px 12px;
+      background: none;
+      border: 0;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .rn {
+      font-weight: 500;
+    }
+    .rs {
+      font-size: 12px;
+      color: var(--secondary-text-color, #727272);
+    }
+    .rs.warn {
+      color: var(--warning-color, #ffa600);
+    }
+    .ib {
+      width: 44px;
+      height: 44px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      background: none;
+      border: 0;
+      border-radius: 50%;
+      color: var(--secondary-text-color, #727272);
+      cursor: pointer;
+    }
+    .ib:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+    .ib.del {
+      color: var(--error-color, #db4437);
+    }
+    .rb {
+      padding: 4px 12px 12px;
+    }
+    .add {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 12px 0 20px;
+      padding: 10px 16px;
+      min-height: 44px;
+      border: 1px dashed var(--primary-color, #03a9f4);
+      border-radius: 12px;
+      background: none;
+      color: var(--primary-color, #03a9f4);
+      font: inherit;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .ropt {
+      display: block;
+      margin-bottom: 16px;
+    }
+  `;
+  }
+};
+__decorateClass([
+  n4({ attribute: false })
+], ImpiantoOverviewCardEditor.prototype, "hass", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCardEditor.prototype, "_config", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCardEditor.prototype, "_openRoom", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCardEditor.prototype, "_note", 2);
+if (!customElements.get(TAG9)) customElements.define(TAG9, ImpiantoOverviewCardEditor);
+
 // src/summary-logic.ts
 var RESTART_BELOW_SETPOINT = 4;
 var OFF_STATES = ["OFF", "SPENTO", "STOP", "ARRESTO", "UNKNOWN", "UNAVAILABLE", ""];
@@ -5698,8 +6071,6 @@ var ImpiantoOverviewCard = class extends i4 {
     this._fit = 1;
     this._fitTargets = [];
     this._sections = defaultSections();
-    this._sectionsStored = null;
-    this._sectionsLoading = false;
     this._stufa = null;
     this._stufaLoadedAt = 0;
     this._stufaLoading = false;
@@ -5747,9 +6118,6 @@ var ImpiantoOverviewCard = class extends i4 {
     if (this._dialog) return;
     const d3 = document.createElement("impianto-settings-dialog");
     d3.hass = this.hass;
-    d3.sections = this._effectiveSections();
-    d3.available = this._availableSections();
-    d3.addEventListener("sections-toggle", (ev) => this._toggleSectionKey(ev.detail));
     d3.addEventListener("closed", () => {
       this._dialog = void 0;
     });
@@ -5760,7 +6128,7 @@ var ImpiantoOverviewCard = class extends i4 {
   _availableSections() {
     return SECTION_KEYS.filter((k2) => k2 === "stufa" ? !!this._config.stufa : k2 === "termostato" ? this._config.thermostat !== false : true);
   }
-  /** Scelta dell'utente limitata alle sezioni disponibili; ne resta sempre almeno una. */
+  /** Sezioni della configurazione limitate a quelle disponibili; ne resta sempre almeno una. */
   _effectiveSections() {
     const av = this._availableSections();
     const eff = { ...this._sections };
@@ -5768,39 +6136,7 @@ var ImpiantoOverviewCard = class extends i4 {
     if (!visibleKeys(eff).length) eff.boiler = true;
     return eff;
   }
-  _toggleSectionKey(key) {
-    const next = toggleSection(this._effectiveSections(), key);
-    this._sections = { ...this._sections, [key]: next[key] };
-    if (this._dialog) {
-      this._dialog.sections = this._effectiveSections();
-      this._dialog.available = this._availableSections();
-    }
-    void this._saveSections();
-  }
-  _wsCall(msg) {
-    const cw = this.hass.callWS;
-    return cw ? cw.call(this.hass, msg) : Promise.reject(new Error("callWS non disponibile"));
-  }
-  /** Legge una volta la scelta salvata dall'utente in Home Assistant. */
-  async _loadSections() {
-    this._sectionsLoading = true;
-    try {
-      const r6 = await this._wsCall({ type: "frontend/get_user_data", key: SECTIONS_USER_KEY });
-      this._sectionsStored = r6?.value ?? null;
-      this._sections = normalizeSections(this._sectionsStored, this._config.show);
-    } catch {
-    }
-  }
-  async _saveSections() {
-    const value = sectionsToStore(this._sections);
-    this._sectionsStored = value;
-    try {
-      await this._wsCall({ type: "frontend/set_user_data", key: SECTIONS_USER_KEY, value });
-    } catch {
-    }
-  }
   updated(changed) {
-    if (this.hass && this._config && !this._sectionsLoading) void this._loadSections();
     if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
     if (changed.has("hass") && this._info) this._info.lines = this._summaryLines();
     if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
@@ -5876,13 +6212,17 @@ var ImpiantoOverviewCard = class extends i4 {
   setConfig(config) {
     if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
     this._config = config;
-    this._sections = normalizeSections(this._sectionsStored, config.show);
+    this._sections = defaultSections(config.show);
   }
   getCardSize() {
     return 12;
   }
   static getStubConfig() {
     return { type: `custom:${CARD_TAG2}` };
+  }
+  /** Editor visuale: cosa mostrare, disposizione e stanze si scelgono da «Modifica scheda». */
+  static getConfigElement() {
+    return document.createElement("impianto-overview-card-editor");
   }
   // ---- lettura -------------------------------------------------------------
   get _e() {
@@ -6835,7 +7175,7 @@ var ImpiantoOverviewCard = class extends i4 {
     if (!this._config || !this.hass) return A;
     const sec = this._effectiveSections();
     const thermo = sec.termostato ? this._renderThermostat() : A;
-    const rooms = sec.termostato ? this._renderRooms() : A;
+    const rooms = this._renderRooms();
     const stufa = sec.stufa ? this._renderStufa() : A;
     const split = this._config.layout === "split";
     const gear = !sec.caldaia && this._config.settings !== false;
@@ -9012,7 +9352,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.8";
+var VERSION = "0.5.9";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

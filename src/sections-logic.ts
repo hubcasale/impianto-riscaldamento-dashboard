@@ -14,30 +14,11 @@ export const SECTION_INFO: Record<SectionKey, { label: string; hint: string; ico
 
 export type Sections = Record<SectionKey, boolean>;
 
-/** Chiave dei dati utente di Home Assistant (frontend/set_user_data) in cui si salva la scelta di ogni utente. */
-export const SECTIONS_USER_KEY = "impianto_riscaldamento_sezioni";
-
 /** Tutte visibili, oppure solo quelle dell'elenco `show` della configurazione YAML. */
 export function defaultSections(show?: unknown): Sections {
   const list = Array.isArray(show) ? show.filter((k): k is SectionKey => SECTION_KEYS.includes(k as SectionKey)) : [];
   const only = list.length > 0;
   return { boiler: !only || list.includes("boiler"), caldaia: !only || list.includes("caldaia"), stufa: !only || list.includes("stufa"), termostato: !only || list.includes("termostato") };
-}
-
-/**
- * La scelta dell'utente (dati utente di Home Assistant: `{ version: 1, sections: {...} }`) sopra i valori di partenza.
- * Valori mancanti o non validi restano quelli di partenza; almeno una sezione resta sempre visibile.
- */
-export function normalizeSections(stored: unknown, show?: unknown): Sections {
-  const base = defaultSections(show);
-  const raw = stored && typeof stored === "object" ? (stored as { sections?: unknown }).sections : undefined;
-  if (raw && typeof raw === "object") {
-    for (const k of SECTION_KEYS) {
-      const v = (raw as Record<string, unknown>)[k];
-      if (typeof v === "boolean") base[k] = v;
-    }
-  }
-  return visibleKeys(base).length === 0 ? defaultSections(show) : base;
 }
 
 export function visibleKeys(s: Sections): SectionKey[] {
@@ -56,9 +37,4 @@ export function sectionsSummary(s: Sections): string {
   if (v.length === SECTION_KEYS.length) return "Tutte le sezioni";
   if (v.length === 1) return `Solo ${SECTION_INFO[v[0]].label.toLowerCase()}`;
   return v.map((k) => SECTION_INFO[k].label.split(" (")[0].toLowerCase()).join(", ");
-}
-
-/** Dato da salvare nei dati utente. */
-export function sectionsToStore(s: Sections): { version: 1; sections: Sections } {
-  return { version: 1, sections: { ...s } };
 }

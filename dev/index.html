@@ -263,8 +263,7 @@ if (sm) {
   set("switch.stufa", sm === "spenta" ? "off" : "on");
   set("switch.presa", "on");
 }
-// ?sezioni=boiler,caldaia,stufa,termostato: scelta salvata dell'utente (dati utente di Home Assistant)
-if (q.get("sezioni")) { const on = q.get("sezioni").split(","); localStorage.setItem("dev_ud_impianto_riscaldamento_sezioni", JSON.stringify({ version: 1, sections: Object.fromEntries(["boiler", "caldaia", "stufa", "termostato"].map((k) => [k, on.includes(k)])) })); } else localStorage.removeItem("dev_ud_impianto_riscaldamento_sezioni");
+// ?sezioni=boiler,caldaia,stufa,termostato: le sezioni mostrate (chiave `show` della scheda); ?stanze=0 nasconde le stanze
 const log = document.getElementById("log");
 const cards = [];
 function push() { cards.forEach((c) => (c.hass = hass)); }
@@ -423,7 +422,7 @@ const hass = {
 
 const wrap = document.getElementById("cards");
 for (const [tag, cfg] of [
-  ["impianto-overview-card", { type: "custom:impianto-overview-card", ...(q.get("stufa") ? { stufa: true } : {}), ...(q.get("layout") ? { layout: q.get("layout") } : {}), ...(q.get("senza_programma") ? { schedule: false } : {}) }],
+  ["impianto-overview-card", { type: "custom:impianto-overview-card", ...(q.get("stufa") ? { stufa: true } : {}), ...(q.get("layout") ? { layout: q.get("layout") } : {}), ...(q.get("senza_programma") ? { schedule: false } : {}), ...(q.get("sezioni") ? { show: q.get("sezioni").split(",") } : {}), ...(q.get("stanze") === "0" ? { rooms: false } : {}) }],
   ["caldaia-schedule-card", { type: "custom:caldaia-schedule-card" }],
 ]) {
   const el = document.createElement(tag);
@@ -434,6 +433,38 @@ for (const [tag, cfg] of [
   cards.push(el);
 }
 push();
+// ?editor=1: l'editor visuale sopra la scheda, con un ha-form di prova (testo, interruttori, menu; i selettori di entità sono campi di testo)
+if (q.get("editor")) {
+  if (!customElements.get("ha-form")) customElements.define("ha-form", class extends HTMLElement {
+    set data(v) { this._d = v; this._r(); } set schema(v) { this._s = v; this._r(); } set hass(v) {}
+    set computeLabel(f) { this._l = f; this._r(); } set computeHelper(f) { this._h = f; }
+    _r() {
+      if (!this._d || !this._s || !this._l) return;
+      const focus = this.querySelector(":focus")?.dataset.n;
+      this.innerHTML = "";
+      const field = (f, box) => {
+        if (f.type === "expandable") { const d = document.createElement("details"); d.open = true; d.innerHTML = `<summary>${this._l(f)}</summary>`; f.schema.forEach((x) => field(x, d)); box.appendChild(d); return; }
+        const row = document.createElement("label"); row.style.cssText = "display:flex;gap:8px;align-items:center;margin:6px 0;font-size:14px";
+        const sel = f.selector; let inp;
+        if (sel.boolean) { inp = document.createElement("input"); inp.type = "checkbox"; inp.checked = !!this._d[f.name]; }
+        else if (sel.select) { inp = document.createElement("select"); sel.select.options.forEach((o) => { const e = document.createElement("option"); e.value = o.value; e.textContent = o.label; inp.appendChild(e); }); inp.value = this._d[f.name]; }
+        else { inp = document.createElement("input"); inp.value = this._d[f.name] ?? ""; inp.style.flex = "1"; }
+        inp.dataset.n = f.name;
+        inp.addEventListener("change", () => this.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { ...this._d, [f.name]: sel.boolean ? inp.checked : inp.value } } })));
+        const t = document.createElement("span"); t.textContent = this._l(f); t.style.minWidth = "220px";
+        row.append(t, inp); box.appendChild(row);
+      };
+      this._s.forEach((f) => field(f, this));
+      if (focus) this.querySelector(`[data-n="${focus}"]`)?.focus();
+    }
+  });
+  const ed = document.createElement("impianto-overview-card-editor");
+  ed.style.cssText = "display:block;max-width:560px;margin:0 0 20px;padding:16px;border:1px solid #8884;border-radius:12px";
+  ed.hass = hass; ed.setConfig(cards[0]._config);
+  const out = document.createElement("pre"); out.id = "editor-config"; out.style.cssText = "font-size:12px;white-space:pre-wrap";
+  ed.addEventListener("config-changed", (e) => { cards[0].setConfig(e.detail.config); ed.setConfig(e.detail.config); out.textContent = JSON.stringify(e.detail.config, null, 1); });
+  wrap.before(ed, out);
+}
 if (q.get("impostazioni")) setTimeout(() => cards[0]._openSettings(), 200);
 // ?apri_blocco=testo: apre nelle preferenze il blocco il cui titolo contiene il testo
 if (q.get("apri_blocco")) setTimeout(() => { const d = document.querySelector("impianto-settings-dialog"); const h = [...d.shadowRoot.querySelectorAll(".bh")].find((e) => e.textContent.includes(q.get("apri_blocco"))); h && h.click(); }, 900);

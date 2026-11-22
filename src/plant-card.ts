@@ -21,7 +21,8 @@ import type { ImpiantoCardDialog } from "./card-dialog";
 import "./card-dialog";
 import type { ImpiantoConfirmDialog } from "./confirm-dialog";
 import "./confirm-dialog";
-import { SECTIONS_USER_KEY, SECTION_KEYS, defaultSections, normalizeSections, sectionsToStore, toggleSection, visibleKeys, type SectionKey, type Sections } from "./sections-logic";
+import { SECTION_KEYS, defaultSections, visibleKeys, type SectionKey, type Sections } from "./sections-logic";
+import "./card-editor";
 import { summarize, type SummaryLine } from "./summary-logic";
 import { CLESS_MASK, CLESS_RENDER } from "./cless-render";
 import { DEFAULT_MODEL, SEASON_LABEL, seasonKey, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, showersFromZones, sinceText, stoveLook, stovePumpRunning, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
@@ -258,7 +259,7 @@ export interface PlantCardConfig {
    */
   stufa?: boolean | { entry_id?: string; title?: string };
   /**
-   * Quali sezioni mostrare di partenza (la scelta di ogni utente, fatta dalle preferenze, ha la precedenza): elenco di
+   * Quali sezioni mostrare (si sceglie dall'editor della scheda): elenco di
    * "boiler", "caldaia", "stufa", "termostato". Se manca, sono tutte visibili.
    */
   show?: SectionKey[];
@@ -341,8 +342,6 @@ export class ImpiantoOverviewCard extends LitElement {
   private _fitRO?: ResizeObserver;
   private _fitTargets: Element[] = [];
   @state() private _sections: Sections = defaultSections();
-  private _sectionsStored: unknown = null;
-  private _sectionsLoading = false;
   @state() private _stufa: StufaInfoLite | null = null;
   private _stufaLoadedAt = 0;
   private _stufaLoading = false;
@@ -382,9 +381,6 @@ export class ImpiantoOverviewCard extends LitElement {
     if (this._dialog) return;
     const d = document.createElement("impianto-settings-dialog") as ImpiantoSettingsDialog;
     d.hass = this.hass;
-    d.sections = this._effectiveSections();
-    d.available = this._availableSections();
-    d.addEventListener("sections-toggle", (ev) => this._toggleSectionKey((ev as CustomEvent<SectionKey>).detail));
     d.addEventListener("closed", () => {
       this._dialog = undefined;
     });
@@ -397,7 +393,7 @@ export class ImpiantoOverviewCard extends LitElement {
     return SECTION_KEYS.filter((k) => (k === "stufa" ? !!this._config.stufa : k === "termostato" ? this._config.thermostat !== false : true));
   }
 
-  /** Scelta dell'utente limitata alle sezioni disponibili; ne resta sempre almeno una. */
+  /** Sezioni della configurazione limitate a quelle disponibili; ne resta sempre almeno una. */
   private _effectiveSections(): Sections {
     const av = this._availableSections();
     const eff = { ...this._sections };
@@ -406,46 +402,8 @@ export class ImpiantoOverviewCard extends LitElement {
     return eff;
   }
 
-  private _toggleSectionKey(key: SectionKey): void {
-    const next = toggleSection(this._effectiveSections(), key);
-    this._sections = { ...this._sections, [key]: next[key] };
-    if (this._dialog) {
-      this._dialog.sections = this._effectiveSections();
-      this._dialog.available = this._availableSections();
-    }
-    void this._saveSections();
-  }
-
-  private _wsCall(msg: Record<string, unknown>): Promise<{ value?: unknown } | null> {
-    const cw = this.hass.callWS as unknown as ((m: Record<string, unknown>) => Promise<{ value?: unknown } | null>) | undefined;
-    return cw ? cw.call(this.hass, msg) : Promise.reject(new Error("callWS non disponibile"));
-  }
-
-  /** Legge una volta la scelta salvata dall'utente in Home Assistant. */
-  private async _loadSections(): Promise<void> {
-    this._sectionsLoading = true;
-    try {
-      const r = await this._wsCall({ type: "frontend/get_user_data", key: SECTIONS_USER_KEY });
-      this._sectionsStored = r?.value ?? null;
-      this._sections = normalizeSections(this._sectionsStored, this._config.show);
-    } catch {
-      /* senza dati utente restano le sezioni di partenza */
-    }
-  }
-
-  private async _saveSections(): Promise<void> {
-    const value = sectionsToStore(this._sections);
-    this._sectionsStored = value;
-    try {
-      await this._wsCall({ type: "frontend/set_user_data", key: SECTIONS_USER_KEY, value });
-    } catch {
-      /* la scelta vale comunque finche' la pagina resta aperta */
-    }
-  }
-
   protected updated(changed: Map<string, unknown>): void {
     // la finestra aperta segue gli stati di Home Assistant (interruttori e numeri si aggiornano subito)
-    if (this.hass && this._config && !this._sectionsLoading) void this._loadSections();
     if (changed.has("hass") && this._dialog) this._dialog.hass = this.hass;
     if (changed.has("hass") && this._info) this._info.lines = this._summaryLines();
     if (changed.has("hass") && this._charts) this._charts.hass = this.hass;
@@ -525,7 +483,7 @@ export class ImpiantoOverviewCard extends LitElement {
   setConfig(config: PlantCardConfig): void {
     if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
     this._config = config;
-    this._sections = normalizeSections(this._sectionsStored, config.show);
+    this._sections = defaultSections(config.show);
   }
 
   getCardSize(): number {
@@ -534,6 +492,11 @@ export class ImpiantoOverviewCard extends LitElement {
 
   static getStubConfig(): PlantCardConfig {
     return { type: `custom:${CARD_TAG}` };
+  }
+
+  /** Editor visuale: cosa mostrare, disposizione e stanze si scelgono da «Modifica scheda». */
+  static getConfigElement(): HTMLElement {
+    return document.createElement("impianto-overview-card-editor");
   }
 
   // ---- lettura -------------------------------------------------------------
@@ -1620,7 +1583,8 @@ export class ImpiantoOverviewCard extends LitElement {
     if (!this._config || !this.hass) return nothing;
     const sec = this._effectiveSections();
     const thermo = sec.termostato ? this._renderThermostat() : nothing;
-    const rooms = sec.termostato ? this._renderRooms() : nothing;
+    // le stanze hanno il loro interruttore (rooms: false), non seguono piu' il termostato
+    const rooms = this._renderRooms();
     const stufa = sec.stufa ? this._renderStufa() : nothing;
     const split = this._config.layout === "split";
     // senza la scheda della caldaia (dove sta l'ingranaggio) le preferenze restano raggiungibili da una barra in alto
