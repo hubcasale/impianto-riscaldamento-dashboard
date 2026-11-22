@@ -29,15 +29,26 @@ esphome:
   # "External System" (il microcontrollore del Beca tiene il modulo in reset all'accensione), non "Power On",
   # e il ripristino non era partito. Dopo OTA, riavvii software o cadute del Wi-Fi il Beca non cambia: non si fa nulla.
   # Dopo 30 s la finestra del ripristino si chiude e da li' in poi i cambi vengono ricordati.
+  # Il componente tuya chiede lo stato al Beca solo dopo il suo primo "battito" periodico, che parte a caso entro
+  # 5 s dall'avvio: intanto il Beca scalderebbe a 23 °C. Qui il battito (55 AA 00 00 00 00 FF) si manda subito,
+  # e altre due volte nel caso il microcontrollore del Beca non fosse ancora pronto: la risposta fa partire la
+  # richiesta dello stato e il ripristino scatta in circa un secondo. I battiti in piu' vengono ignorati.
   on_boot:
-    priority: -100
-    then:
-      - delay: 30s
-      - lambda: |-
-          if (!id(ripristino_fatto)) {
-            id(ripristino_fatto) = true;
-            if (!id(ripristino_corretto)) id(ultimo_ripristino).publish_state("non serviva");
-          }
+    - priority: 300          # dopo UART e tuya, prima del Wi-Fi
+      then:
+        - uart.write: [0x55, 0xAA, 0x00, 0x00, 0x00, 0x00, 0xFF]
+        - delay: 500ms
+        - uart.write: [0x55, 0xAA, 0x00, 0x00, 0x00, 0x00, 0xFF]
+        - delay: 1s
+        - uart.write: [0x55, 0xAA, 0x00, 0x00, 0x00, 0x00, 0xFF]
+    - priority: -100
+      then:
+        - delay: 30s
+        - lambda: |-
+            if (!id(ripristino_fatto)) {
+              id(ripristino_fatto) = true;
+              if (!id(ripristino_corretto)) id(ultimo_ripristino).publish_state("non serviva");
+            }
 
 esp8266:
   board: esp01_1m
