@@ -23,34 +23,21 @@ esphome:
   name: termostato
   friendly_name: Termostato
   # Dopo una mancanza di corrente il Beca riparte da solo acceso a 23 °C e il riscaldamento parte.
-  # A ogni avvio dell'ESP si confronta quello che dice il Beca con l'ultimo obiettivo e l'ultimo modo ricordati:
-  # se sono diversi il Beca ha perso lo stato (e' mancata la corrente) e si rimettono quelli ricordati.
+  # Appena il Beca comunica il suo stato (uno o due secondi dopo l'avvio dell'ESP, vedi on_state del climate) lo si
+  # confronta con l'ultimo obiettivo e l'ultimo modo ricordati: quello che e' diverso si rimette subito, senza aspettare.
   # Non ci si fida del motivo del riavvio: dopo la mancanza di corrente del 21/11/2026 l'ESP ha detto
   # "External System" (il microcontrollore del Beca tiene il modulo in reset all'accensione), non "Power On",
   # e il ripristino non era partito. Dopo OTA, riavvii software o cadute del Wi-Fi il Beca non cambia: non si fa nulla.
+  # Dopo 30 s la finestra del ripristino si chiude e da li' in poi i cambi vengono ricordati.
   on_boot:
     priority: -100
     then:
-      - delay: 30s            # il microcontrollore del Beca deve aver comunicato il suo stato
+      - delay: 30s
       - lambda: |-
-          float t = id(beca).target_temperature;
-          bool acceso = id(beca).mode != climate::CLIMATE_MODE_OFF;
-          bool diverso = std::isnan(t) || fabsf(t - id(ultimo_obiettivo)) > 0.01f || acceso != id(ultimo_modo_acceso);
-          if (diverso) {
-            auto call = id(beca).make_call();
-            call.set_mode(id(ultimo_modo_acceso) ? climate::CLIMATE_MODE_HEAT : climate::CLIMATE_MODE_OFF);
-            call.set_target_temperature(id(ultimo_obiettivo));
-            call.perform();
-            ESP_LOGW("ripristino", "Il Beca e' ripartito con %.1f %s: rimesso obiettivo %.1f e modo %s",
-                     t, acceso ? "heat" : "off", id(ultimo_obiettivo), id(ultimo_modo_acceso) ? "heat" : "off");
-            char buf[64];
-            snprintf(buf, sizeof(buf), "rimesso %.1f °C %s (era %.1f %s)", id(ultimo_obiettivo),
-                     id(ultimo_modo_acceso) ? "acceso" : "spento", t, acceso ? "acceso" : "spento");
-            id(ultimo_ripristino).publish_state(buf);
-          } else {
-            id(ultimo_ripristino).publish_state("non serviva");
+          if (!id(ripristino_fatto)) {
+            id(ripristino_fatto) = true;
+            if (!id(ripristino_corretto)) id(ultimo_ripristino).publish_state("non serviva");
           }
-          id(ripristino_fatto) = true;
 
 esp8266:
   board: esp01_1m
@@ -67,6 +54,10 @@ globals:
     restore_value: yes
     initial_value: "true"
   - id: ripristino_fatto
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: ripristino_corretto
     type: bool
     restore_value: no
     initial_value: "false"
@@ -112,7 +103,26 @@ climate:
     on_state:
       then:
         - lambda: |-
-            if (!id(ripristino_fatto)) return;
+            if (!id(ripristino_fatto)) {
+              // primi 30 s dopo l'avvio: quello che il Beca dice di diverso da quanto ricordato si rimette subito
+              float tb = id(beca).target_temperature;
+              bool on = id(beca).mode != climate::CLIMATE_MODE_OFF;
+              bool modo_diverso = on != id(ultimo_modo_acceso);
+              bool obiettivo_diverso = !std::isnan(tb) && fabsf(tb - id(ultimo_obiettivo)) > 0.01f;
+              if (modo_diverso || obiettivo_diverso) {
+                auto call = id(beca).make_call();
+                if (modo_diverso) call.set_mode(id(ultimo_modo_acceso) ? climate::CLIMATE_MODE_HEAT : climate::CLIMATE_MODE_OFF);
+                if (obiettivo_diverso) call.set_target_temperature(id(ultimo_obiettivo));
+                call.perform();
+                id(ripristino_corretto) = true;
+                ESP_LOGW("ripristino", "Il Beca e' ripartito con %.1f %s: rimesso obiettivo %.1f e modo %s",
+                         tb, on ? "heat" : "off", id(ultimo_obiettivo), id(ultimo_modo_acceso) ? "heat" : "off");
+                char buf[64];
+                snprintf(buf, sizeof(buf), "rimesso %.1f °C %s", id(ultimo_obiettivo), id(ultimo_modo_acceso) ? "acceso" : "spento");
+                id(ultimo_ripristino).publish_state(buf);
+              }
+              return;
+            }
             float t = id(beca).target_temperature;
             if (!std::isnan(t) && t >= 5.0f && t <= 35.0f && fabsf(t - id(ultimo_obiettivo)) > 0.01f)
               id(ultimo_obiettivo) = t;
