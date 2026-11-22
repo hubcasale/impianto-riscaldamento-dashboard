@@ -5572,8 +5572,8 @@ var DEFAULT_ENTITIES = {
   guard: "input_boolean.caldaia_salvaguardia_attiva",
   guard_flag: "input_boolean.caldaia_salvaguardia_ha_spento",
   pellet_reserve: "binary_sensor.casale_riserva_legna",
-  pellet_empty: "binary_sensor.casale_pellet_empty",
-  pellet_open: "binary_sensor.casale_pellet_hopper_open",
+  pellet_empty: "binary_sensor.garage_casale_pellet_vuoto",
+  pellet_open: "binary_sensor.garage_casale_serbatoio_pellet_aperto",
   integration_pump: "binary_sensor.caldaia_pompa_integrazione_attiva",
   collector_pump: "binary_sensor.caldaia_pompa_collettore_attiva",
   integration_power: "sensor.garage_bs_pompa_integrazione_potenza",
@@ -5820,7 +5820,7 @@ var LABELS = {
   stufa_entry: "Stufa: quale (se ne hai pi\xF9 di una)",
   thermo_title: "Termostato: titolo",
   thermo_entry: "Termostato: quale (se ne hai pi\xF9 di uno)",
-  target_entity: "Termostato per la linea dell'obiettivo"
+  target_entity: "Termostato di riferimento"
 };
 var HELP = {
   layout: "Affiancata: boiler, caldaia e stufa in colonne, termostato e stanze sotto a tutta larghezza.",
@@ -5828,7 +5828,7 @@ var HELP = {
   show_stufa: "Serve l'integrazione \xABImpianto di riscaldamento\xBB con la stufa configurata.",
   btn_settings: "Le preferenze di funzionamento (set boiler, stagione, soglie, assenza) restano l\xEC.",
   rooms_title: "Vuoto = \xABStanze\xBB.",
-  target_entity: "Vuoto = climate.termostato."
+  target_entity: "La linea tratteggiata sulle colonne delle stanze segna la temperatura impostata su questo termostato. Vuoto = climate.termostato."
 };
 var GENERAL_SCHEMA = [
   { name: "title", selector: { text: {} } },
@@ -9656,7 +9656,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.10";
+var VERSION = "0.5.11";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

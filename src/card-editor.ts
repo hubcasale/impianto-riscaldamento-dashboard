@@ -56,7 +56,7 @@ const LABELS: Record<string, string> = {
   stufa_entry: "Stufa: quale (se ne hai più di una)",
   thermo_title: "Termostato: titolo",
   thermo_entry: "Termostato: quale (se ne hai più di uno)",
-  target_entity: "Termostato per la linea dell'obiettivo",
+  target_entity: "Termostato di riferimento",
 };
 const HELP: Record<string, string> = {
   layout: "Affiancata: boiler, caldaia e stufa in colonne, termostato e stanze sotto a tutta larghezza.",
@@ -64,7 +64,7 @@ const HELP: Record<string, string> = {
   show_stufa: "Serve l'integrazione «Impianto di riscaldamento» con la stufa configurata.",
   btn_settings: "Le preferenze di funzionamento (set boiler, stagione, soglie, assenza) restano lì.",
   rooms_title: "Vuoto = «Stanze».",
-  target_entity: "Vuoto = climate.termostato.",
+  target_entity: "La linea tratteggiata sulle colonne delle stanze segna la temperatura impostata su questo termostato. Vuoto = climate.termostato.",
 };
 
 const GENERAL_SCHEMA: FormSchema[] = [

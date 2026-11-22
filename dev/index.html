@@ -138,8 +138,8 @@ set("binary_sensor.caldaia_integrazione_inutile", pompe === "bloccata" ? "on" : 
 // pellet (?pellet=ok|riserva|vuoto|aperto)
 const pel = q.get("pellet") || "ok";
 set("binary_sensor.casale_riserva_legna", pel === "riserva" ? "on" : "off");
-set("binary_sensor.casale_pellet_empty", pel === "vuoto" ? "on" : "off");
-set("binary_sensor.casale_pellet_hopper_open", pel === "aperto" ? "on" : "off");
+set("binary_sensor.garage_casale_pellet_vuoto", pel === "vuoto" ? "on" : "off");
+set("binary_sensor.garage_casale_serbatoio_pellet_aperto", pel === "aperto" ? "on" : "off");
 // pannello solare e serpentine (?pannello=attiva|ferma|sereno)
 const pan = q.get("pannello") || "ferma";
 set("sensor.solare_termico_solare_serpentina_ingresso", pan === "attiva" ? 33.5 : 24.7, { unit_of_measurement: "°C" });
