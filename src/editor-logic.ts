@@ -193,3 +193,42 @@ export function setRoomsOptions(config: EditorConfig, opt: { title: string; targ
   else if (next.rooms !== false) delete next.rooms;
   return next;
 }
+
+// ---- stufa e termostato ----------------------------------------------------
+
+export interface PartsValues {
+  stufa_title: string;
+  stufa_entry: string;
+  thermo_title: string;
+  thermo_entry: string;
+}
+
+function partObject(x: unknown): Record<string, unknown> {
+  return x && typeof x === "object" ? (x as Record<string, unknown>) : {};
+}
+
+/** Titolo e voce dell'integrazione di stufa e termostato (servono solo se ne hai più di uno o vuoi un altro titolo). */
+export function partsValues(config: EditorConfig): PartsValues {
+  const st = partObject(config.stufa);
+  const th = partObject(config.thermostat);
+  return { stufa_title: str(st.title), stufa_entry: str(st.entry_id), thermo_title: str(th.title), thermo_entry: str(th.entry_id) };
+}
+
+function partValue(title: string, entry: string): Record<string, string> | null {
+  const o: Record<string, string> = {};
+  if (entry.trim()) o.entry_id = entry.trim();
+  if (title.trim()) o.title = title.trim();
+  return Object.keys(o).length ? o : null;
+}
+
+/** Scrive titolo e voce; una stufa o un termostato spenti (assente / false) restano spenti finché non si compila qualcosa. */
+export function applyParts(config: EditorConfig, v: PartsValues): EditorConfig {
+  const next: EditorConfig = { ...config };
+  const st = partValue(v.stufa_title, v.stufa_entry);
+  if (st) next.stufa = st;
+  else if (next.stufa) next.stufa = true;
+  const th = partValue(v.thermo_title, v.thermo_entry);
+  if (th) next.thermostat = th;
+  else if (next.thermostat !== false) delete next.thermostat;
+  return next;
+}

@@ -5512,6 +5512,289 @@ function setRoomsOptions(config, opt) {
   else if (next.rooms !== false) delete next.rooms;
   return next;
 }
+function partObject(x2) {
+  return x2 && typeof x2 === "object" ? x2 : {};
+}
+function partsValues(config) {
+  const st = partObject(config.stufa);
+  const th = partObject(config.thermostat);
+  return { stufa_title: str(st.title), stufa_entry: str(st.entry_id), thermo_title: str(th.title), thermo_entry: str(th.entry_id) };
+}
+function partValue(title, entry) {
+  const o6 = {};
+  if (entry.trim()) o6.entry_id = entry.trim();
+  if (title.trim()) o6.title = title.trim();
+  return Object.keys(o6).length ? o6 : null;
+}
+function applyParts(config, v2) {
+  const next = { ...config };
+  const st = partValue(v2.stufa_title, v2.stufa_entry);
+  if (st) next.stufa = st;
+  else if (next.stufa) next.stufa = true;
+  const th = partValue(v2.thermo_title, v2.thermo_entry);
+  if (th) next.thermostat = th;
+  else if (next.thermostat !== false) delete next.thermostat;
+  return next;
+}
+
+// src/plant-entities.ts
+var DEFAULT_ENTITIES = {
+  boiler_top: "sensor.boiler_solare_alto_stimato",
+  boiler_bottom: "sensor.boiler_solare_basso_stimato",
+  solar_power: "sensor.solare_termico_potenza",
+  cless_mode: "input_boolean.impianto_modo_cless",
+  collector_temp: "sensor.solare_termico_t_collettore_stimata",
+  puffer: "sensor.casale_temperatura_boiler",
+  stove_state: "sensor.casale_stato",
+  season: "sensor.garage_casale_stagione",
+  stove_water: "sensor.casale_temperatura_acqua",
+  smoke: "sensor.casale_temperatura_fumi",
+  flame: "sensor.casale_temperatura_fiamma",
+  power: "sensor.casale_potenza_reale",
+  water_pressure: "sensor.casale_pressione_acqua",
+  brazier_pressure: "sensor.casale_pressione_braciere",
+  extractor: "sensor.casale_estrattore_fumi",
+  pump: "sensor.casale_pompa_acqua",
+  alarm: "sensor.casale_allarme",
+  set_boiler: "number.casale_setpoint_boiler",
+  set_water: "climate.casale_acqua",
+  starts_today: "sensor.caldaia_accensioni_oggi",
+  starts_yesterday: "sensor.caldaia_accensioni_ieri",
+  standby_today: "sensor.caldaia_stand_by_oggi",
+  work_hours_today: "sensor.caldaia_ore_in_lavoro_oggi",
+  request_acs: "binary_sensor.caldaia_richiesta_acs",
+  request_heating: "binary_sensor.caldaia_richiesta_riscaldamento",
+  consent: "binary_sensor.caldaia_consenso_suggerito",
+  eta: "sensor.caldaia_acqua_pronta_tra",
+  boost_state: "sensor.caldaia_accensione_rapida_stato",
+  boost_start_script: "script.caldaia_accensione_rapida",
+  boost_cancel_script: "script.caldaia_accensione_rapida_annulla",
+  guard: "input_boolean.caldaia_salvaguardia_attiva",
+  guard_flag: "input_boolean.caldaia_salvaguardia_ha_spento",
+  pellet_reserve: "binary_sensor.casale_riserva_legna",
+  pellet_empty: "binary_sensor.casale_pellet_empty",
+  pellet_open: "binary_sensor.casale_pellet_hopper_open",
+  integration_pump: "binary_sensor.caldaia_pompa_integrazione_attiva",
+  collector_pump: "binary_sensor.caldaia_pompa_collettore_attiva",
+  integration_power: "sensor.garage_bs_pompa_integrazione_potenza",
+  integration_call: "binary_sensor.garage_bs_pompa_integrazione_ingresso_0",
+  integration_block_enabled: "input_boolean.caldaia_integrazione_blocco_attivo",
+  integration_block_wanted: "binary_sensor.caldaia_integrazione_inutile",
+  collector_power: "sensor.garage_centralina_solare_pompe_potenza",
+  pellet_today: "sensor.caldaia_pellet_oggi",
+  pellet_week: "sensor.caldaia_pellet_settimana",
+  pellet_month: "sensor.caldaia_pellet_mese",
+  pellet_total: "sensor.caldaia_pellet_stimato_totale",
+  pellet_ref_kg: "input_number.caldaia_pellet_kg_riferimento",
+  pellet_ref_total: "input_number.caldaia_pellet_totale_riferimento",
+  pellet_bag: "input_number.caldaia_pellet_sacco_kg",
+  coil_solar_in: "sensor.solare_termico_solare_serpentina_ingresso",
+  coil_solar_out: "sensor.solare_termico_solare_serpentina_uscita",
+  coil_integ_in: "sensor.locale_caldaia_solare_termico_puffer_generatore",
+  coil_integ_out: "sensor.locale_caldaia_solare_termico_puffer_minima_riscaldamento",
+  panel_max: "sensor.solare_pannello_massima_prevista",
+  panel_max_today: "sensor.solare_pannello_massima_oggi",
+  puffer_effective: "sensor.puffer_temperatura_effettiva",
+  thermo_mode: "sensor.termostato_riscaldamento_modalita",
+  heat_call: "binary_sensor.termostato_riscaldamento_sta_scaldando",
+  gti_station: "sensor.solare_termico_irraggiamento_sul_piano",
+  gti_forecast: "sensor.open_meteo_irraggiamento_previsto_sul_piano",
+  gti_satellite: "sensor.open_meteo_irraggiamento_osservato_dal_satellite",
+  cloud_forecast: "sensor.open_meteo_nuvolosita",
+  irr_station_raw: "sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato",
+  irr_station_corrected: "sensor.irraggiamento_stazione_corretto",
+  allsky_irradiance: "sensor.allsky_irraggiamento_stimato",
+  allsky_cloud: "sensor.allsky_copertura_equivalente",
+  allsky_sun_free: "binary_sensor.allsky_sole_libero",
+  allsky_analysis: "sensor.allsky_analisi",
+  sun_above_horizon: "binary_sensor.sole_sopra_l_orizzonte",
+  horizon_elevation: "sensor.sole_elevazione_orizzonte",
+  sun: "sun.sun",
+  crono_master: "switch.casale_cronotermostato_settimanale",
+  program_active: "binary_sensor.caldaia_programma_attivo_ora",
+  away: "binary_sensor.caldaia_nessuno_in_casa",
+  away_enabled: "input_boolean.caldaia_assenza_attiva",
+  away_flag: "input_boolean.caldaia_assenza_ha_spento",
+  away_guests: "input_boolean.caldaia_assenza_ospiti",
+  away_minutes: "input_number.caldaia_assenza_minuti"
+};
+
+// src/entity-catalog.ts
+var ENTITY_GROUPS = [
+  {
+    id: "accumulo",
+    title: "Boiler solare / puffer",
+    icon: "mdi:water-boiler",
+    items: [
+      { key: "boiler_top", label: "Temperatura alta (S3)" },
+      { key: "boiler_bottom", label: "Temperatura bassa (S2)" },
+      { key: "outlet", label: "Acqua in uscita (facoltativa)" },
+      { key: "puffer", label: "Puffer / S. BOILER della caldaia" },
+      { key: "puffer_effective", label: "Puffer: temperatura effettiva" },
+      { key: "coil_integ_in", label: "Puffer: pozzetto c (generatore)" },
+      { key: "coil_integ_out", label: "Puffer: pozzetto b (minima riscaldamento)" },
+      { key: "cless_mode", label: "Interruttore \xABaccumulo CLESS\xBB" },
+      { key: "eta", label: "Acqua pronta tra (minuti)" }
+    ]
+  },
+  {
+    id: "solare",
+    title: "Solare termico",
+    icon: "mdi:solar-power-variant",
+    items: [
+      { key: "collector_temp", label: "Temperatura del collettore" },
+      { key: "solar_power", label: "Potenza solare" },
+      { key: "coil_solar_in", label: "Serpentina solare: ingresso" },
+      { key: "coil_solar_out", label: "Serpentina solare: uscita" },
+      { key: "collector_pump", label: "Pompa del collettore in funzione" },
+      { key: "collector_power", label: "Potenza della centralina solare (W)" },
+      { key: "panel_max", label: "Massima prevista del collettore oggi" },
+      { key: "panel_max_today", label: "Massima raggiunta oggi" }
+    ]
+  },
+  {
+    id: "caldaia",
+    title: "Caldaia a pellet",
+    icon: "mdi:fire",
+    items: [
+      { key: "stove_state", label: "Stato" },
+      { key: "alarm", label: "Allarme" },
+      { key: "season", label: "Stagione (Estate/Inverno)" },
+      { key: "stove_water", label: "Temperatura dell'acqua" },
+      { key: "smoke", label: "Temperatura dei fumi" },
+      { key: "flame", label: "Temperatura della fiamma" },
+      { key: "power", label: "Potenza reale" },
+      { key: "water_pressure", label: "Pressione dell'acqua" },
+      { key: "brazier_pressure", label: "Pressione del braciere" },
+      { key: "extractor", label: "Estrattore dei fumi" },
+      { key: "pump", label: "Pompa dell'acqua" },
+      { key: "set_boiler", label: "Set boiler" },
+      { key: "set_water", label: "Set acqua (climate)" },
+      { key: "crono_master", label: "Cronotermostato settimanale" },
+      { key: "program_active", label: "Programma attivo adesso" }
+    ]
+  },
+  {
+    id: "richieste",
+    title: "Richieste, accensione rapida e conteggi",
+    icon: "mdi:counter",
+    items: [
+      { key: "request_acs", label: "Richiesta acqua calda" },
+      { key: "request_heating", label: "Richiesta riscaldamento" },
+      { key: "consent", label: "Consenso suggerito" },
+      { key: "thermo_mode", label: "Termostato: modalit\xE0" },
+      { key: "heat_call", label: "Termostato: sta scaldando" },
+      { key: "boost_state", label: "Accensione rapida: stato" },
+      { key: "boost_start_script", label: "Accensione rapida: script di avvio" },
+      { key: "boost_cancel_script", label: "Accensione rapida: script di annullamento" },
+      { key: "starts_today", label: "Accensioni oggi" },
+      { key: "starts_yesterday", label: "Accensioni ieri" },
+      { key: "standby_today", label: "Stand-by oggi" },
+      { key: "work_hours_today", label: "Ore in lavoro oggi" }
+    ]
+  },
+  {
+    id: "pellet",
+    title: "Pellet",
+    icon: "mdi:sack",
+    items: [
+      { key: "pellet_reserve", label: "Riserva (sta per finire)" },
+      { key: "pellet_empty", label: "Pellet esaurito" },
+      { key: "pellet_open", label: "Coperchio del serbatoio aperto" },
+      { key: "pellet_today", label: "Consumo di oggi (kg)" },
+      { key: "pellet_week", label: "Consumo della settimana (kg)" },
+      { key: "pellet_month", label: "Consumo del mese (kg)" },
+      { key: "pellet_total", label: "Totale stimato (kg)" },
+      { key: "pellet_ref_kg", label: "Riferimento: chili nel serbatoio" },
+      { key: "pellet_ref_total", label: "Riferimento: totale stimato" },
+      { key: "pellet_bag", label: "Peso di un sacco (kg)" }
+    ]
+  },
+  {
+    id: "assenza",
+    title: "Assenza",
+    icon: "mdi:home-export-outline",
+    items: [
+      { key: "away", label: "Nessuno in casa" },
+      { key: "away_enabled", label: "Spegnimento per assenza attivo" },
+      { key: "away_flag", label: "L'assenza ha spento la caldaia" },
+      { key: "away_guests", label: "Ospiti in casa" },
+      { key: "away_minutes", label: "Minuti di attesa" }
+    ]
+  },
+  {
+    id: "meteo",
+    title: "Sole e irraggiamento",
+    icon: "mdi:weather-sunny",
+    items: [
+      { key: "gti_station", label: "Irraggiamento sul piano: stazione" },
+      { key: "gti_forecast", label: "Irraggiamento sul piano: previsto" },
+      { key: "gti_satellite", label: "Irraggiamento sul piano: satellite" },
+      { key: "cloud_forecast", label: "Nuvolosit\xE0 prevista" },
+      { key: "irr_station_raw", label: "Irraggiamento stazione (originale)" },
+      { key: "irr_station_corrected", label: "Irraggiamento stazione (corretto)" },
+      { key: "allsky_irradiance", label: "AllSky: irraggiamento stimato" },
+      { key: "allsky_cloud", label: "AllSky: copertura nuvolosa" },
+      { key: "allsky_sun_free", label: "AllSky: sole libero" },
+      { key: "allsky_analysis", label: "AllSky: analisi" },
+      { key: "sun_above_horizon", label: "Sole sopra l'orizzonte del terreno" },
+      { key: "horizon_elevation", label: "Elevazione dell'orizzonte" },
+      { key: "sun", label: "Sole (sun.sun)" }
+    ]
+  },
+  {
+    id: "vecchio",
+    title: "Vecchio impianto (prima del CLESS)",
+    icon: "mdi:archive-outline",
+    items: [
+      { key: "integration_pump", label: "Pompa di integrazione in funzione" },
+      { key: "integration_power", label: "Pompa di integrazione: potenza" },
+      { key: "integration_call", label: "Pompa di integrazione: chiamata dell'Elios" },
+      { key: "integration_block_enabled", label: "Blocco della pompa: interruttore" },
+      { key: "integration_block_wanted", label: "Blocco della pompa: richiesto" },
+      { key: "guard", label: "Salvaguardia: interruttore" },
+      { key: "guard_flag", label: "Salvaguardia: ha spento" }
+    ]
+  }
+];
+function overrides(config) {
+  const raw = config.entities;
+  const out = {};
+  if (raw && typeof raw === "object") {
+    for (const [k2, v2] of Object.entries(raw)) if (typeof v2 === "string" && v2.trim()) out[k2] = v2.trim();
+  }
+  return out;
+}
+function groupValues(config, group) {
+  const ov = overrides(config);
+  const def = DEFAULT_ENTITIES;
+  return Object.fromEntries(group.items.map((it) => [it.key, ov[it.key] ?? def[it.key] ?? ""]));
+}
+function groupChanged(config, group) {
+  const ov = overrides(config);
+  const def = DEFAULT_ENTITIES;
+  return group.items.filter((it) => ov[it.key] !== void 0 && ov[it.key] !== def[it.key]).length;
+}
+function groupMissing(config, group, exists) {
+  return Object.values(groupValues(config, group)).filter((id) => id && !exists(id)).length;
+}
+function applyGroup(config, group, values) {
+  const ov = overrides(config);
+  const def = DEFAULT_ENTITIES;
+  for (const it of group.items) {
+    const v2 = typeof values[it.key] === "string" ? values[it.key].trim() : "";
+    if (!v2 || v2 === def[it.key]) delete ov[it.key];
+    else ov[it.key] = v2;
+  }
+  const next = { ...config };
+  if (Object.keys(ov).length) next.entities = ov;
+  else delete next.entities;
+  return next;
+}
+function keyDomain(key) {
+  const def = DEFAULT_ENTITIES[key];
+  return def ? def.split(".")[0] : null;
+}
 
 // src/card-editor.ts
 var TAG9 = "impianto-overview-card-editor";
@@ -5533,6 +5816,10 @@ var LABELS = {
   temperature: "Sensore di temperatura",
   humidity: "Sensore di umidit\xE0",
   rooms_title: "Titolo del riquadro",
+  stufa_title: "Stufa: titolo",
+  stufa_entry: "Stufa: quale (se ne hai pi\xF9 di una)",
+  thermo_title: "Termostato: titolo",
+  thermo_entry: "Termostato: quale (se ne hai pi\xF9 di uno)",
   target_entity: "Termostato per la linea dell'obiettivo"
 };
 var HELP = {
@@ -5583,6 +5870,12 @@ var ROOM_SCHEMA = [
   { name: "temperature", selector: { entity: { filter: { domain: "sensor", device_class: "temperature" } } } },
   { name: "humidity", selector: { entity: { filter: { domain: "sensor", device_class: "humidity" } } } }
 ];
+var PARTS_SCHEMA = [
+  { name: "stufa_title", selector: { text: {} } },
+  { name: "stufa_entry", selector: { config_entry: { integration: "impianto_riscaldamento" } } },
+  { name: "thermo_title", selector: { text: {} } },
+  { name: "thermo_entry", selector: { config_entry: { integration: "impianto_riscaldamento" } } }
+];
 var ROOMS_OPT_SCHEMA = [
   { name: "rooms_title", selector: { text: {} } },
   { name: "target_entity", selector: { entity: { filter: { domain: "climate" } } } }
@@ -5593,6 +5886,7 @@ var ImpiantoOverviewCardEditor = class extends i4 {
     this._config = { type: "custom:impianto-overview-card" };
     this._openRoom = null;
     this._note = "";
+    this._openGroup = null;
   }
   setConfig(config) {
     this._config = { ...config };
@@ -5632,6 +5926,65 @@ var ImpiantoOverviewCardEditor = class extends i4 {
     const v2 = ev.detail.value;
     const s4 = (x2) => typeof x2 === "string" ? x2 : "";
     this._emit(setRoomsOptions(this._config, { title: s4(v2.rooms_title), target_entity: s4(v2.target_entity) }));
+  }
+  _onParts(ev) {
+    ev.stopPropagation();
+    const v2 = ev.detail.value;
+    const s4 = (x2) => typeof x2 === "string" ? x2 : "";
+    const vals = { stufa_title: s4(v2.stufa_title), stufa_entry: s4(v2.stufa_entry), thermo_title: s4(v2.thermo_title), thermo_entry: s4(v2.thermo_entry) };
+    this._emit(applyParts(this._config, vals));
+  }
+  _onGroup(group, ev) {
+    ev.stopPropagation();
+    this._emit(applyGroup(this._config, group, ev.detail.value));
+  }
+  _groupHead(id, icon, title, sub, warn) {
+    const open = this._openGroup === id;
+    return b2`<button class="gh" aria-expanded=${open ? "true" : "false"} @click=${() => this._openGroup = open ? null : id}>
+      <ha-icon icon=${icon}></ha-icon>
+      <span class="gt"><span class="rn">${title}</span><span class=${warn ? "rs warn" : "rs"}>${sub}</span></span>
+      <ha-icon icon=${open ? "mdi:chevron-up" : "mdi:chevron-down"}></ha-icon>
+    </button>`;
+  }
+  _renderParts() {
+    const open = this._openGroup === "parti";
+    const v2 = partsValues(this._config);
+    const sub = [v2.stufa_title || v2.stufa_entry ? "stufa personalizzata" : "", v2.thermo_title || v2.thermo_entry ? "termostato personalizzato" : ""].filter(Boolean).join(" \xB7 ") || "Titoli e voci di partenza";
+    return b2`<div class=${open ? "room open" : "room"}>
+      ${this._groupHead("parti", "mdi:tune-variant", "Stufa e termostato", sub, false)}
+      ${open ? b2`<div class="rb">
+            <ha-form
+              .hass=${this.hass}
+              .data=${v2}
+              .schema=${PARTS_SCHEMA}
+              .computeLabel=${(s4) => LABELS[s4.name] ?? s4.name}
+              @value-changed=${(e5) => this._onParts(e5)}
+            ></ha-form>
+          </div>` : A}
+    </div>`;
+  }
+  _renderGroup(g2) {
+    const open = this._openGroup === g2.id;
+    const changed = groupChanged(this._config, g2);
+    const missing = groupMissing(this._config, g2, (id) => this.hass.states[id] !== void 0);
+    const sub = [`${g2.items.length} entit\xE0`, changed ? `${changed} ${changed === 1 ? "cambiata" : "cambiate"}` : "", missing ? `${missing} non ${missing === 1 ? "trovata" : "trovate"}` : ""].filter(Boolean).join(" \xB7 ");
+    const labels = Object.fromEntries(g2.items.map((it) => [it.key, it.label]));
+    const schema = g2.items.map((it) => {
+      const domain = keyDomain(it.key);
+      return { name: it.key, selector: { entity: domain ? { filter: { domain } } : {} } };
+    });
+    return b2`<div class=${open ? "room open" : "room"}>
+      ${this._groupHead(g2.id, g2.icon, g2.title, sub, missing > 0)}
+      ${open ? b2`<div class="rb">
+            <ha-form
+              .hass=${this.hass}
+              .data=${groupValues(this._config, g2)}
+              .schema=${schema}
+              .computeLabel=${(s4) => labels[s4.name] ?? s4.name}
+              @value-changed=${(e5) => this._onGroup(g2, e5)}
+            ></ha-form>
+          </div>` : A}
+    </div>`;
   }
   _add() {
     const rooms = addRoom(this._rooms());
@@ -5702,6 +6055,9 @@ var ImpiantoOverviewCardEditor = class extends i4 {
               @value-changed=${(e5) => this._onRoomsOpt(e5)}
             ></ha-form>
           ` : A}
+      <h3>Entità dell'impianto</h3>
+      <p class="hint">Di solito non serve toccarle. Ogni campo mostra l'entità in uso; se lo svuoti torna quella di partenza.</p>
+      <div class="rooms">${this._renderParts()}${ENTITY_GROUPS.map((g2) => this._renderGroup(g2))}</div>
       <p class="hint">Set boiler, stagione, soglie, assenza e taratura si regolano dall'ingranaggio «Preferenze» della scheda: valgono per l'impianto, non per l'aspetto.</p>
     `;
   }
@@ -5762,6 +6118,31 @@ var ImpiantoOverviewCardEditor = class extends i4 {
     }
     .rn {
       font-weight: 500;
+    }
+    .gh {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      min-height: 56px;
+      background: none;
+      border: 0;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .gh ha-icon {
+      flex: none;
+      color: var(--secondary-text-color, #727272);
+    }
+    .gt {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
     .rs {
       font-size: 12px;
@@ -5826,6 +6207,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], ImpiantoOverviewCardEditor.prototype, "_note", 2);
+__decorateClass([
+  r5()
+], ImpiantoOverviewCardEditor.prototype, "_openGroup", 2);
 if (!customElements.get(TAG9)) customElements.define(TAG9, ImpiantoOverviewCardEditor);
 
 // src/summary-logic.ts
@@ -5954,86 +6338,6 @@ var CLESS_MASK = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAkGBwg
 
 // src/plant-card.ts
 var CARD_TAG2 = "impianto-overview-card";
-var DEFAULT_ENTITIES = {
-  boiler_top: "sensor.boiler_solare_alto_stimato",
-  boiler_bottom: "sensor.boiler_solare_basso_stimato",
-  solar_power: "sensor.solare_termico_potenza",
-  cless_mode: "input_boolean.impianto_modo_cless",
-  collector_temp: "sensor.solare_termico_t_collettore_stimata",
-  puffer: "sensor.casale_temperatura_boiler",
-  stove_state: "sensor.casale_stato",
-  season: "sensor.garage_casale_stagione",
-  stove_water: "sensor.casale_temperatura_acqua",
-  smoke: "sensor.casale_temperatura_fumi",
-  flame: "sensor.casale_temperatura_fiamma",
-  power: "sensor.casale_potenza_reale",
-  water_pressure: "sensor.casale_pressione_acqua",
-  brazier_pressure: "sensor.casale_pressione_braciere",
-  extractor: "sensor.casale_estrattore_fumi",
-  pump: "sensor.casale_pompa_acqua",
-  alarm: "sensor.casale_allarme",
-  set_boiler: "number.casale_setpoint_boiler",
-  set_water: "climate.casale_acqua",
-  starts_today: "sensor.caldaia_accensioni_oggi",
-  starts_yesterday: "sensor.caldaia_accensioni_ieri",
-  standby_today: "sensor.caldaia_stand_by_oggi",
-  work_hours_today: "sensor.caldaia_ore_in_lavoro_oggi",
-  request_acs: "binary_sensor.caldaia_richiesta_acs",
-  request_heating: "binary_sensor.caldaia_richiesta_riscaldamento",
-  consent: "binary_sensor.caldaia_consenso_suggerito",
-  eta: "sensor.caldaia_acqua_pronta_tra",
-  boost_state: "sensor.caldaia_accensione_rapida_stato",
-  boost_start_script: "script.caldaia_accensione_rapida",
-  boost_cancel_script: "script.caldaia_accensione_rapida_annulla",
-  guard: "input_boolean.caldaia_salvaguardia_attiva",
-  guard_flag: "input_boolean.caldaia_salvaguardia_ha_spento",
-  pellet_reserve: "binary_sensor.casale_riserva_legna",
-  pellet_empty: "binary_sensor.casale_pellet_empty",
-  pellet_open: "binary_sensor.casale_pellet_hopper_open",
-  integration_pump: "binary_sensor.caldaia_pompa_integrazione_attiva",
-  collector_pump: "binary_sensor.caldaia_pompa_collettore_attiva",
-  integration_power: "sensor.garage_bs_pompa_integrazione_potenza",
-  integration_call: "binary_sensor.garage_bs_pompa_integrazione_ingresso_0",
-  integration_block_enabled: "input_boolean.caldaia_integrazione_blocco_attivo",
-  integration_block_wanted: "binary_sensor.caldaia_integrazione_inutile",
-  collector_power: "sensor.garage_centralina_solare_pompe_potenza",
-  pellet_today: "sensor.caldaia_pellet_oggi",
-  pellet_week: "sensor.caldaia_pellet_settimana",
-  pellet_month: "sensor.caldaia_pellet_mese",
-  pellet_total: "sensor.caldaia_pellet_stimato_totale",
-  pellet_ref_kg: "input_number.caldaia_pellet_kg_riferimento",
-  pellet_ref_total: "input_number.caldaia_pellet_totale_riferimento",
-  pellet_bag: "input_number.caldaia_pellet_sacco_kg",
-  coil_solar_in: "sensor.solare_termico_solare_serpentina_ingresso",
-  coil_solar_out: "sensor.solare_termico_solare_serpentina_uscita",
-  coil_integ_in: "sensor.locale_caldaia_solare_termico_puffer_generatore",
-  coil_integ_out: "sensor.locale_caldaia_solare_termico_puffer_minima_riscaldamento",
-  panel_max: "sensor.solare_pannello_massima_prevista",
-  panel_max_today: "sensor.solare_pannello_massima_oggi",
-  puffer_effective: "sensor.puffer_temperatura_effettiva",
-  thermo_mode: "sensor.termostato_riscaldamento_modalita",
-  heat_call: "binary_sensor.termostato_riscaldamento_sta_scaldando",
-  gti_station: "sensor.solare_termico_irraggiamento_sul_piano",
-  gti_forecast: "sensor.open_meteo_irraggiamento_previsto_sul_piano",
-  gti_satellite: "sensor.open_meteo_irraggiamento_osservato_dal_satellite",
-  cloud_forecast: "sensor.open_meteo_nuvolosita",
-  irr_station_raw: "sensor.esterno_e_garage_stazione_meteo_sqm_irraggiamento_solare_stimato",
-  irr_station_corrected: "sensor.irraggiamento_stazione_corretto",
-  allsky_irradiance: "sensor.allsky_irraggiamento_stimato",
-  allsky_cloud: "sensor.allsky_copertura_equivalente",
-  allsky_sun_free: "binary_sensor.allsky_sole_libero",
-  allsky_analysis: "sensor.allsky_analisi",
-  sun_above_horizon: "binary_sensor.sole_sopra_l_orizzonte",
-  horizon_elevation: "sensor.sole_elevazione_orizzonte",
-  sun: "sun.sun",
-  crono_master: "switch.casale_cronotermostato_settimanale",
-  program_active: "binary_sensor.caldaia_programma_attivo_ora",
-  away: "binary_sensor.caldaia_nessuno_in_casa",
-  away_enabled: "input_boolean.caldaia_assenza_attiva",
-  away_flag: "input_boolean.caldaia_assenza_ha_spento",
-  away_guests: "input_boolean.caldaia_assenza_ospiti",
-  away_minutes: "input_number.caldaia_assenza_minuti"
-};
 var DEFAULT_MODEL_ENTITIES = {
   volume: "input_number.boiler_solare_volume",
   top_share: "input_number.boiler_solare_peso_alto",
@@ -9352,7 +9656,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.9";
+var VERSION = "0.5.10";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {

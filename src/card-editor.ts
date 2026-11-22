@@ -3,6 +3,8 @@ import { property, state } from "lit/decorators.js";
 import {
   addRoom,
   applyGeneral,
+  applyParts,
+  partsValues,
   generalValues,
   moveRoom,
   removeRoom,
@@ -14,8 +16,10 @@ import {
   updateRoom,
   type EditorConfig,
   type GeneralValues,
+  type PartsValues,
   type RoomDraft,
 } from "./editor-logic";
+import { ENTITY_GROUPS, applyGroup, groupChanged, groupMissing, groupValues, keyDomain, type EntityGroup } from "./entity-catalog";
 import type { HomeAssistant } from "./types";
 
 interface FormSchema {
@@ -48,6 +52,10 @@ const LABELS: Record<string, string> = {
   temperature: "Sensore di temperatura",
   humidity: "Sensore di umidità",
   rooms_title: "Titolo del riquadro",
+  stufa_title: "Stufa: titolo",
+  stufa_entry: "Stufa: quale (se ne hai più di una)",
+  thermo_title: "Termostato: titolo",
+  thermo_entry: "Termostato: quale (se ne hai più di uno)",
   target_entity: "Termostato per la linea dell'obiettivo",
 };
 const HELP: Record<string, string> = {
@@ -101,6 +109,13 @@ const ROOM_SCHEMA: FormSchema[] = [
   { name: "humidity", selector: { entity: { filter: { domain: "sensor", device_class: "humidity" } } } },
 ];
 
+const PARTS_SCHEMA: FormSchema[] = [
+  { name: "stufa_title", selector: { text: {} } },
+  { name: "stufa_entry", selector: { config_entry: { integration: "impianto_riscaldamento" } } },
+  { name: "thermo_title", selector: { text: {} } },
+  { name: "thermo_entry", selector: { config_entry: { integration: "impianto_riscaldamento" } } },
+];
+
 const ROOMS_OPT_SCHEMA: FormSchema[] = [
   { name: "rooms_title", selector: { text: {} } },
   { name: "target_entity", selector: { entity: { filter: { domain: "climate" } } } },
@@ -116,6 +131,8 @@ export class ImpiantoOverviewCardEditor extends LitElement {
   /** stanza aperta nell'elenco (una alla volta) */
   @state() private _openRoom: string | null = null;
   @state() private _note = "";
+  /** gruppo aperto tra «Stufa e termostato» e le entità (uno alla volta: i selettori si creano solo per quello aperto) */
+  @state() private _openGroup: string | null = null;
 
   setConfig(config: EditorConfig): void {
     this._config = { ...config };
@@ -161,6 +178,74 @@ export class ImpiantoOverviewCardEditor extends LitElement {
     const v = ev.detail.value;
     const s = (x: unknown) => (typeof x === "string" ? x : "");
     this._emit(setRoomsOptions(this._config, { title: s(v.rooms_title), target_entity: s(v.target_entity) }));
+  }
+
+  private _onParts(ev: CustomEvent<{ value: Record<string, unknown> }>): void {
+    ev.stopPropagation();
+    const v = ev.detail.value;
+    const s = (x: unknown) => (typeof x === "string" ? x : "");
+    const vals: PartsValues = { stufa_title: s(v.stufa_title), stufa_entry: s(v.stufa_entry), thermo_title: s(v.thermo_title), thermo_entry: s(v.thermo_entry) };
+    this._emit(applyParts(this._config, vals));
+  }
+
+  private _onGroup(group: EntityGroup, ev: CustomEvent<{ value: Record<string, unknown> }>): void {
+    ev.stopPropagation();
+    this._emit(applyGroup(this._config, group, ev.detail.value));
+  }
+
+  private _groupHead(id: string, icon: string, title: string, sub: string, warn: boolean) {
+    const open = this._openGroup === id;
+    return html`<button class="gh" aria-expanded=${open ? "true" : "false"} @click=${() => (this._openGroup = open ? null : id)}>
+      <ha-icon icon=${icon}></ha-icon>
+      <span class="gt"><span class="rn">${title}</span><span class=${warn ? "rs warn" : "rs"}>${sub}</span></span>
+      <ha-icon icon=${open ? "mdi:chevron-up" : "mdi:chevron-down"}></ha-icon>
+    </button>`;
+  }
+
+  private _renderParts() {
+    const open = this._openGroup === "parti";
+    const v = partsValues(this._config);
+    const sub = [v.stufa_title || v.stufa_entry ? "stufa personalizzata" : "", v.thermo_title || v.thermo_entry ? "termostato personalizzato" : ""].filter(Boolean).join(" · ") || "Titoli e voci di partenza";
+    return html`<div class=${open ? "room open" : "room"}>
+      ${this._groupHead("parti", "mdi:tune-variant", "Stufa e termostato", sub, false)}
+      ${open
+        ? html`<div class="rb">
+            <ha-form
+              .hass=${this.hass}
+              .data=${v}
+              .schema=${PARTS_SCHEMA}
+              .computeLabel=${(s: FormSchema) => LABELS[s.name] ?? s.name}
+              @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => this._onParts(e)}
+            ></ha-form>
+          </div>`
+        : nothing}
+    </div>`;
+  }
+
+  private _renderGroup(g: EntityGroup) {
+    const open = this._openGroup === g.id;
+    const changed = groupChanged(this._config, g);
+    const missing = groupMissing(this._config, g, (id) => this.hass.states[id] !== undefined);
+    const sub = [`${g.items.length} entità`, changed ? `${changed} ${changed === 1 ? "cambiata" : "cambiate"}` : "", missing ? `${missing} non ${missing === 1 ? "trovata" : "trovate"}` : ""].filter(Boolean).join(" · ");
+    const labels = Object.fromEntries(g.items.map((it) => [it.key, it.label]));
+    const schema: FormSchema[] = g.items.map((it) => {
+      const domain = keyDomain(it.key);
+      return { name: it.key, selector: { entity: domain ? { filter: { domain } } : {} } };
+    });
+    return html`<div class=${open ? "room open" : "room"}>
+      ${this._groupHead(g.id, g.icon, g.title, sub, missing > 0)}
+      ${open
+        ? html`<div class="rb">
+            <ha-form
+              .hass=${this.hass}
+              .data=${groupValues(this._config, g)}
+              .schema=${schema}
+              .computeLabel=${(s: FormSchema) => labels[s.name] ?? s.name}
+              @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => this._onGroup(g, e)}
+            ></ha-form>
+          </div>`
+        : nothing}
+    </div>`;
   }
 
   private _add(): void {
@@ -239,6 +324,9 @@ export class ImpiantoOverviewCardEditor extends LitElement {
             ></ha-form>
           `
         : nothing}
+      <h3>Entità dell'impianto</h3>
+      <p class="hint">Di solito non serve toccarle. Ogni campo mostra l'entità in uso; se lo svuoti torna quella di partenza.</p>
+      <div class="rooms">${this._renderParts()}${ENTITY_GROUPS.map((g) => this._renderGroup(g))}</div>
       <p class="hint">Set boiler, stagione, soglie, assenza e taratura si regolano dall'ingranaggio «Preferenze» della scheda: valgono per l'impianto, non per l'aspetto.</p>
     `;
   }
@@ -299,6 +387,31 @@ export class ImpiantoOverviewCardEditor extends LitElement {
     }
     .rn {
       font-weight: 500;
+    }
+    .gh {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      min-height: 56px;
+      background: none;
+      border: 0;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .gh ha-icon {
+      flex: none;
+      color: var(--secondary-text-color, #727272);
+    }
+    .gt {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
     .rs {
       font-size: 12px;
