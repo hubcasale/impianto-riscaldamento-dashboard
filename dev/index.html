@@ -7,7 +7,7 @@
 <!--
   Pagina per provare le schede nel browser senza Home Assistant:
     npm run build:dev    poi apri dev/index.html nel browser (anche da file, senza server)
-  Parametri: ?tema=chiaro|scuro  ?stato=WORK|START|ECO%20STOP|STAND%20BY  ?larghezza=380  ?layout=split&stanze=1[&bagno_verde=1] (scheda Stanze accanto al termostato)
+  Parametri: ?tema=chiaro|scuro  ?stato=WORK|START|ECO%20STOP|STAND%20BY  ?larghezza=380  ?layout=split&stanze=1[&bagno_verde=1] (scheda Stanze accanto al termostato)  ?colore=deep-orange (colore proprio della scheda)
 -->
 <style>
   :root { color-scheme: light; }
@@ -422,7 +422,7 @@ const hass = {
 
 const wrap = document.getElementById("cards");
 for (const [tag, cfg] of [
-  ["impianto-overview-card", { type: "custom:impianto-overview-card", ...(q.get("stufa") ? { stufa: true } : {}), ...(q.get("layout") ? { layout: q.get("layout") } : {}), ...(q.get("senza_programma") ? { schedule: false } : {}), ...(q.get("sezioni") ? { show: q.get("sezioni").split(",") } : {}), ...(q.get("stanze") === "0" ? { rooms: false } : {}) }],
+  ["impianto-overview-card", { type: "custom:impianto-overview-card", ...(q.get("stufa") ? { stufa: true } : {}), ...(q.get("layout") ? { layout: q.get("layout") } : {}), ...(q.get("colore") ? { color: q.get("colore") } : {}), ...(q.get("senza_programma") ? { schedule: false } : {}), ...(q.get("sezioni") ? { show: q.get("sezioni").split(",") } : {}), ...(q.get("stanze") === "0" ? { rooms: false } : {}) }],
   ["caldaia-schedule-card", { type: "custom:caldaia-schedule-card" }],
 ]) {
   const el = document.createElement(tag);

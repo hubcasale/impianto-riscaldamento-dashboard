@@ -11,6 +11,8 @@ export interface GeneralValues {
   title: string;
   layout: "classic" | "split";
   boiler: "full" | "short";
+  /** colore proprio della scheda: nome della tavolozza di Home Assistant o colore CSS; vuoto = aspetto del tema */
+  color: string;
   show_boiler: boolean;
   show_caldaia: boolean;
   show_stufa: boolean;
@@ -51,6 +53,7 @@ export function generalValues(config: EditorConfig): GeneralValues {
     title: typeof config.title === "string" ? config.title : "",
     layout: config.layout === "split" ? "split" : "classic",
     boiler: config.boiler === "short" ? "short" : "full",
+    color: typeof config.color === "string" && config.color !== "none" ? config.color : "",
     show_boiler: inShow("boiler"),
     show_caldaia: inShow("caldaia"),
     show_stufa: !!config.stufa && inShow("stufa"),
@@ -83,6 +86,9 @@ export function applyGeneral(config: EditorConfig, v: GeneralValues): EditorConf
   else delete next.layout;
   if (v.boiler === "short") next.boiler = "short";
   else delete next.boiler;
+  const color = v.color.trim();
+  if (color && color !== "none") next.color = color;
+  else delete next.color;
 
   // stufa: accesa vuol dire configurata (resta l'oggetto con entry_id e titolo, se c'era) e nell'elenco show
   if (v.show_stufa && !next.stufa) next.stufa = true;

@@ -25,6 +25,7 @@ import { SECTION_KEYS, defaultSections, visibleKeys, type SectionKey, type Secti
 import "./card-editor";
 import { DEFAULT_ENTITIES, type PlantEntities } from "./plant-entities";
 import { summarize, type SummaryLine } from "./summary-logic";
+import { tintColor } from "./color-logic";
 import { CLESS_MASK, CLESS_RENDER } from "./cless-render";
 import { DEFAULT_MODEL, SEASON_LABEL, seasonKey, boostButton, collectorPumpPill, etaText, fmt, integrationPumpPill, panelColor, panelModel, pelletStatus, showersEstimate, showersFromZones, sinceText, stoveLook, stovePumpRunning, stufaButton, stufaKey, STUFA_LABEL, STUFA_MODE_LABEL, tempColor, toNumber, type BoilerModel, type PanelModel, type StoveLook } from "./plant-logic";
 
@@ -59,6 +60,11 @@ export interface PlantCardConfig {
   layout?: "classic" | "split";
   /** "short" (prova): boiler con un solo giro per serpentina (nel layout split a schede larghe); predefinito: boiler intero */
   boiler?: "full" | "short";
+  /**
+   * Colore proprio della scheda: lo sfondo ne prende una tinta e il bordo lo segue, come un blocco colorato della plancia;
+   * i pannelli interni restano come sono. Un nome della tavolozza di Home Assistant ("deep-orange", "blue"…) o un colore CSS.
+   */
+  color?: string;
   /** false per nascondere il pulsante «Programmazione» della scheda della caldaia; un oggetto passa le opzioni alla scheda della programmazione (prefix, master, status, presets) */
   schedule?: boolean | Record<string, unknown>;
   /**
@@ -292,6 +298,11 @@ export class ImpiantoOverviewCard extends LitElement {
     if (!config || typeof config !== "object") throw new Error("impianto-overview-card: configurazione non valida");
     this._config = config;
     this._sections = defaultSections(config.show);
+    // il colore sta sull'elemento della scheda: vale per tutte le disposizioni senza toccare i modelli
+    const tint = tintColor(config.color);
+    this.toggleAttribute("tinted", tint !== undefined);
+    if (tint !== undefined) this.style.setProperty("--ir-tint", tint);
+    else this.style.removeProperty("--ir-tint");
   }
 
   getCardSize(): number {
@@ -1445,6 +1456,11 @@ export class ImpiantoOverviewCard extends LitElement {
       padding: 12px;
       color: var(--primary-text-color);
       position: relative;
+    }
+    /* opzione color: la tinta si mescola allo sfondo della scheda del tema (vale uguale su tema chiaro e scuro); i pannelli dentro hanno il loro sfondo e non cambiano */
+    :host([tinted]) ha-card {
+      background: color-mix(in srgb, var(--ir-tint) 30%, var(--ha-card-background, var(--card-background-color, #fff)));
+      border: 1px solid color-mix(in srgb, var(--ir-tint) 55%, transparent);
     }
     /* layout split: la scheda della caldaia in versione compatta (tessere in una riga, contatori, richieste e salvaguardia piu' stretti) */
     .layout.split .stove {

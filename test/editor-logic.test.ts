@@ -103,3 +103,15 @@ test("stanze: titolo e termostato dell'obiettivo", () => {
   assert.deepEqual(roomsOptions(cfg), { title: "Casa", target_entity: "climate.altro" });
   assert.deepEqual(setRoomsOptions(cfg, { title: "", target_entity: "" }), BASE);
 });
+
+test("editor: il colore della scheda si scrive solo se scelto, e «nessuno» lo toglie", () => {
+  assert.equal(generalValues(BASE).color, "");
+  const on = applyGeneral(BASE, { ...generalValues(BASE), color: "deep-orange" });
+  assert.equal(on.color, "deep-orange");
+  assert.equal(generalValues(on).color, "deep-orange");
+  assert.deepEqual(applyGeneral(on, generalValues(on)), on);
+  assert.equal("color" in applyGeneral(on, { ...generalValues(on), color: "none" }), false);
+  assert.equal("color" in applyGeneral(on, { ...generalValues(on), color: "  " }), false);
+  // uno YAML con `color: none` scritto a mano si legge come «nessun colore»
+  assert.equal(generalValues({ ...BASE, color: "none" }).color, "");
+});

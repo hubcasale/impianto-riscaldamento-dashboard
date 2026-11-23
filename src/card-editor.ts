@@ -38,6 +38,7 @@ const LABELS: Record<string, string> = {
   title: "Titolo",
   layout: "Disposizione",
   boiler: "Disegno del boiler",
+  color: "Colore della scheda",
   show_boiler: "Boiler solare / puffer",
   show_caldaia: "Caldaia a pellet",
   show_stufa: "Stufa a pellet",
@@ -61,6 +62,7 @@ const LABELS: Record<string, string> = {
 const HELP: Record<string, string> = {
   layout: "Affiancata: boiler, caldaia e stufa in colonne, termostato e stanze sotto a tutta larghezza.",
   boiler: "Il boiler corto si usa solo con la disposizione affiancata.",
+  color: "Tinge lo sfondo e il bordo della scheda, come un blocco colorato della plancia; i pannelli interni restano come sono. Nessuno lascia l'aspetto del tema.",
   show_stufa: "Serve l'integrazione «Impianto di riscaldamento» con la stufa configurata.",
   btn_settings: "Le preferenze di funzionamento (set boiler, stagione, soglie, assenza) restano lì.",
   rooms_title: "Vuoto = «Stanze».",
@@ -74,6 +76,7 @@ const GENERAL_SCHEMA: FormSchema[] = [
     selector: { select: { mode: "dropdown", options: [{ value: "classic", label: "Classica: boiler a sinistra, il resto a destra" }, { value: "split", label: "Affiancata: colonne, termostato e stanze sotto" }] } },
   },
   { name: "boiler", selector: { select: { mode: "dropdown", options: [{ value: "full", label: "Intero" }, { value: "short", label: "Corto" }] } } },
+  { name: "color", selector: { ui_color: { include_none: true } } },
   {
     name: "cosa",
     type: "expandable",
@@ -148,6 +151,8 @@ export class ImpiantoOverviewCardEditor extends LitElement {
     const cur = generalValues(this._config);
     const v = { ...cur, ...(ev.detail.value as Partial<GeneralValues>) };
     v.title = typeof v.title === "string" ? v.title : "";
+    // il selettore del colore, svuotato, non manda la chiave
+    v.color = typeof v.color === "string" ? v.color : "";
     const next = applyGeneral(this._config, v);
     if (next === this._config) {
       this._note = "Almeno una sezione deve restare visibile.";
