@@ -24,6 +24,10 @@ export interface PlantEntities {
   extractor: string;
   pump: string;
   alarm: string;
+  /** input_boolean acceso quando, dopo un allarme, la caldaia aspetta il ripristino dello stato di prima */
+  restore_pending: string;
+  /** script che azzera l'allarme e rimette caldaia, cronotermostato e termostato com'erano */
+  restore_script: string;
   set_boiler: string;
   set_water: string;
   starts_today: string;
@@ -133,6 +137,8 @@ export const DEFAULT_ENTITIES: PlantEntities = {
   extractor: "sensor.casale_estrattore_fumi",
   pump: "sensor.casale_pompa_acqua",
   alarm: "sensor.casale_allarme",
+  restore_pending: "input_boolean.caldaia_ripristino_in_attesa",
+  restore_script: "script.caldaia_ripristina_dopo_allarme",
   set_boiler: "number.casale_setpoint_boiler",
   set_water: "climate.casale_acqua",
   starts_today: "sensor.caldaia_accensioni_oggi",

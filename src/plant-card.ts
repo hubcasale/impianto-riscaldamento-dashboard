@@ -278,6 +278,18 @@ export class ImpiantoOverviewCard extends LitElement {
     this._confirm = d;
   }
 
+  /** Ripristino dopo un allarme: chiede conferma, poi lancia lo script che azzera l'allarme e rimette lo stato di prima. */
+  private _restore(): void {
+    const script = this._e.restore_script;
+    this._ask(
+      "Ripristinare la caldaia?",
+      ["Azzera l'allarme e rimette caldaia, cronotermostato settimanale e termostato com'erano prima dell'allarme.", "Se l'allarme non è un semplice black-out, controlla prima la caldaia."],
+      "Ripristina",
+      false,
+      () => void this.hass.callService("script", "turn_on", { entity_id: script }),
+    );
+  }
+
   /** Accensione rapida (o suo annullamento): chiede conferma in una finestra. */
   private _press(): void {
     const model = boostButton(this._s(this._e.boost_state), false);
@@ -847,6 +859,8 @@ export class ImpiantoOverviewCard extends LitElement {
     const since = changed ? new Date(changed).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
     const alarmRaw = (this._s(e.alarm) ?? "").trim();
     const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown";
+    // dopo un allarme: pulsante che azzera l'allarme e rimette tutto com'era (solo se interruttore e script esistono)
+    const restore = this._yes(e.restore_pending) && !!this.hass.states[e.restore_script];
     const work = this._n(e.work_hours_today);
     const pellet = pelletStatus(this._yes(e.pellet_reserve), this._yes(e.pellet_empty), this._yes(e.pellet_open));
     // layout split con il conteggio del pellet: stato e acqua nella figura, ultimo cambio in alto, pellet sul serbatoio
@@ -882,7 +896,14 @@ export class ImpiantoOverviewCard extends LitElement {
                   <span class="scp"><span class="tl">Pellet</span><span class="pelletpill ${pellet.key}">${pellet.label}</span></span>
                 </div>`}
         </div>
-        ${noAlarm ? nothing : html`<div class="alarmbar" role="alert"><b>Allarme</b><span>${alarmRaw}</span></div>`}
+        ${noAlarm && !restore
+          ? nothing
+          : html`<div class="alarmbar" role="alert">
+              <b>${noAlarm ? "Dopo l'allarme" : "Allarme"}</b><span>${noAlarm ? "caldaia da ripristinare" : alarmRaw}</span>
+              ${restore
+                ? html`<button class="restorebtn" @click=${() => this._restore()}><ha-icon icon="mdi:restore-alert"></ha-icon><span>Ripristina</span></button>`
+                : nothing}
+            </div>`}
         <div class="tiles">
           ${this._tile(this._cless() ? "Sonda S. BOILER" : "Puffer 50 L", `${fmt(this._n(this.hass.states[e.puffer_effective] ? e.puffer_effective : e.puffer), 1)} °C${this.hass.states[e.puffer_effective]?.attributes?.fonte === "sonda pozzetto" ? " (stima)" : ""}`, "#f59e0b")}
           ${this._tile("Set boiler", `${fmt(this._n(e.set_boiler), 0)} °C`)}
@@ -2344,10 +2365,28 @@ export class ImpiantoOverviewCard extends LitElement {
     .more {
       white-space: nowrap;
     }
+    .restorebtn {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 10px;
+      background: #ef4444;
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .restorebtn ha-icon {
+      --mdc-icon-size: 20px;
+    }
     .alarmbar {
       display: flex;
       gap: 10px;
-      align-items: baseline;
+      align-items: center;
       margin-top: 8px;
       padding: 6px 12px;
       border-radius: 10px;

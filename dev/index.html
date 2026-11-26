@@ -113,7 +113,8 @@ set("input_number.impianto_cless_spenta_minuti", 20, { min: 5, max: 240, step: 5
 set("input_boolean.caldaia_accumulo_attivo", q.get("accumulo") === "off" ? "off" : "on");
 set("input_number.caldaia_accumulo_t_spegni", 55, { min: 40, max: 75, step: 1, unit_of_measurement: "°C" });
 set("input_number.caldaia_accumulo_t_accendi", 53, { min: 35, max: 70, step: 1, unit_of_measurement: "°C" });
-set("sensor.casale_allarme", "____");
+set("sensor.casale_allarme", q.get("allarme") || "____");
+if (q.get("ripristino")) { set("input_boolean.caldaia_ripristino_in_attesa", "on"); set("script.caldaia_ripristina_dopo_allarme", "off"); }
 set("number.casale_setpoint_boiler", 45, { min: 45, max: 70, step: 1, unit_of_measurement: "°C" });
 set("climate.casale_acqua", "heat", { temperature: 65, min_temp: 50, max_temp: 75, target_temp_step: 1 });
 set("sensor.caldaia_accensioni_oggi", 6);

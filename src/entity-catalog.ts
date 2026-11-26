@@ -50,6 +50,8 @@ export const ENTITY_GROUPS: EntityGroup[] = [
     items: [
       { key: "stove_state", label: "Stato" },
       { key: "alarm", label: "Allarme" },
+      { key: "restore_pending", label: "Ripristino dopo allarme in attesa (interruttore)" },
+      { key: "restore_script", label: "Script di ripristino dopo allarme" },
       { key: "season", label: "Stagione (Estate/Inverno)" },
       { key: "stove_water", label: "Temperatura dell'acqua" },
       { key: "smoke", label: "Temperatura dei fumi" },

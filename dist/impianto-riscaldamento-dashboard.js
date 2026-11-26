@@ -5560,6 +5560,8 @@ var DEFAULT_ENTITIES = {
   extractor: "sensor.casale_estrattore_fumi",
   pump: "sensor.casale_pompa_acqua",
   alarm: "sensor.casale_allarme",
+  restore_pending: "input_boolean.caldaia_ripristino_in_attesa",
+  restore_script: "script.caldaia_ripristina_dopo_allarme",
   set_boiler: "number.casale_setpoint_boiler",
   set_water: "climate.casale_acqua",
   starts_today: "sensor.caldaia_accensioni_oggi",
@@ -5663,6 +5665,8 @@ var ENTITY_GROUPS = [
     items: [
       { key: "stove_state", label: "Stato" },
       { key: "alarm", label: "Allarme" },
+      { key: "restore_pending", label: "Ripristino dopo allarme in attesa (interruttore)" },
+      { key: "restore_script", label: "Script di ripristino dopo allarme" },
       { key: "season", label: "Stagione (Estate/Inverno)" },
       { key: "stove_water", label: "Temperatura dell'acqua" },
       { key: "smoke", label: "Temperatura dei fumi" },
@@ -6543,6 +6547,17 @@ var ImpiantoOverviewCard = class extends i4 {
     document.body.appendChild(d3);
     this._confirm = d3;
   }
+  /** Ripristino dopo un allarme: chiede conferma, poi lancia lo script che azzera l'allarme e rimette lo stato di prima. */
+  _restore() {
+    const script = this._e.restore_script;
+    this._ask(
+      "Ripristinare la caldaia?",
+      ["Azzera l'allarme e rimette caldaia, cronotermostato settimanale e termostato com'erano prima dell'allarme.", "Se l'allarme non \xE8 un semplice black-out, controlla prima la caldaia."],
+      "Ripristina",
+      false,
+      () => void this.hass.callService("script", "turn_on", { entity_id: script })
+    );
+  }
   /** Accensione rapida (o suo annullamento): chiede conferma in una finestra. */
   _press() {
     const model = boostButton(this._s(this._e.boost_state), false);
@@ -7031,6 +7046,7 @@ var ImpiantoOverviewCard = class extends i4 {
     const since = changed ? new Date(changed).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
     const alarmRaw = (this._s(e5.alarm) ?? "").trim();
     const noAlarm = alarmRaw === "" || /^[_\-\s0]+$/.test(alarmRaw) || alarmRaw.toLowerCase() === "unknown";
+    const restore = this._yes(e5.restore_pending) && !!this.hass.states[e5.restore_script];
     const work = this._n(e5.work_hours_today);
     const pellet = pelletStatus(this._yes(e5.pellet_reserve), this._yes(e5.pellet_empty), this._yes(e5.pellet_open));
     const inline = this._config.layout === "split" && this._pelletEnabled();
@@ -7056,7 +7072,10 @@ var ImpiantoOverviewCard = class extends i4 {
                   <span class="scp"><span class="tl">Pellet</span><span class="pelletpill ${pellet.key}">${pellet.label}</span></span>
                 </div>`}
         </div>
-        ${noAlarm ? A : b2`<div class="alarmbar" role="alert"><b>Allarme</b><span>${alarmRaw}</span></div>`}
+        ${noAlarm && !restore ? A : b2`<div class="alarmbar" role="alert">
+              <b>${noAlarm ? "Dopo l'allarme" : "Allarme"}</b><span>${noAlarm ? "caldaia da ripristinare" : alarmRaw}</span>
+              ${restore ? b2`<button class="restorebtn" @click=${() => this._restore()}><ha-icon icon="mdi:restore-alert"></ha-icon><span>Ripristina</span></button>` : A}
+            </div>`}
         <div class="tiles">
           ${this._tile(this._cless() ? "Sonda S. BOILER" : "Puffer 50 L", `${fmt(this._n(this.hass.states[e5.puffer_effective] ? e5.puffer_effective : e5.puffer), 1)} \xB0C${this.hass.states[e5.puffer_effective]?.attributes?.fonte === "sonda pozzetto" ? " (stima)" : ""}`, "#f59e0b")}
           ${this._tile("Set boiler", `${fmt(this._n(e5.set_boiler), 0)} \xB0C`)}
@@ -8461,10 +8480,28 @@ var ImpiantoOverviewCard = class extends i4 {
     .more {
       white-space: nowrap;
     }
+    .restorebtn {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 10px;
+      background: #ef4444;
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .restorebtn ha-icon {
+      --mdc-icon-size: 20px;
+    }
     .alarmbar {
       display: flex;
       gap: 10px;
-      align-items: baseline;
+      align-items: center;
       margin-top: 8px;
       padding: 6px 12px;
       border-radius: 10px;
@@ -9710,7 +9747,7 @@ __decorateClass([
 customElements.define(CARD_TAG3, CaldaiaScheduleCard);
 
 // src/impianto-riscaldamento-dashboard.ts
-var VERSION = "0.5.12";
+var VERSION = "0.5.13";
 window.customCards = window.customCards || [];
 window.customCards.push(
   {
